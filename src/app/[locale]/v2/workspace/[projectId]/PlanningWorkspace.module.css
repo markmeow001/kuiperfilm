@@ -1,0 +1,193 @@
+.planningRoot,
+.studioRoot {
+  /* Unified Kuiper studio palette. Planning pages keep the production-token
+   * API so existing components share one contract without inheriting the
+   * former paper theme. */
+  --production-paper: #070b0f;
+  --production-surface: #111b24;
+  --production-muted: #17232d;
+  --production-raised: #17232d;
+  --production-ink: #f2f6f7;
+  --production-ink-muted: #a7b3bc;
+  --production-border: #263642;
+  --production-border-dark: #354956;
+  --production-blue: #3e73b9;
+  --production-blue-hover: #315f98;
+  --production-blue-soft: rgba(62, 115, 185, 0.18);
+  --production-tool: #55afc0;
+  --production-tool-strong: #79c7d4;
+  --production-tool-soft: rgba(85, 175, 192, 0.13);
+  --production-focus: #55afc0;
+  --production-danger: #fb7185;
+  min-height: calc(100dvh - 64px);
+  color: var(--production-ink);
+  color-scheme: dark;
+  background:
+    radial-gradient(
+      circle at 82% -14%,
+      rgba(85, 175, 192, 0.09),
+      transparent 34rem
+    ),
+    var(--production-paper);
+}
+
+.planningRoot
+  :where(a, button, input, textarea, select, summary, [tabindex]):focus-visible,
+.studioRoot
+  :where(
+    a,
+    button,
+    input,
+    textarea,
+    select,
+    summary,
+    [tabindex]
+  ):focus-visible {
+  outline: 3px solid color-mix(
+    in srgb,
+    var(--production-focus) 84%,
+    transparent
+  );
+  outline-offset: 2px;
+}
+
+.planningRoot :global(.kuiper-dashboard-kicker),
+.studioRoot :global(.kuiper-dashboard-kicker) {
+  color: var(--production-tool);
+}
+
+.boundPage {
+  position: relative;
+}
+
+.boundPage::before {
+  display: block;
+  width: 100%;
+  height: 2px;
+  margin-bottom: 24px;
+  background: linear-gradient(
+    90deg,
+    var(--production-tool) 0 72px,
+    var(--production-border) 72px 100%
+  );
+  content: '';
+}
+
+.staticCard {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.025),
+    0 18px 42px rgba(0, 0, 0, 0.15);
+}
+
+.staticCard:hover {
+  border-color: var(--production-border);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.025),
+    0 18px 42px rgba(0, 0, 0, 0.15);
+  transform: none;
+}
+
+.stageCard {
+  background: var(--production-raised, #17232d);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025);
+}
+
+.stageCard:hover {
+  border-color: color-mix(
+    in srgb,
+    var(--production-tool) 54%,
+    var(--production-border)
+  );
+  background: color-mix(
+    in srgb,
+    var(--production-raised, #17232d) 88%,
+    var(--production-tool)
+  );
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.24);
+}
+
+.settingsWell {
+  border-top: 1px solid var(--production-border);
+  background: var(--production-paper);
+}
+
+.settingsBridge {
+  color: var(--production-ink);
+}
+
+.manuscript {
+  position: relative;
+  overflow: hidden;
+  background: var(--production-raised, #17232d);
+  box-shadow: inset 3px 0 0 var(--production-tool);
+}
+
+.episodeCard {
+  background: var(--production-raised, #17232d);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025);
+}
+
+.paperCard,
+.guideCard,
+.studioPanel {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.025),
+    0 20px 48px rgba(0, 0, 0, 0.18);
+}
+
+.screenplayDesk {
+  background:
+    linear-gradient(rgba(167, 179, 188, 0.035) 1px, transparent 1px),
+    var(--production-paper);
+  background-size: 100% 32px;
+}
+
+.screenplayPage {
+  caret-color: var(--production-tool-strong);
+  background: var(--production-raised, #17232d);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.025),
+    0 18px 42px rgba(0, 0, 0, 0.2);
+}
+
+.screenplayPage::selection {
+  color: var(--production-ink);
+  background: color-mix(
+    in srgb,
+    var(--production-tool) 38%,
+    transparent
+  );
+}
+
+.studioPanel {
+  background: var(--production-surface);
+}
+
+@media (max-width: 639px) {
+  .planningRoot,
+  .studioRoot {
+    min-height: calc(100dvh - 56px);
+  }
+
+  .boundPage::before {
+    margin-bottom: 18px;
+    background: linear-gradient(
+      90deg,
+      var(--production-tool) 0 44px,
+      var(--production-border) 44px 100%
+    );
+  }
+
+  .paperCard,
+  .guideCard,
+  .studioPanel {
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stageCard,
+  .staticCard {
+    transition: none;
+  }
+}

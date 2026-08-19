@@ -78,6 +78,26 @@ describe('deserializeCanvas', () => {
     expect(back.nodes[0].data.maskSourceKey).toBe('refs/plate.webp')
   })
 
+  it('[Canvas TTS request outcome 未知] -> [request identity round-trip 後仍可供 reload 重試]', () => {
+    const serialized = serializeCanvas([
+      node('audio-1', 'audio', 20, 30, {
+        ttsClientRequestId: '11111111-1111-4111-8111-111111111111',
+        ttsIdempotencyFingerprint: '["你好","voice/ref.wav","",0.4]',
+      }),
+    ], [], { x: 0, y: 0, zoom: 1 })
+
+    expect(serialized.nodes[0].data).toMatchObject({
+      ttsClientRequestId: '11111111-1111-4111-8111-111111111111',
+      ttsIdempotencyFingerprint: '["你好","voice/ref.wav","",0.4]',
+    })
+
+    const back = deserializeCanvas(serialized)
+    expect(back.nodes[0].data).toMatchObject({
+      ttsClientRequestId: '11111111-1111-4111-8111-111111111111',
+      ttsIdempotencyFingerprint: '["你好","voice/ref.wav","",0.4]',
+    })
+  })
+
   it('round-trips edge portType/order/role without losing metadata', () => {
     const nodes = [node('a', 'image', 0, 0), node('b', 'video', 0, 0, { genMode: 'firstlast' })]
     const edges: Edge[] = [{ id: 'e1', source: 'a', target: 'b', sourceHandle: 'frame-out', targetHandle: 'first-frame', data: { portType: 'frame-image', order: 0, role: 'first-frame' } }]
@@ -107,7 +127,7 @@ describe('deserializeCanvas', () => {
       edges: [{ id: 'e1', source: 'a', target: 'b' }],
       viewport: { x: 0, y: 0, zoom: 1 },
     })
-    expect(back.edges[0]).toMatchObject({ data: { portType: 'audio-voice', invalid: true }, label: '无效连线' })
+    expect(back.edges[0]).toMatchObject({ data: { portType: 'audio-voice', invalid: true }, label: '無效連線' })
   })
 
   it('fills DEFAULT_NODE_DATA for partial node data', () => {

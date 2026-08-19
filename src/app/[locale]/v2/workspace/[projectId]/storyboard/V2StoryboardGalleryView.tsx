@@ -27,7 +27,6 @@
  */
 
 import type { Dispatch, ReactNode, SetStateAction } from 'react'
-import type { UseMutationResult } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
 import { AppIcon } from '@/components/ui/icons'
 import { MultiShotBindingsRail } from './MultiShotBindingsRail'
@@ -41,7 +40,7 @@ import {
 import type { useGenerateVideo } from '@/lib/query/hooks/useStoryboards'
 import type { useActiveTasks } from '@/lib/query/hooks/useTaskStatus'
 import type { useRegenerateProjectPanelImage } from '@/lib/query/mutations/storyboard-panel-mutations'
-import type { useAutoGroupMultiShot, AutoGroupResult } from '@/lib/query/mutations/auto-group-multi-shot-mutation'
+import type { AutoGroupMutation } from '@/lib/query/mutations/auto-group-multi-shot-mutation'
 
 // Phase 1 step 4 prep (2026-06-22) — `VideoFamily` consolidated to
 // storyboard-client-helpers (single source of truth). Was previously
@@ -59,6 +58,7 @@ export interface V2StoryboardGalleryViewProps {
 
   // ── Permission ──
   canEdit: boolean
+  appearanceGenerationBlocked: boolean
 
   // ── Shared overlay (modals + cleanup dialog rendered in parent) ──
   globalOverlaysNode: ReactNode
@@ -75,7 +75,7 @@ export interface V2StoryboardGalleryViewProps {
   analyzeProgress: number
   onAnalyzeStoryboard: () => void
   onStaleCleanupOpen: () => void
-  autoGroup: UseMutationResult<AutoGroupResult, Error, { episodeId: string }>
+  autoGroup: AutoGroupMutation
   onAutoGroup: () => void
   multiShotState: MultiShotState
   onSubmitMultiShot: () => void
@@ -129,6 +129,7 @@ export function V2StoryboardGalleryView(props: V2StoryboardGalleryViewProps) {
     canMultiShot,
     videoFamily,
     canEdit,
+    appearanceGenerationBlocked,
     globalOverlaysNode,
     layoutToggleNode,
     videoModelPickerNode,
@@ -176,9 +177,9 @@ export function V2StoryboardGalleryView(props: V2StoryboardGalleryViewProps) {
   const selectedIdxForGallery = allPanels.findIndex((p) => p.id === selected?.id)
 
   return (
-    <>
+    <div className="contents [&_a]:min-h-11 [&_a]:min-w-11 [&_button]:min-h-11 [&_button]:min-w-11">
       {globalOverlaysNode}
-      <div className="kuiper-storyboard-shell flex flex-col">
+      <div className="kuiper-storyboard-shell flex flex-col [&_a]:min-h-11 [&_a]:min-w-11 [&_button]:min-h-11 [&_button]:min-w-11">
         {/* Top toolbar — analyze + autogroup + layout toggle
             (2026-05-12: split into two rows — view toggle on top,
             title + action cluster below — same as Groups layout) */}
@@ -233,7 +234,7 @@ export function V2StoryboardGalleryView(props: V2StoryboardGalleryViewProps) {
                     ? t('multiShot.tipScriptAnalyzing')
                     : t('multiShot.tipSplitDetailLLM')
                 }
-                className="flex items-center gap-1.5 rounded-sm border border-violet-500/40 bg-violet-500/10 px-3 py-1.5 font-mono text-[14px] tracking-wider text-violet-300 transition-all hover:bg-violet-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex items-center gap-1.5 rounded-sm border border-[var(--production-blue)]/45 bg-[var(--production-blue-soft)] px-3 py-1.5 font-mono text-[14px] tracking-wider text-[var(--process-cyan-strong)] transition-all hover:border-[var(--production-blue)] hover:bg-[var(--production-blue-soft)] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <AppIcon name="sparklesAlt" className="h-3 w-3" />
                 {autoGroup.isPending ? t('buttons.splitting') : analyzeBusy ? t('buttons.splitWhileAnalyzing') : hasGroups ? t('buttons.resplit') : t('buttons.smartSplit')}
@@ -241,7 +242,7 @@ export function V2StoryboardGalleryView(props: V2StoryboardGalleryViewProps) {
               <button
                 type="button"
                 onClick={() => onSubmitMultiShot()}
-                disabled={multiShotState.status === 'submitting' || !canMultiShot}
+                disabled={multiShotState.status === 'submitting' || !canMultiShot || appearanceGenerationBlocked}
                 title={
                   !canMultiShot
                     ? t('multiShot.tipCurrentModelNotMultiShot')
@@ -396,9 +397,9 @@ export function V2StoryboardGalleryView(props: V2StoryboardGalleryViewProps) {
                 <div className="mt-4 grid grid-cols-2 gap-2">
                   <button
                     type="button"
-                    disabled={!selected || regenPanel.isPending || !canEdit}
+                    disabled={!selected || regenPanel.isPending || !canEdit || appearanceGenerationBlocked}
                     onClick={() => {
-                      if (!selected) return
+                      if (!selected || appearanceGenerationBlocked) return
                       const panelIdAtSubmit = selected.id
                       regenPanel.mutate(
                         { panelId: panelIdAtSubmit },
@@ -424,7 +425,7 @@ export function V2StoryboardGalleryView(props: V2StoryboardGalleryViewProps) {
                   </button>
                   <button
                     type="button"
-                    disabled={!selected.imageUrl || generateVideo.isPending || isCurrentPanelVideoInFlight || !canEdit}
+                    disabled={!selected.imageUrl || generateVideo.isPending || isCurrentPanelVideoInFlight || !canEdit || appearanceGenerationBlocked}
                     onClick={() => onGenerateVideo()}
                     className="rounded-sm border border-primary-500/40 bg-primary-500/10 py-2 font-serif-cn text-xs text-primary-300 transition-all hover:bg-primary-500/20 disabled:opacity-50"
                   >
@@ -446,7 +447,7 @@ export function V2StoryboardGalleryView(props: V2StoryboardGalleryViewProps) {
                   <span className="shrink-0">{t('gallery.fal.label')}</span>
                   <button
                     type="button"
-                    disabled={!selected.imageUrl || generateVideo.isPending || isCurrentPanelVideoInFlight || !canEdit}
+                    disabled={!selected.imageUrl || generateVideo.isPending || isCurrentPanelVideoInFlight || !canEdit || appearanceGenerationBlocked}
                     onClick={() => onGenerateVideo('fal::bytedance/seedance-2.0/image-to-video')}
                     title={t('gallery.fal.seedanceTitle')}
                     className="flex flex-1 items-center justify-center rounded-sm border border-border-strong bg-raised/40 py-1 font-serif-cn text-[11px] text-text-secondary transition-all hover:border-primary-500/40 hover:text-primary-400 disabled:opacity-50"
@@ -455,7 +456,7 @@ export function V2StoryboardGalleryView(props: V2StoryboardGalleryViewProps) {
                   </button>
                   <button
                     type="button"
-                    disabled={!selected.imageUrl || generateVideo.isPending || isCurrentPanelVideoInFlight || !canEdit}
+                    disabled={!selected.imageUrl || generateVideo.isPending || isCurrentPanelVideoInFlight || !canEdit || appearanceGenerationBlocked}
                     onClick={() => onGenerateVideo('fal::bytedance/seedance-2.0/fast/image-to-video')}
                     title={t('gallery.fal.fastTitle')}
                     className="flex flex-1 items-center justify-center rounded-sm border border-border-strong bg-raised/40 py-1 font-serif-cn text-[11px] text-text-secondary transition-all hover:border-primary-500/40 hover:text-primary-400 disabled:opacity-50"
@@ -551,6 +552,6 @@ export function V2StoryboardGalleryView(props: V2StoryboardGalleryViewProps) {
           </aside>
         </div>
       </div>
-    </>
+    </div>
   )
 }

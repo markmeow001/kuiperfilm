@@ -15,7 +15,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
+import { useTranslations } from 'next-intl'
 import { useProjectData } from '@/lib/query/hooks/useProjectData'
 import {
   useBulkBindEpisodeCharacterAppearance,
@@ -28,6 +28,7 @@ import {
 import { useUploadAndExpandCharacterToMultiView } from '@/lib/query/mutations/character-image-ops-mutations'
 import { useRegisterArkAsset } from '@/lib/query/mutations/useRegisterArkAsset'
 import { AppIcon } from '@/components/ui/icons'
+import { DarkMediaLightbox } from '@/components/v2/DarkMediaLightbox'
 import { ArkAssetRegisterChip } from './ArkAssetRegisterChip'
 
 interface AppearanceOption {
@@ -54,12 +55,16 @@ interface AppearanceOption {
 interface V2CharacterAppearancesPanelProps {
   projectId: string
   characterId: string
+  currentEpisodeId: string | null
+  activeAppearanceId: string
   appearances: AppearanceOption[]
 }
 
 export function V2CharacterAppearancesPanel({
   projectId,
   characterId,
+  currentEpisodeId,
+  activeAppearanceId,
   appearances,
 }: V2CharacterAppearancesPanelProps) {
   const projectQuery = useProjectData(projectId)
@@ -85,13 +90,14 @@ export function V2CharacterAppearancesPanel({
 
   return (
     <div className="space-y-2 rounded-sm border border-border-soft/60 bg-raised/40 p-3">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="font-mono text-[14px] tracking-wider text-text-tertiary">
           造型管理 ({appearances.length})
         </div>
         <AddAppearanceButton
           projectId={projectId}
           characterId={characterId}
+          currentEpisodeId={currentEpisodeId}
           existingAppearanceCount={appearances.length}
         />
       </div>
@@ -105,6 +111,7 @@ export function V2CharacterAppearancesPanel({
               projectId={projectId}
               characterId={characterId}
               appearance={ap}
+              isActive={ap.id === activeAppearanceId}
               canDelete={appearances.length > 1}
               onZoom={(url) => setZoomImageUrl(url)}
             />
@@ -114,9 +121,13 @@ export function V2CharacterAppearancesPanel({
 
       {/* Lightbox overlay — single shared instance per panel so all
           thumbnail clicks route through the same z-index / ESC handler. */}
-      {zoomImageUrl ? (
-        <AppearanceLightbox url={zoomImageUrl} onClose={() => setZoomImageUrl(null)} />
-      ) : null}
+      <DarkMediaLightbox
+        src={zoomImageUrl}
+        alt="造型參考圖"
+        closeLabel="關閉造型圖片預覽"
+        dismissHint="點擊背景或按 Esc 關閉"
+        onClose={() => setZoomImageUrl(null)}
+      />
 
       {appearances.length <= 1 ? (
         <div className="font-body text-[11px] italic text-text-tertiary">
@@ -168,17 +179,20 @@ function AppearanceManageRow({
   projectId,
   characterId,
   appearance,
+  isActive,
   canDelete,
   onZoom,
 }: {
   projectId: string
   characterId: string
   appearance: AppearanceOption
+  isActive: boolean
   canDelete: boolean
   /** Click handler for the thumbnail — opens the shared lightbox in
    * the parent panel. Called with the url to render full-screen. */
   onZoom: (url: string) => void
 }) {
+  const activeAppearanceT = useTranslations('v2Subjects.activeAppearance')
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(appearance.changeReason ?? '')
   // Description-editor expansion. User-asked 2026-05-13: '目前只能更改最原本
@@ -279,7 +293,13 @@ function AppearanceManageRow({
   }
 
   return (
-    <div className="rounded-sm bg-canvas/40">
+    <div
+      className={`rounded-[10px] border bg-canvas/40 ${
+        isActive
+          ? 'border-[var(--production-tool)]/45'
+          : 'border-transparent'
+      }`}
+    >
       <div className="flex items-center gap-2.5 p-2">
         {/* 64×64 thumbnail. Click → lightbox. Hover overlay shows the zoom
             icon so it reads as clickable. Falls back to a gradient + 👤 icon
@@ -288,7 +308,8 @@ function AppearanceManageRow({
           <button
             type="button"
             onClick={() => onZoom(thumbUrl)}
-            className="group relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-sm border border-border-soft bg-raised transition-all hover:border-primary-500/60"
+            aria-label={`圖片預覽：${display}`}
+            className="group relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-sm border border-border-soft bg-raised transition-all hover:border-primary-500/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--production-focus)]"
             title="點擊看大圖"
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -297,9 +318,9 @@ function AppearanceManageRow({
               alt={display}
               className="h-full w-full object-cover transition-transform group-hover:scale-105"
             />
-            <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition-opacity group-hover:bg-black/40 group-hover:opacity-100">
+            <span className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition-opacity group-hover:bg-black/40 group-hover:opacity-100">
               <span className="font-mono text-[12px] tracking-wider text-primary-300">🔍</span>
-            </div>
+            </span>
           </button>
         ) : (
           <div
@@ -314,6 +335,11 @@ function AppearanceManageRow({
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <div className="flex items-center gap-2">
             <span className="flex-shrink-0 font-mono text-[12px] tracking-wider text-text-tertiary">{idxLabel}</span>
+            {isActive ? (
+              <span className="flex-shrink-0 rounded-full bg-[var(--production-tool-soft)] px-2 py-0.5 text-[11px] font-semibold text-[var(--production-tool)]">
+                {activeAppearanceT('modalLabel')}
+              </span>
+            ) : null}
             {editing ? (
               <input
                 autoFocus
@@ -467,60 +493,6 @@ function AppearanceManageRow({
 }
 
 /**
- * Full-screen lightbox overlay for appearance thumbnails. Lives at panel
- * root so all thumbnail clicks route through one z-index layer. Clicking
- * the backdrop or pressing ESC closes.
- */
-function AppearanceLightbox({ url, onClose }: { url: string; onClose: () => void }) {
-  // ESC to close. Effect runs only while overlay is mounted.
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', handler)
-    return () => window.removeEventListener('keydown', handler)
-  }, [onClose])
-
-  // 2026-05-13 — portal to <body> so the overlay escapes the parent
-  // modal's stacking context. Without this the lightbox would render
-  // inside V2CharacterEditModal's transformed/scrollable container and
-  // appear at the TOP of that scroll region (user-reported: 'I have to
-  // scroll up to see the preview'). The portal lets `fixed inset-0`
-  // resolve against the actual viewport.
-  if (typeof window === 'undefined') return null
-
-  return createPortal(
-    <div
-      onClick={onClose}
-      className="fixed inset-0 z-[200] flex items-center justify-center bg-black/85 backdrop-blur-sm"
-    >
-      {/* Sized at 60vw × 60vh per user request ('不需要展到最大,60%就夠').
-          The image itself preserves aspect ratio inside this box. */}
-      <div
-        className="relative max-h-[60vh] max-w-[60vw]"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={url}
-          alt="造型參考圖"
-          className="max-h-[60vh] max-w-[60vw] rounded-sm object-contain shadow-2xl"
-        />
-        <button
-          type="button"
-          onClick={onClose}
-          className="absolute -right-2 -top-2 flex h-7 w-7 items-center justify-center rounded-full border border-border-strong bg-raised font-mono text-[14px] text-text-secondary shadow-md transition-colors hover:border-primary-500/60 hover:text-primary-300"
-          title="關閉 (ESC)"
-        >
-          ✕
-        </button>
-      </div>
-    </div>,
-    document.body,
-  )
-}
-
-/**
  * Range-bind toolbar. User picks "套用造型 X 至 第 1 - 10 集" and
  * fires one bulk request. Episodes outside the range are left
  * untouched.
@@ -578,8 +550,8 @@ function RangeBindToolbar({
   }
 
   return (
-    <div className="rounded-sm border border-violet-500/20 bg-violet-500/5 px-2 py-2">
-      <div className="mb-1.5 font-mono text-[14px] tracking-wider text-violet-300">
+    <div className="rounded-sm border border-[var(--process-cyan)]/30 bg-[var(--process-cyan-soft)] px-2 py-2">
+      <div className="mb-1.5 font-mono text-[14px] tracking-wider text-[var(--process-cyan-strong)]">
         ⚡ 批量綁定
       </div>
       <div className="flex flex-wrap items-center gap-1.5 font-body text-xs text-text-secondary">
@@ -588,7 +560,7 @@ function RangeBindToolbar({
           value={selectedAppearance}
           onChange={(e) => setSelectedAppearance(e.target.value)}
           disabled={bulk.isPending}
-          className="rounded-sm border border-border-soft bg-canvas/80 px-1.5 py-0.5 text-xs text-text-primary outline-none focus:border-violet-500/60 disabled:opacity-50"
+          className="rounded-sm border border-border-soft bg-canvas/80 px-1.5 py-0.5 text-xs text-text-primary outline-none focus:border-[var(--production-focus)] disabled:opacity-50"
         >
           <option value="">— 用第一個造型 —</option>
           {appearances.map((ap) => {
@@ -608,7 +580,7 @@ function RangeBindToolbar({
           min={minNum}
           max={maxNum}
           disabled={bulk.isPending}
-          className="w-14 rounded-sm border border-border-soft bg-canvas/80 px-1.5 py-0.5 text-center font-mono text-xs text-text-primary outline-none focus:border-violet-500/60 disabled:opacity-50"
+          className="w-14 rounded-sm border border-border-soft bg-canvas/80 px-1.5 py-0.5 text-center font-mono text-xs text-text-primary outline-none focus:border-[var(--production-focus)] disabled:opacity-50"
         />
         <span className="text-text-secondary">-</span>
         <input
@@ -618,14 +590,14 @@ function RangeBindToolbar({
           min={minNum}
           max={maxNum}
           disabled={bulk.isPending}
-          className="w-14 rounded-sm border border-border-soft bg-canvas/80 px-1.5 py-0.5 text-center font-mono text-xs text-text-primary outline-none focus:border-violet-500/60 disabled:opacity-50"
+          className="w-14 rounded-sm border border-border-soft bg-canvas/80 px-1.5 py-0.5 text-center font-mono text-xs text-text-primary outline-none focus:border-[var(--production-focus)] disabled:opacity-50"
         />
         <span className="text-text-secondary">集</span>
         <button
           type="button"
           onClick={handleApply}
           disabled={bulk.isPending || matchedEpisodes.length === 0}
-          className="ml-auto rounded-sm border border-violet-500/40 bg-violet-500/10 px-3 py-0.5 font-mono text-[14px] tracking-wider text-violet-200 transition-all hover:bg-violet-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+          className="ml-auto rounded-sm border border-[var(--production-blue)]/45 bg-[var(--production-blue-soft)] px-3 py-0.5 font-mono text-[14px] tracking-wider text-[var(--process-cyan-strong)] transition-all hover:border-[var(--production-blue)] hover:bg-[var(--production-blue-soft)] disabled:cursor-not-allowed disabled:opacity-40"
         >
           {bulk.isPending ? '套用中…' : `套用 (${matchedEpisodes.length} 集)`}
         </button>
@@ -637,10 +609,12 @@ function RangeBindToolbar({
 function AddAppearanceButton({
   projectId,
   characterId,
+  currentEpisodeId,
   existingAppearanceCount,
 }: {
   projectId: string
   characterId: string
+  currentEpisodeId: string | null
   existingAppearanceCount: number
 }) {
   const [open, setOpen] = useState(false)
@@ -675,7 +649,12 @@ function AddAppearanceButton({
     }
     const descToSave = trimmedDesc || `(由上傳的參考圖生成的「${trimmedReason}」造型)`
     create.mutate(
-      { characterId, changeReason: trimmedReason, description: descToSave },
+      {
+        characterId,
+        changeReason: trimmedReason,
+        description: descToSave,
+        episodeId: currentEpisodeId ?? undefined,
+      },
       {
         onSuccess: (data: unknown) => {
           // The create endpoint returns { appearance: { id, ... } }
@@ -718,14 +697,14 @@ function AddAppearanceButton({
   const suggestedReason = existingAppearanceCount === 1 ? '時間跳轉造型' : `造型 ${existingAppearanceCount + 1}`
 
   return (
-    <div className="flex flex-1 flex-col gap-2 rounded-sm border border-primary-500/40 bg-canvas/60 p-2">
+    <div className="flex min-w-0 w-full flex-1 flex-col gap-2 rounded-sm border border-primary-500/40 bg-canvas/60 p-2">
       <div className="font-mono text-[14px] tracking-wider text-primary-400">新增造型</div>
       <input
         type="text"
         value={reason}
         onChange={(e) => setReason(e.target.value)}
         placeholder={`造型名稱(例:${suggestedReason})`}
-        className="rounded-sm border border-border-soft bg-canvas/80 px-2 py-1 font-body text-xs text-text-primary outline-none focus:border-primary-500"
+        className="min-w-0 w-full rounded-sm border border-border-soft bg-canvas/80 px-2 py-1 font-body text-xs text-text-primary outline-none focus:border-primary-500"
         disabled={inFlight}
       />
       <textarea
@@ -735,7 +714,7 @@ function AddAppearanceButton({
         placeholder={pickedFile
           ? '描述(可選 — 上傳參考圖後可以留空,系統用圖片生 3 視角)'
           : '外觀描述(種族/年齡/服裝/配件,越具體越穩)或下方上傳參考圖至少擇一'}
-        className="resize-none rounded-sm border border-border-soft bg-canvas/80 px-2 py-1 font-body text-xs text-text-primary outline-none focus:border-primary-500"
+        className="min-w-0 w-full resize-none rounded-sm border border-border-soft bg-canvas/80 px-2 py-1 font-body text-xs text-text-primary outline-none focus:border-primary-500"
         disabled={inFlight}
       />
 
@@ -743,18 +722,18 @@ function AddAppearanceButton({
           after the appearance row is created so the new outfit gets a
           3-view sheet generated FROM the user's reference instead of a
           pure-text prompt. */}
-      <div className="flex items-center justify-between rounded-sm border border-border-soft/60 bg-raised/40 px-2 py-1.5">
-        <div className="flex items-center gap-2">
+      <div className="flex min-w-0 flex-col items-stretch gap-2 rounded-sm border border-border-soft/60 bg-raised/40 px-2 py-1.5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 items-center gap-2">
           <AppIcon name="image" className="h-3 w-3 text-text-tertiary" />
           {pickedFile ? (
-            <span className="font-mono text-[14px] text-primary-300" title={pickedFile.name}>
+            <span className="min-w-0 truncate font-mono text-[14px] text-primary-300" title={pickedFile.name}>
               {pickedFile.name.length > 28 ? `${pickedFile.name.slice(0, 28)}…` : pickedFile.name}
             </span>
           ) : (
-            <span className="font-mono text-[14px] text-text-tertiary">參考圖(可選 — 上傳即用此圖生 3 視角)</span>
+            <span className="min-w-0 break-words font-mono text-[14px] text-text-tertiary">參考圖(可選 — 上傳即用此圖生 3 視角)</span>
           )}
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex shrink-0 flex-wrap items-center gap-1.5">
           {pickedFile ? (
             <button
               type="button"
@@ -789,7 +768,7 @@ function AddAppearanceButton({
         />
       </div>
 
-      <div className="flex items-center justify-end gap-2 font-mono text-[14px]">
+      <div className="flex flex-wrap items-center justify-end gap-2 font-mono text-[14px]">
         <button
           type="button"
           onClick={reset}
@@ -822,19 +801,23 @@ interface EpisodeBindingRowProps {
   appearances: AppearanceOption[]
 }
 
-function EpisodeBindingRow({
+export function EpisodeBindingRow({
   projectId,
   characterId,
   episode,
   appearances,
 }: EpisodeBindingRowProps) {
+  const t = useTranslations('v2Subjects.activeAppearance')
   const bindingsQuery = useEpisodeCharacterBindings(projectId, episode.id)
   const updateBinding = useUpdateEpisodeCharacterBinding(projectId)
 
   const currentBinding = (bindingsQuery.data ?? []).find((b) => b.characterId === characterId)
   const currentValue = currentBinding?.appearanceId ?? ''
+  const bindingLoadFailed = Boolean(bindingsQuery.error)
+  const bindingUnavailable = bindingsQuery.isPending || bindingsQuery.isFetching || bindingLoadFailed
 
   function handleChange(value: string) {
+    if (bindingUnavailable) return
     updateBinding.mutate({
       episodeId: episode.id,
       characterId,
@@ -843,30 +826,53 @@ function EpisodeBindingRow({
   }
 
   const epLabel = episode.episodeNumber
-    ? `第 ${episode.episodeNumber} 集`
+    ? t('episodeNumber', { number: episode.episodeNumber })
     : episode.name ?? episode.id.slice(0, 6)
 
   return (
-    <div className="flex items-center gap-2">
-      <div className="w-20 flex-shrink-0 font-mono text-[14px] text-text-secondary">{epLabel}</div>
-      <select
-        value={currentValue}
-        onChange={(e) => handleChange(e.target.value)}
-        disabled={updateBinding.isPending}
-        className="flex-1 rounded-sm border border-border-soft bg-canvas/80 px-2 py-1 font-body text-xs text-text-primary outline-none focus:border-primary-500 disabled:opacity-50"
-      >
-        <option value="">— 用第一個造型 —</option>
-        {appearances.map((ap) => {
-          const label = ap.changeReason || `造型 ${(ap.appearanceIndex ?? 0) + 1}`
-          return (
-            <option key={ap.id} value={ap.id}>
-              {label}
-            </option>
-          )
-        })}
-      </select>
+    <div className="flex flex-col gap-2 rounded-[10px] border border-border-soft/60 bg-canvas/35 p-2 sm:flex-row sm:items-center">
+      <div className="w-full flex-shrink-0 text-[14px] text-text-secondary sm:w-20">{epLabel}</div>
+      <div className="min-w-0 flex-1">
+        <select
+          aria-label={epLabel}
+          value={currentValue}
+          onChange={(e) => handleChange(e.target.value)}
+          disabled={bindingUnavailable || updateBinding.isPending}
+          className="min-h-11 w-full rounded-[9px] border border-border-soft bg-canvas/80 px-2 text-xs text-text-primary outline-none focus:border-[var(--production-focus)] focus:ring-2 focus:ring-[var(--production-focus)]/20 disabled:cursor-not-allowed disabled:opacity-55"
+        >
+          <option value="">{t('bindingDefaultOption')}</option>
+          {appearances.map((ap) => {
+            const label = ap.changeReason || t('appearanceNumber', { number: (ap.appearanceIndex ?? 0) + 1 })
+            return (
+              <option key={ap.id} value={ap.id}>
+                {label}
+              </option>
+            )
+          })}
+        </select>
+        {bindingsQuery.isPending || (bindingsQuery.isFetching && !bindingLoadFailed) ? (
+          <div role="status" className="mt-1.5 text-[12px] text-[var(--production-ink-muted)]">
+            {t('bindingLoading')}
+          </div>
+        ) : null}
+        {bindingLoadFailed ? (
+          <div
+            role="alert"
+            className="mt-1.5 flex flex-col gap-2 rounded-[8px] border border-[var(--production-danger)]/30 bg-[var(--production-danger)]/10 px-2.5 py-2 text-[12px] text-[var(--production-danger)] sm:flex-row sm:items-center sm:justify-between"
+          >
+            <span>{t('bindingError')}</span>
+            <button
+              type="button"
+              onClick={() => { void bindingsQuery.refetch() }}
+              className="min-h-11 shrink-0 rounded-[8px] border border-[var(--production-danger)]/40 px-3 font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--production-focus)]"
+            >
+              {t('bindingRetry')}
+            </button>
+          </div>
+        ) : null}
+      </div>
       {updateBinding.isPending ? (
-        <span className="font-mono text-[12px] text-text-tertiary">儲存中…</span>
+        <span className="text-[12px] text-text-tertiary">{t('bindingSaving')}</span>
       ) : null}
     </div>
   )

@@ -2,7 +2,6 @@
 
 import ImagePreviewModal from '@/components/ui/ImagePreviewModal'
 import ImageEditModal from './ImageEditModal'
-import VoiceDesignDialog from '../voice/VoiceDesignDialog'
 import CharacterProfileDialog from './CharacterProfileDialog'
 import {
   CharacterCreationModal,
@@ -37,11 +36,6 @@ interface CharacterImageEditModalState {
   characterName: string
 }
 
-interface VoiceDesignCharacterState {
-  name: string
-  hasExistingVoice: boolean
-}
-
 interface EditingProfileState {
   characterId: string
   characterName: string
@@ -57,8 +51,6 @@ interface AssetsStageModalsProps {
   handleUpdateLocationDescription: (newDescription: string) => Promise<void>
   handleLocationImageEdit: (modifyPrompt: string, extraImageUrls?: string[]) => Promise<void>
   handleCharacterImageEdit: (modifyPrompt: string, extraImageUrls?: string[]) => Promise<void>
-  handleCloseVoiceDesign: () => void
-  handleVoiceDesignSave: (voiceId: string, audioBase64: string) => Promise<void>
   handleCloseCopyPicker: () => void
   handleConfirmCopyFromGlobal: (globalAssetId: string) => Promise<void>
   handleConfirmProfile: (characterId: string, updatedProfileData?: CharacterProfileData) => Promise<void>
@@ -77,7 +69,6 @@ interface AssetsStageModalsProps {
   editingLocation: EditingLocationState | null
   showAddCharacter: boolean
   showAddLocation: boolean
-  voiceDesignCharacter: VoiceDesignCharacterState | null
   editingProfile: EditingProfileState | null
   copyFromGlobalTarget: GlobalCopyTarget | null
   isGlobalCopyInFlight: boolean
@@ -92,8 +83,6 @@ export default function AssetsStageModals({
   handleUpdateLocationDescription,
   handleLocationImageEdit,
   handleCharacterImageEdit,
-  handleCloseVoiceDesign,
-  handleVoiceDesignSave,
   handleCloseCopyPicker,
   handleConfirmCopyFromGlobal,
   handleConfirmProfile,
@@ -112,7 +101,6 @@ export default function AssetsStageModals({
   editingLocation,
   showAddCharacter,
   showAddLocation,
-  voiceDesignCharacter,
   editingProfile,
   copyFromGlobalTarget,
   isGlobalCopyInFlight,
@@ -189,17 +177,6 @@ export default function AssetsStageModals({
             closeAddLocation()
             onRefresh()
           }}
-        />
-      )}
-
-      {voiceDesignCharacter && (
-        <VoiceDesignDialog
-          isOpen={!!voiceDesignCharacter}
-          speaker={voiceDesignCharacter.name}
-          hasExistingVoice={voiceDesignCharacter.hasExistingVoice}
-          projectId={projectId}
-          onClose={handleCloseVoiceDesign}
-          onSave={handleVoiceDesignSave}
         />
       )}
 

@@ -209,27 +209,30 @@ export function V2LocationEditModal({
         <div className="grid gap-6 p-6 md:grid-cols-[320px_1fr]">
           {/* Left: image + actions */}
           <div className="space-y-3">
-            <div
-              className={`relative aspect-video overflow-hidden rounded-sm border border-border-soft bg-gradient-to-br from-overlay to-raised ${
+            <button
+              type="button"
+              disabled={!imageUrl}
+              aria-label={`圖片預覽：${location.name ?? '場景'}`}
+              className={`relative block w-full aspect-video overflow-hidden rounded-sm border border-border-soft bg-gradient-to-br from-overlay to-raised ${
                 imageUrl ? 'cursor-zoom-in' : ''
-              }`}
+              } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--production-focus)] disabled:cursor-default`}
               onClick={() => imageUrl && onZoomImage(imageUrl)}
             >
               {imageUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={imageUrl} alt={location.name ?? '場景'} className="h-full w-full object-cover" />
               ) : (
-                <div className="flex h-full w-full items-center justify-center">
+                <span className="flex h-full w-full items-center justify-center">
                   <AppIcon name="image" className="h-10 w-10 text-text-tertiary" />
-                </div>
+                </span>
               )}
               {isRegenerating ? (
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-canvas/70 backdrop-blur-sm">
+                <span className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-canvas/70 backdrop-blur-sm">
                   <AppIcon name="sparklesAlt" className="h-6 w-6 animate-pulse text-primary-400" />
-                  <div className="font-mono text-[14px] tracking-wider text-primary-300">生圖中…</div>
-                </div>
+                  <span className="font-mono text-[14px] tracking-wider text-primary-300">生圖中…</span>
+                </span>
               ) : null}
-            </div>
+            </button>
 
             <input
               ref={fileInputRef}

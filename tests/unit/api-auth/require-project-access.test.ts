@@ -177,6 +177,19 @@ describe('requireProjectAccess — Step 3.5: LEGACY ws_owner_legacy (CRITICAL RE
     const result = await requireProjectAccess(PROJECT_ID, EDITOR_ID, 'write')
     expect(result.allowed).toBe(false)
   })
+
+  it('does NOT apply legacy workspace ownership to a project assigned to another workspace', async () => {
+    setupBaselineMocks(mockProject({ workspaceId: WS_ID }), 'editor')
+    prismaMock.workspace.findUnique.mockResolvedValue({ ownerEditorId: 'other-owner' })
+    // This would have matched the project owner's unrelated legacy
+    // membership before explicit workspace scoping became authoritative.
+    prismaMock.workspace.findFirst.mockResolvedValue({ id: 'legacy-ws' })
+
+    const result = await requireProjectAccess(PROJECT_ID, EDITOR_ID, 'write')
+
+    expect(result.allowed).toBe(false)
+    expect(prismaMock.workspace.findFirst).not.toHaveBeenCalled()
+  })
 })
 
 // ─── Step 4: per-project collaborator ────────────────────────────

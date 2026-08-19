@@ -2,7 +2,7 @@
 
 import { logError as _ulogError } from '@/lib/logging/core'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useTranslations } from 'next-intl'
+import { useLocale, useTranslations } from 'next-intl'
 import {
   VideoToolbar,
   type VideoGenerationOptionValue,
@@ -74,6 +74,7 @@ export function useVideoStageRuntime({
   onEnterEditor,
 }: VideoStageShellProps) {
   const t = useTranslations('video')
+  const locale = useLocale()
 
   const {
     panelVideoPreference,
@@ -331,11 +332,6 @@ export function useVideoStageRuntime({
   const isAnyTaskRunning = runningCount > 0
   const canSubmitBatchGenerate = !!batchSelectedModel && batchMissingCapabilityFields.length === 0
 
-  const handleOpenBatchGenerateModal = useCallback(() => {
-    if (isAnyTaskRunning) return
-    setIsBatchConfigOpen(true)
-  }, [isAnyTaskRunning])
-
   const handleCloseBatchGenerateModal = useCallback(() => {
     setIsBatchConfigOpen(false)
   }, [])
@@ -370,7 +366,7 @@ export function useVideoStageRuntime({
         failedCount={failedCount}
         isAnyTaskRunning={isAnyTaskRunning}
         isDownloading={isDownloading}
-        onGenerateAll={handleOpenBatchGenerateModal}
+        batchGenerateHref={`/${locale}/v2/workspace/${encodeURIComponent(projectId)}/storyboard?episode=${encodeURIComponent(episodeId)}`}
         onDownloadAll={handleDownloadAllVideos}
         onBack={onBack}
         onEnterEditor={onEnterEditor}

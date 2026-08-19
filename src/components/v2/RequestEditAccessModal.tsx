@@ -13,6 +13,7 @@
 
 import { useState } from 'react'
 import { useTranslations } from 'next-intl'
+import { Modal } from './Modal'
 
 interface RequestEditAccessModalProps {
   projectId: string
@@ -72,42 +73,29 @@ export function RequestEditAccessModal({
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/70 backdrop-blur-sm"
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-md rounded-sm border border-amber-900/30 bg-stone-950 p-6 shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="mb-4 flex items-center justify-between">
-          <h3 className="font-serif-cn text-lg text-stone-100">{t('title')}</h3>
-          <button
-            type="button"
-            onClick={onClose}
-            className="font-mono text-sm text-stone-500 transition-colors hover:text-stone-300"
-            aria-label={t('closeAria')}
-          >
-            ✕
-          </button>
-        </div>
-
-        <div className="mb-4 space-y-1 font-fraunces text-sm text-stone-400">
-          <div>{t('projectLabel')} <span className="text-stone-200">《{projectName}》</span></div>
-          {ownerName ? <div>{t('ownerLabel')} <span className="text-stone-200">@{ownerName}</span></div> : null}
+    <Modal open onClose={onClose} size="md">
+      <Modal.Header
+        heading={t('title')}
+        onClose={onClose}
+        closeAriaLabel={t('closeAria')}
+      />
+      <Modal.Body>
+        <div className="mb-4 space-y-1 font-fraunces text-sm text-[var(--production-ink-muted)]">
+          <div>{t('projectLabel')} <span className="text-[var(--production-ink)]">《{projectName}》</span></div>
+          {ownerName ? <div>{t('ownerLabel')} <span className="text-[var(--production-ink)]">@{ownerName}</span></div> : null}
         </div>
 
         {success === 'created' ? (
-          <div className="rounded-sm border border-emerald-600/40 bg-emerald-600/10 px-3 py-2 font-fraunces text-sm text-emerald-300">
+          <div className="rounded-[10px] border border-emerald-500/35 bg-emerald-500/10 px-3 py-2 font-fraunces text-sm text-emerald-200" role="status">
             {t('successCreated')}
           </div>
         ) : success === 'already-pending' ? (
-          <div className="rounded-sm border border-amber-600/40 bg-amber-600/10 px-3 py-2 font-fraunces text-sm text-amber-300">
+          <div className="rounded-[10px] border border-amber-500/35 bg-amber-500/10 px-3 py-2 font-fraunces text-sm text-amber-200" role="status">
             {t('successAlreadyPending')}
           </div>
         ) : (
           <>
-            <label className="block font-fraunces text-xs italic text-stone-500">
+            <label className="block font-fraunces text-xs italic text-[var(--production-ink-muted)]">
               {t('messageLabel')}
             </label>
             <textarea
@@ -116,45 +104,45 @@ export function RequestEditAccessModal({
               maxLength={500}
               rows={4}
               placeholder={t('messagePlaceholder')}
-              className="mt-1 w-full rounded-sm border border-stone-700 bg-stone-900 px-3 py-2 font-serif-cn text-sm text-stone-200 placeholder:text-stone-600 focus:border-amber-500/60 focus:outline-none"
+              className="mt-1 w-full rounded-[10px] border border-[var(--production-border)] bg-[var(--production-muted)] px-3 py-2 font-serif-cn text-sm text-[var(--production-ink)] outline-none placeholder:text-[color-mix(in_srgb,var(--production-ink-muted)_68%,transparent)] hover:border-[var(--production-border-dark)] focus-visible:border-[var(--production-focus)] focus-visible:ring-2 focus-visible:ring-[rgba(85,175,192,0.24)]"
               disabled={submitting}
             />
-            <div className="mt-1 text-right font-mono text-[10px] text-stone-600">
+            <div className="mt-1 text-right font-mono text-[11px] text-[var(--production-ink-muted)]">
               {t('messageCounter', { count: message.length })}
             </div>
 
             {errorReason ? (
-              <div className="mt-2 rounded-sm border border-rose-600/40 bg-rose-600/10 px-3 py-2 font-fraunces text-xs text-rose-300">
+              <div className="mt-2 rounded-[10px] border border-rose-500/35 bg-rose-500/10 px-3 py-2 font-fraunces text-xs text-rose-200" role="alert">
                 {errorReason}
               </div>
             ) : null}
 
-            <div className="mt-3 font-fraunces text-[11px] italic text-stone-500">
+            <div className="mt-3 font-fraunces text-[12px] italic text-[var(--production-ink-muted)]">
               {t('tip')}
             </div>
           </>
         )}
 
-        <div className="mt-5 flex justify-end gap-2">
+      </Modal.Body>
+      <Modal.Footer>
+        <button
+          type="button"
+          onClick={onClose}
+          className="min-h-11 rounded-[10px] border border-[var(--production-border)] bg-transparent px-4 py-2 font-serif-cn text-sm text-[var(--production-ink-muted)] transition-colors hover:border-[var(--production-border-dark)] hover:bg-[var(--production-muted)] hover:text-[var(--production-ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--production-focus)]"
+        >
+          {success ? t('close') : t('cancel')}
+        </button>
+        {!success ? (
           <button
             type="button"
-            onClick={onClose}
-            className="rounded-sm border border-stone-700 bg-transparent px-4 py-1.5 font-serif-cn text-sm text-stone-300 transition-colors hover:bg-stone-900"
+            onClick={handleSubmit}
+            disabled={submitting}
+            className="min-h-11 rounded-[10px] bg-[var(--production-blue)] px-4 py-2 font-serif-cn text-sm font-semibold text-white transition-colors hover:bg-[var(--production-blue-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--production-focus)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--production-surface)] disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {success ? t('close') : t('cancel')}
+            {submitting ? t('submitting') : t('submit')}
           </button>
-          {!success ? (
-            <button
-              type="button"
-              onClick={handleSubmit}
-              disabled={submitting}
-              className="rounded-sm bg-amber-500 px-4 py-1.5 font-serif-cn text-sm font-medium text-stone-950 transition-colors hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {submitting ? t('submitting') : t('submit')}
-            </button>
-          ) : null}
-        </div>
-      </div>
-    </div>
+        ) : null}
+      </Modal.Footer>
+    </Modal>
   )
 }

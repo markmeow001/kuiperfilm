@@ -42,6 +42,7 @@ import { handleCharacterProfileTask } from './handlers/character-profile'
 import { handleRegisterArkAssetTask } from './handlers/register-ark-asset'
 import { handleVisualDevelopmentScriptAnalysisTask } from './handlers/visual-development-script-analysis'
 import { handleVisualDevelopmentStageBriefTask } from './handlers/visual-development-stage-brief'
+import { handleAutoGroupMultiShotTask } from './handlers/auto-group-multi-shot'
 import { defaultPanelGenerationMode } from '@/lib/novel-promotion/generation-mode'
 
 type AnyObj = Record<string, unknown>
@@ -675,6 +676,8 @@ async function processTextTask(job: Job<TaskJobData>) {
     case TASK_TYPE.REFERENCE_TO_CHARACTER:
     case TASK_TYPE.ASSET_HUB_REFERENCE_TO_CHARACTER:
       return await handleReferenceToCharacterTask(job)
+    case TASK_TYPE.AUTO_GROUP_MULTI_SHOT:
+      return await handleAutoGroupMultiShotTask(job)
     case TASK_TYPE.REGENERATE_STORYBOARD_TEXT:
       return await handleRegenerateStoryboardTextTask(job)
     case TASK_TYPE.INSERT_PANEL:

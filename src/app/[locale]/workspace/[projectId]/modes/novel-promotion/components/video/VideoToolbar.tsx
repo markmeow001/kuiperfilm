@@ -1,4 +1,5 @@
 'use client'
+import Link from 'next/link'
 import { useTranslations } from 'next-intl'
 import TaskStatusInline from '@/components/task/TaskStatusInline'
 import { resolveTaskPresentationState } from '@/lib/task/presentation'
@@ -11,7 +12,7 @@ interface VideoToolbarProps {
   failedCount: number
   isAnyTaskRunning: boolean
   isDownloading: boolean
-  onGenerateAll: () => void
+  batchGenerateHref: string
   onDownloadAll: () => void
   onBack: () => void
   onEnterEditor?: () => void  // 进入剪辑器
@@ -25,7 +26,7 @@ export default function VideoToolbar({
   failedCount,
   isAnyTaskRunning,
   isDownloading,
-  onGenerateAll,
+  batchGenerateHref,
   onDownloadAll,
   onBack,
   onEnterEditor,
@@ -70,8 +71,8 @@ export default function VideoToolbar({
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={onGenerateAll}
-            disabled={isAnyTaskRunning}
+            type="button"
+            disabled
             className="glass-btn-base glass-btn-primary flex items-center gap-2 px-4 py-2 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isAnyTaskRunning ? (
@@ -83,6 +84,15 @@ export default function VideoToolbar({
               </>
             )}
           </button>
+          <div className="flex max-w-56 flex-col gap-1 px-1 text-xs text-[var(--glass-text-tertiary)]">
+            <span>{t('toolbar.batchMovedToV2')}</span>
+            <Link
+              href={batchGenerateHref}
+              className="font-semibold text-[var(--glass-tone-info-fg)] underline underline-offset-2"
+            >
+              {t('toolbar.openV2Storyboard')}
+            </Link>
+          </div>
           <button
             onClick={onDownloadAll}
             disabled={videosWithUrl === 0 || isDownloading}

@@ -111,6 +111,7 @@ const ROUTE_FILES = [
   'src/app/api/novel-promotion/[projectId]/assets/route.ts',
   'src/app/api/novel-promotion/[projectId]/character-profile/batch-confirm/route.ts',
   'src/app/api/novel-promotion/[projectId]/character-profile/confirm/route.ts',
+  'src/app/api/novel-promotion/[projectId]/character-profile/finalize/route.ts',
   'src/app/api/novel-promotion/[projectId]/character-voice/route.ts',
   'src/app/api/novel-promotion/[projectId]/character/appearance/redescribe/route.ts',
   'src/app/api/novel-promotion/[projectId]/character/appearance/route.ts',
@@ -127,7 +128,9 @@ const ROUTE_FILES = [
   'src/app/api/novel-promotion/[projectId]/editor/route.ts',
   'src/app/api/novel-promotion/[projectId]/episodes/[episodeId]/auto-group-multi-shot/route.ts',
   'src/app/api/novel-promotion/[projectId]/episodes/[episodeId]/character-appearance/route.ts',
+  'src/app/api/novel-promotion/[projectId]/episodes/[episodeId]/delivery/route.ts',
   'src/app/api/novel-promotion/[projectId]/episodes/[episodeId]/locations/route.ts',
+  'src/app/api/novel-promotion/[projectId]/episodes/[episodeId]/panels/route.ts',
   'src/app/api/novel-promotion/[projectId]/episodes/[episodeId]/props/route.ts',
   'src/app/api/novel-promotion/[projectId]/episodes/[episodeId]/multi-shot-tasks-by-group/route.ts',
   'src/app/api/novel-promotion/[projectId]/episodes/[episodeId]/route.ts',
@@ -187,6 +190,7 @@ const ROUTE_FILES = [
   'src/app/api/novel-promotion/[projectId]/voice-design/route.ts',
   'src/app/api/novel-promotion/[projectId]/voice-generate/route.ts',
   'src/app/api/novel-promotion/[projectId]/voice-lines/route.ts',
+  'src/app/api/novel-promotion/[projectId]/voice-presets/route.ts',
   'src/app/api/organizations/[organizationId]/route.ts',
   'src/app/api/organizations/route.ts',
   'src/app/api/playground/discussion/route.ts',
@@ -206,12 +210,14 @@ const ROUTE_FILES = [
   'src/app/api/projects/[projectId]/costs/route.ts',
   'src/app/api/projects/[projectId]/data/route.ts',
   'src/app/api/projects/[projectId]/edit-requests/route.ts',
+  'src/app/api/projects/[projectId]/graph/route.ts',
   'src/app/api/projects/[projectId]/import-character/route.ts',
   'src/app/api/projects/[projectId]/import-location/route.ts',
   'src/app/api/projects/[projectId]/locations/route.ts',
   'src/app/api/projects/[projectId]/restore/route.ts',
   'src/app/api/projects/[projectId]/route.ts',
   'src/app/api/projects/[projectId]/style-profile/route.ts',
+  'src/app/api/projects/options/route.ts',
   'src/app/api/projects/route.ts',
   'src/app/api/public/v1/projects/route.ts',
   'src/app/api/runs/[runId]/cancel/route.ts',
@@ -287,6 +293,9 @@ function resolveCategory(routeFile: string): RouteCategory {
 }
 
 function resolveContractGroup(routeFile: string): RouteContractGroup {
+  if (routeFile.endsWith('/character-profile/finalize/route.ts')) {
+    return 'crud-novel-promotion-routes'
+  }
   if (
     routeFile.includes('/ai-')
     || routeFile.includes('/analyze')
@@ -307,7 +316,10 @@ function resolveContractGroup(routeFile: string): RouteContractGroup {
     routeFile.endsWith('/generate-image/route.ts')
     || routeFile.endsWith('/generate-video/route.ts')
     || routeFile.endsWith('/modify-image/route.ts')
-    || routeFile.endsWith('/voice-design/route.ts')
+    || (
+      routeFile.endsWith('/voice-design/route.ts')
+      && !routeFile.startsWith('src/app/api/asset-hub/')
+    )
     || routeFile.endsWith('/insert-panel/route.ts')
     || routeFile.endsWith('/lip-sync/route.ts')
     || routeFile.endsWith('/modify-asset-image/route.ts')

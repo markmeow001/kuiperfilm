@@ -120,7 +120,7 @@ export function V2PropEditModal({
           </div>
         </div>
 
-        <div className="grid grid-cols-[200px_1fr] gap-6">
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-[200px_minmax(0,1fr)]">
           {/* Left: image preview */}
           <div className="space-y-3">
             <div className="aspect-square overflow-hidden rounded-sm border border-border-soft bg-raised">
@@ -128,8 +128,10 @@ export function V2PropEditModal({
                 <button
                   type="button"
                   onClick={() => onZoomImage(imageUrl)}
-                  className="block h-full w-full"
+                  aria-label={`圖片預覽：${prop.name ?? '道具'}`}
+                  className="block h-full w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--production-focus)]"
                 >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={imageUrl} alt={prop.name ?? '道具'} className="h-full w-full object-cover transition-transform hover:scale-[1.03]" />
                 </button>
               ) : (

@@ -136,15 +136,16 @@ export interface EpisodeWithNumber {
 
 export const KLING_GROUP_SIZE = 5 // panel/group; API allows 2-6
 
-// 6 distinct accent colours for multi-shot group ribbons. Cycles if more
-// groups than colours (rare — typical episode has 5-8 groups for 25-40 panels).
+// Six restrained night-blue / process-cyan levels for multi-shot group
+// ribbons. The variation keeps adjacent groups legible without turning the
+// production timeline into a rainbow.
 export const GROUP_ACCENTS = [
-  'border-l-amber-500',
-  'border-l-rose-500',
-  'border-l-emerald-500',
-  'border-l-sky-500',
-  'border-l-violet-500',
-  'border-l-orange-500',
+  'border-l-[var(--production-blue-hover)]',
+  'border-l-[var(--production-blue)]',
+  'border-l-[var(--process-cyan-deep)]',
+  'border-l-[#408B9A]',
+  'border-l-[var(--process-cyan)]',
+  'border-l-[var(--process-cyan-strong)]',
 ] as const
 
 /**

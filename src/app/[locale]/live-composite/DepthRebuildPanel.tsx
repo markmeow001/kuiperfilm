@@ -230,7 +230,7 @@ export function DepthRebuildPanel({
       {errorMessage ? (
         <div
           role="alert"
-          className="mx-4 mt-4 rounded-lg border border-rose-300/25 bg-rose-300/[0.06] px-3 py-2 text-xs leading-5 text-rose-200"
+          className="mx-4 mt-4 rounded-lg border border-red-300/25 bg-red-300/[0.06] px-3 py-2 text-xs leading-5 text-red-200"
         >
           {errorMessage}
         </div>
@@ -257,7 +257,7 @@ export function DepthRebuildPanel({
               type="button"
               disabled={controlsDisabled || depthBusy}
               onClick={() => videoInputRef.current?.click()}
-              className={`flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/[0.035] px-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200 ${
+              className={`flex h-11 w-full items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/[0.035] px-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70 ${
                 controlsDisabled || depthBusy
                   ? 'cursor-not-allowed text-stone-600 opacity-50'
                   : 'text-stone-300 hover:border-cyan-300/30 hover:text-cyan-100'
@@ -296,7 +296,7 @@ export function DepthRebuildPanel({
                 <div className="h-full rounded-full bg-cyan-300 transition-[width]" style={{ width: `${depthPercent ?? 8}%` }} />
               </div>
               {onCancelDepthGuide ? (
-                <button type="button" onClick={onCancelDepthGuide} className="mt-3 text-xs text-stone-400 underline decoration-stone-600 underline-offset-4 hover:text-white">
+                <button type="button" onClick={onCancelDepthGuide} className="mt-3 min-h-11 rounded-md px-2 text-xs text-stone-400 underline decoration-stone-600 underline-offset-4 hover:bg-white/[0.05] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70">
                   停止處理
                 </button>
               ) : null}
@@ -306,7 +306,7 @@ export function DepthRebuildPanel({
               type="button"
               disabled={!source || interactionDisabled}
               onClick={onCreateDepthGuide}
-              className="mt-3 flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-cyan-300 px-3 text-sm font-semibold text-stone-950 hover:bg-cyan-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-100 disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-stone-600"
+              className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-cyan-300 px-3 text-sm font-semibold text-stone-950 hover:bg-cyan-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70 disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-stone-600"
             >
               <AppIcon name="scanLine" className="h-4 w-4" />
               {depthGuide ? '重新產生深度影片' : '產生深度影片（不扣點）'}
@@ -432,7 +432,7 @@ export function DepthRebuildPanel({
             aria-describedby="depth-rebuild-prompt-readiness"
             disabled={controlsDisabled}
             onClick={onBuildPrompt}
-            className="mt-3 flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-cyan-300/35 bg-cyan-300/[0.07] px-3 text-sm font-medium text-cyan-100 hover:bg-cyan-300/[0.12] disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.025] disabled:text-stone-600"
+            className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-lg border border-cyan-300/35 bg-cyan-300/[0.07] px-3 text-sm font-medium text-cyan-100 hover:bg-cyan-300/[0.12] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.025] disabled:text-stone-600"
           >
             <AppIcon name="fileText" className="h-4 w-4" />
             {prompt ? '重新檢查並建立 Prompt' : '檢查並建立 Prompt'}
@@ -446,7 +446,7 @@ export function DepthRebuildPanel({
               readOnly
               value={prompt}
               placeholder="完成角色與場景設定後，按「檢查並建立 Prompt」；系統不會在這一步送出生成。"
-              className={`min-h-40 w-full resize-y rounded-lg border bg-black/25 px-3 py-2 font-mono text-xs leading-5 outline-none placeholder:text-stone-600 ${
+              className={`min-h-40 w-full resize-y rounded-lg border bg-black/25 px-3 py-2 font-mono text-xs leading-5 outline-none placeholder:text-stone-600 focus-visible:ring-2 focus-visible:ring-cyan-300/70 ${
                 promptStale && prompt ? 'border-amber-300/40 text-stone-500' : 'border-white/10 text-stone-300'
               }`}
             />
@@ -469,7 +469,7 @@ export function DepthRebuildPanel({
                 value={modelKey}
                 disabled={controlsDisabled || !hasEnabledModel}
                 onChange={(event) => onModelChange(event.target.value)}
-                className="mt-2 h-10 w-full rounded-lg border border-white/10 bg-[#10151b] px-2 text-sm text-stone-200 outline-none focus:border-violet-300/45 disabled:opacity-50"
+                className="mt-2 h-11 w-full rounded-lg border border-white/10 bg-[#10151b] px-2 text-sm text-stone-200 outline-none focus-visible:border-cyan-300/45 focus-visible:ring-2 focus-visible:ring-cyan-300/70 disabled:opacity-50"
               >
                 {!hasEnabledModel ? <option value="">帳號未啟用可用模型</option> : null}
                 {hasEnabledModel && !selectedModelEnabled ? (
@@ -484,7 +484,7 @@ export function DepthRebuildPanel({
                 value={resolution}
                 disabled={controlsDisabled}
                 onChange={(event) => onResolutionChange(event.target.value)}
-                className="mt-2 h-10 w-full rounded-lg border border-white/10 bg-[#10151b] px-2 text-sm text-stone-200 outline-none focus:border-violet-300/45 disabled:opacity-50"
+                className="mt-2 h-11 w-full rounded-lg border border-white/10 bg-[#10151b] px-2 text-sm text-stone-200 outline-none focus-visible:border-cyan-300/45 focus-visible:ring-2 focus-visible:ring-cyan-300/70 disabled:opacity-50"
               >
                 {!selectedResolutionAvailable ? (
                   <option value={resolution} disabled>目前解析度不支援，請重新選擇</option>
@@ -527,14 +527,14 @@ export function DepthRebuildPanel({
                   : '這筆已送出的任務已確認失敗。清除後才能依目前設定建立另一筆任務。'}
               </p>
               {!hasResult && errorMessage ? (
-                <p role="alert" className="mt-2 text-rose-200">
+                <p role="alert" className="mt-2 text-red-200">
                   失敗原因：{errorMessage}
                 </p>
               ) : null}
               <button
                 type="button"
                 onClick={onResetSubmittedRun}
-                className="mt-2 rounded-md border border-white/15 px-2.5 py-1.5 text-xs text-stone-200 hover:border-cyan-300/35 hover:text-cyan-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70"
+                className="mt-2 min-h-11 rounded-md border border-white/15 px-2.5 py-2 text-xs text-stone-200 hover:border-cyan-300/35 hover:text-cyan-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70"
               >
                 {hasResult ? '開始另一個版本' : '清除失敗任務'}
               </button>
@@ -543,13 +543,13 @@ export function DepthRebuildPanel({
 
           <div className="mt-4 flex items-center justify-between gap-3 text-xs">
             <span className="text-stone-500">預估費用</span>
-            <span className="font-mono text-violet-200">{estimatedCostLabel ?? '完成設定後顯示'}</span>
+            <span className="font-mono text-cyan-100">{estimatedCostLabel ?? '完成設定後顯示'}</span>
           </div>
           <button
             type="button"
             disabled={!generateActionReady || controlsDisabled}
             onClick={onGenerate}
-            className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-violet-300 px-3 text-sm font-semibold text-violet-950 hover:bg-violet-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-100 disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-stone-600"
+            className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-cyan-300 px-3 text-sm font-semibold text-stone-950 hover:bg-cyan-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70 disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-stone-600"
           >
             <AppIcon name={generating ? 'loader' : 'sparkles'} className={`h-4 w-4 ${generating ? 'animate-spin' : ''}`} />
             {depthBusy

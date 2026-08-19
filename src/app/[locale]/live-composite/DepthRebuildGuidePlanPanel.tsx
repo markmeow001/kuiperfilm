@@ -1,6 +1,7 @@
 'use client'
 
 import { useId } from 'react'
+import styles from './LiveCompositeShell.module.css'
 
 export type DepthRebuildGuideStrategy = 'full-dual' | 'depth-plus-detail' | 'depth-only'
 
@@ -143,18 +144,24 @@ export function DepthRebuildGuidePlanPanel({
           <p className="mt-1 text-xs leading-5 text-stone-500">
             把游標移到最需要保留表情、互動或快速動作的位置，系統會在附近取一段 RGB 原片。
           </p>
-          <input
-            id={sliderId}
-            aria-label="關鍵動作位置"
-            type="range"
-            min={0}
-            max={sourceDuration}
-            step={0.1}
-            value={criticalCenterSeconds}
-            disabled={disabled}
-            onChange={(event) => onCriticalCenterChange(Number(event.currentTarget.value))}
-            className="mt-4 h-1.5 w-full cursor-pointer accent-cyan-300 disabled:cursor-not-allowed disabled:opacity-45"
-          />
+          <label
+            htmlFor={sliderId}
+            className={`${styles.specialControlHitArea} mt-2 flex items-center`}
+            data-live-composite-control-hit-area
+          >
+            <input
+              id={sliderId}
+              aria-label="關鍵動作位置"
+              type="range"
+              min={0}
+              max={sourceDuration}
+              step={0.1}
+              value={criticalCenterSeconds}
+              disabled={disabled}
+              onChange={(event) => onCriticalCenterChange(Number(event.currentTarget.value))}
+              className="h-1.5 w-full cursor-pointer accent-cyan-300 disabled:cursor-not-allowed disabled:opacity-45"
+            />
+          </label>
           <div className="mt-1 flex justify-between font-mono text-[10px] tabular-nums text-stone-600">
             <span>0 秒</span>
             <span>{seconds(sourceDuration)} 秒</span>

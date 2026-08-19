@@ -39,11 +39,13 @@ import {
   type ColdOpenPanel,
   type ColdOpenVariant,
 } from '@/lib/cold-open'
-import {
-  buildDialogueDrivenDurations,
-  computeGroupRecommendedDurationSec,
-} from '@/lib/workers/handlers/speech-duration-estimator'
+import { computeGroupRecommendedDurationSec } from '@/lib/workers/handlers/speech-duration-estimator'
 import type { UseMutationResult } from '@tanstack/react-query'
+import {
+  resolveActiveCharacterAppearance,
+  type ActiveCharacterAppearanceBindingState,
+} from '../subjects/active-character-appearance'
+import { prepareMultiShotPanels } from '@/lib/novel-promotion/multi-shot-submission'
 
 /**
  * Cold-open UI state. `off` = no hook formatting. `auto` = pick the
@@ -155,19 +157,7 @@ interface GroupCardProps {
   updatePanelText: UpdatePanelTextMutation
   characterRoster?: CharacterRef[]
   locationRoster?: LocationRef[]
-  /**
-   * Per-episode character → appearance binding (EpisodeCharacter rows).
-   * Worker resolution priority (see image-task-handler-shared and
-   * multi-shot-video-b-path):
-   *   1. UI per-call override (characterOverrides)
-   *   2. EpisodeCharacter binding ← what this prop carries
-   *   3. panel.characters[i].appearance hint (matched by changeReason)
-   *   4. appearances[0] default
-   * Chip rail MUST mirror this priority — otherwise 出場角色 displays
-   * one appearance while the worker renders another (user-reported
-   * 2026-05-13: chip said "初始形象" but Kling rendered "王玄Y").
-   */
-  episodeBindings?: Array<{ characterId: string; appearanceId: string | null }>
+  appearanceBindingState: ActiveCharacterAppearanceBindingState
   /**
    * Approximate per-group runtime in seconds. Used to compute the
    * cumulative time range badge in the collapsed header. Defaults
@@ -256,7 +246,7 @@ export function GroupCard({
   updatePanelText,
   characterRoster,
   locationRoster,
-  episodeBindings,
+  appearanceBindingState,
   segmentDurationSeconds = 15,
   segmentStartSec,
   episodeNumber,
@@ -264,7 +254,6 @@ export function GroupCard({
   videoFamily = null,
   projectVisualStyleId = null,
   canEdit = true,
-  viewerTip,
   targetSecPerGroup = null,
   groupStoryboardId = null,
   groupReferenceVideoUrl = null,
@@ -272,15 +261,6 @@ export function GroupCard({
   onRegenerate,
 }: GroupCardProps) {
   const t = useTranslations('v2Storyboard.groupCard')
-  // Build episode binding lookup ONCE. Empty map when no bindings prop
-  // (legacy callers) — falls through to panel-hint / default-[0] priority.
-  const episodeBindingByCharId = useMemo(() => {
-    const map = new Map<string, string>()
-    for (const b of episodeBindings ?? []) {
-      if (b.characterId && b.appearanceId) map.set(b.characterId, b.appearanceId)
-    }
-    return map
-  }, [episodeBindings])
   // Collapsed by default — the user referenced the Seedance 2.0
   // 视频方案编辑器 layout where each segment is a list row that
   // expands on click. Helps a multi-group episode (8+ groups) stay
@@ -351,14 +331,12 @@ export function GroupCard({
       const charsRaw: unknown[] = Array.isArray(panel.characters) ? panel.characters : []
       for (const item of charsRaw) {
         let name: string | null = null
-        let appearanceHint: string | null = null
         if (typeof item === 'string') {
           const trimmed = item.trim()
           if (trimmed.startsWith('{')) {
             try {
               const parsed = JSON.parse(trimmed) as { name?: unknown; appearance?: unknown }
               if (typeof parsed.name === 'string') name = parsed.name
-              if (typeof parsed.appearance === 'string') appearanceHint = parsed.appearance
             } catch {
               name = trimmed
             }
@@ -366,9 +344,8 @@ export function GroupCard({
             name = trimmed
           }
         } else if (item && typeof item === 'object') {
-          const r = item as { name?: unknown; appearance?: unknown }
+          const r = item as { name?: unknown }
           if (typeof r.name === 'string') name = r.name
-          if (typeof r.appearance === 'string') appearanceHint = r.appearance
         }
         if (!name) continue
         const lower = name.trim().toLowerCase()
@@ -379,34 +356,15 @@ export function GroupCard({
         if (!char) continue
         seen.add(lower)
         const appearances = char.appearances ?? []
-        // Resolution priority — MUST mirror worker. 2026-05-13 user
-        // clarification: per-shot LLM intent (panel.characters[i].appearance)
-        // wins over EpisodeCharacter binding so the same character can
-        // render different appearances across the same episode based on
-        // script context (flashback / present-day / costume change).
-        //   1. UI per-call override (characterOverrides[char.id])
-        //   2. panel.characters[i].appearance — LLM read script per-shot
-        //   3. EpisodeCharacter binding — episode-level fallback
-        //   4. appearances[0] — global default
-        const overrideId = characterOverrides[char.id]
-        const episodeBoundId = episodeBindingByCharId.get(char.id)
-        let chosen = appearances[0]
-        if (overrideId) {
-          const o = appearances.find((a) => a.id === overrideId)
-          if (o) chosen = o
-        } else if (appearanceHint) {
-          const h = appearances.find(
-            (a) => (a.changeReason || '').toLowerCase() === appearanceHint!.toLowerCase(),
-          )
-          if (h) chosen = h
-          else if (episodeBoundId) {
-            const b = appearances.find((a) => a.id === episodeBoundId)
-            if (b) chosen = b
-          }
-        } else if (episodeBoundId) {
-          const b = appearances.find((a) => a.id === episodeBoundId)
-          if (b) chosen = b
-        }
+        const activeResolution = resolveActiveCharacterAppearance({
+          characterId: char.id,
+          appearances,
+          episodeId,
+          bindingState: appearanceBindingState,
+        })
+        const chosen = activeResolution.status === 'resolved'
+          ? activeResolution.appearance
+          : null
         if (!chosen) {
           out.push({
             character: char,
@@ -425,7 +383,23 @@ export function GroupCard({
       }
     }
     return out
-  }, [panels, characterRoster, characterOverrides, episodeBindingByCharId])
+  }, [panels, characterRoster, episodeId, appearanceBindingState])
+
+  const canonicalAppearanceIdByCharacterId = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const character of characterRoster ?? []) {
+      const resolution = resolveActiveCharacterAppearance({
+        characterId: character.id,
+        appearances: character.appearances,
+        episodeId,
+        bindingState: appearanceBindingState,
+      })
+      if (resolution.status === 'resolved') {
+        map.set(character.id, resolution.appearanceId)
+      }
+    }
+    return map
+  }, [characterRoster, episodeId, appearanceBindingState])
   const groupScenes = useMemo<SceneChip[]>(() => {
     const seen = new Set<string>()
     const out: SceneChip[] = []
@@ -489,7 +463,6 @@ export function GroupCard({
     if (typeof saved === 'number' && saved > 0) {
       setTotalDurationDraft(saved)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [panels])
 
   // 2026-05-13 — ReelShort 8-second cold-open hook (Phase 1).
@@ -1444,20 +1417,16 @@ export function GroupCard({
       setRegenState({ status: 'error', message: t('errors.needTwoPanels') })
       return
     }
-    // Kling 多鏡頭 single dispatch caps at 6 clips per group; Seedance
-    // composite caps at 9 references (BobAPI content[] @N hard limit).
-    // Worker enforces both — UI just nudges so the user understands which
-    // panels get dropped if the group is oversized.
-    const maxPanels = videoFamily === 'seedance' ? 9 : 6
-    if (panels.length > maxPanels) {
+    const preparedPanels = prepareMultiShotPanels(panels, videoFamily)
+    if (!preparedPanels.ok) {
       setRegenState({
         status: 'error',
-        message: t('errors.tooManyPanels', { max: maxPanels }),
+        message: t('errors.tooManyPanels', { max: preparedPanels.maxPanels }),
       })
-    } else {
-      setRegenState({ status: 'submitting' })
+      return
     }
-    const ids = panels.slice(0, 6).map((p) => p.id)
+    setRegenState({ status: 'submitting' })
+    const ids = preparedPanels.panelIds
     // 2026-05-13 — AUTO mode (totalDurationDraft=0) means: don't compute
     // panelDurations at all. Worker engages buildDialogueDrivenDurations
     // and picks per-shot timing from voice line speech length.
@@ -1555,11 +1524,12 @@ export function GroupCard({
       // use this as a tier-1.5 fallback so "選 15s + 編 narrative" no
       // longer drops to 10-13s baseline. 0 = AUTO (unchanged behavior).
       ...(totalDurationDraft > 0 ? { totalDurationSeconds: totalDurationDraft } : {}),
-      characterOverrides: Object.entries(characterOverrides)
-        .filter(([, app]) => app !== undefined)
-        .map(([characterId, appearanceId]) =>
-          appearanceId === null ? { characterId } : { characterId, appearanceId },
-        ),
+      characterOverrides: Object.keys(characterOverrides).flatMap((characterId) => {
+        const canonicalAppearanceId = canonicalAppearanceIdByCharacterId.get(characterId)
+        return canonicalAppearanceId
+          ? [{ characterId, appearanceId: canonicalAppearanceId }]
+          : []
+      }),
       locationOverrides: Object.entries(locationOverrides)
         .filter(([, view]) => view !== undefined)
         .map(([locationId, viewName]) =>
@@ -1806,14 +1776,14 @@ export function GroupCard({
             }}
           />
           {overrideCount > 0 ? (
-            <div className="mt-2 flex items-center justify-between rounded-sm border border-violet-500/30 bg-violet-500/5 px-2 py-1.5">
-              <div className="font-mono text-[12px] tracking-wider text-violet-300">
+            <div className="mt-2 flex items-center justify-between rounded-sm border border-[var(--process-cyan)]/30 bg-[var(--process-cyan-soft)] px-2 py-1.5">
+              <div className="font-mono text-[12px] tracking-wider text-[var(--process-cyan-strong)]">
                 {t('overrides.edited', { count: overrideCount })}
               </div>
               <button
                 type="button"
                 onClick={handleResetOverrides}
-                className="font-mono text-[12px] tracking-wider text-text-tertiary transition-colors hover:text-violet-300"
+                className="font-mono text-[12px] tracking-wider text-text-tertiary transition-colors hover:text-[var(--process-cyan-strong)]"
               >
                 {t('overrides.clear')}
               </button>
@@ -2110,7 +2080,7 @@ export function GroupCard({
           />
           {/* Phase V (2026-05-28) — Status banner has three states:
               1. Unsaved edit (narrativeDirty && snapshot !== draft):
-                 amber violet "✏ 未保存修改 — 點保存敘事將套用至下次生成"
+                 process cyan "✏ 未保存修改 — 點保存敘事將套用至下次生成"
               2. Saved edit (snapshot === draft && snapshot !== null):
                  green "✓ 敘事已保存 — 下次「生成視頻」會以這段為主 prompt"
               3. Clean default (no edits): stone hint with preview info
@@ -2118,7 +2088,7 @@ export function GroupCard({
               任何的提示」 by surfacing whether the system has ingested
               the edit. */}
           {narrativeDirty && narrativeSavedSnapshot !== narrativeDraft ? (
-            <div className="rounded-sm border border-violet-500/30 bg-violet-500/5 px-2 py-1 font-mono text-[12px] tracking-wider text-violet-300">
+            <div className="rounded-sm border border-[var(--process-cyan)]/30 bg-[var(--process-cyan-soft)] px-2 py-1 font-mono text-[12px] tracking-wider text-[var(--process-cyan-strong)]">
               ✏ 未保存修改 — 點「保存敘事」存入專案（重整 / 改時長都保留），下次「{taskId ? '重新生成' : '生成視頻'}」會以這段為主 prompt
             </div>
           ) : narrativeSavedSnapshot !== null ? (
@@ -2235,7 +2205,7 @@ export function GroupCard({
                       const overridden = characterOverrides[c.character.id] !== undefined
                         && characterOverrides[c.character.id] !== c.appearanceId
                       const stateClass = overridden
-                        ? 'border-violet-500/60 bg-violet-500/10'
+                        ? 'border-[var(--process-cyan)]/60 bg-[var(--process-cyan-soft)]'
                         : 'border-primary-900/30 bg-canvas/40'
                       // 2026-05-13 — chip refactored from single <button> to
                       // a <div> with two interactive children: main area
@@ -2276,7 +2246,7 @@ export function GroupCard({
                               {c.appearanceLabel ?? '默認造型'}
                             </span>
                             {overridden ? (
-                              <span className="font-mono text-[12px] tracking-wider text-violet-300">
+                              <span className="font-mono text-[12px] tracking-wider text-[var(--process-cyan-strong)]">
                                 ✏ 已改
                               </span>
                             ) : null}
@@ -2325,7 +2295,7 @@ export function GroupCard({
                       const overridden = locationOverrides[s.location.id] !== undefined
                         && locationOverrides[s.location.id] !== s.viewName
                       const stateClass = overridden
-                        ? 'border-violet-500/60 bg-violet-500/10'
+                        ? 'border-[var(--process-cyan)]/60 bg-[var(--process-cyan-soft)]'
                         : 'border-emerald-900/30 bg-canvas/40'
                       // 2026-05-13 — same refactor as 出場角色: split into
                       // main button + × remove button. Removes scene
@@ -2363,7 +2333,7 @@ export function GroupCard({
                               {s.viewName ?? t('chips.mainView')}
                             </span>
                             {overridden ? (
-                              <span className="font-mono text-[12px] tracking-wider text-violet-300">
+                              <span className="font-mono text-[12px] tracking-wider text-[var(--process-cyan-strong)]">
                                 {t('chips.editedFlag')}
                               </span>
                             ) : null}
@@ -2401,7 +2371,7 @@ export function GroupCard({
                         overrideAppearanceId !== undefined
                         && overrideAppearanceId !== c.appearanceId
                       const stateClass = hasOverride
-                        ? 'border-violet-500/60 bg-violet-500/10'
+                        ? 'border-[var(--process-cyan)]/60 bg-[var(--process-cyan-soft)]'
                         : 'border-primary-900/30 bg-canvas/40'
                       const character = characterById.get(c.id) ?? null
                       const handleClick = () => {
@@ -2447,7 +2417,7 @@ export function GroupCard({
                               {c.appearanceLabel ?? t('chips.defaultAppearance')}
                             </span>
                             {hasOverride ? (
-                              <span className="font-mono text-[12px] tracking-wider text-violet-300">
+                              <span className="font-mono text-[12px] tracking-wider text-[var(--process-cyan-strong)]">
                                 {t('chips.editedFlag')}
                               </span>
                             ) : null}

@@ -1,0 +1,92 @@
+{
+  "shell": {
+    "eyebrow": "製作工具",
+    "libraryTitle": "Skill 庫",
+    "libraryDescription": "把可重複使用的製作流程帶進每一個專案。",
+    "detailTitle": "Skill 詳情",
+    "backToProduction": "返回製作首頁",
+    "backToLibrary": "返回 Skill 庫",
+    "createProject": "建立新專案"
+  },
+  "library": {
+    "tabsLabel": "Skill 庫檢視",
+    "mineTab": "我的 Skill",
+    "browseTab": "精選 Skill",
+    "loading": "正在載入 Skill 庫…",
+    "loadErrorTitle": "無法載入 Skill 庫",
+    "loadErrorDescription": "請稍後再試。",
+    "emptyMineEyebrow": "你的 Skill 庫",
+    "emptyMineTitle": "尚未啟用任何 Skill",
+    "emptyMineDescription": "先從精選流程選一個開始。",
+    "browseFeatured": "瀏覽精選 Skill",
+    "allEnabledTitle": "已啟用全部官方 Skill",
+    "allEnabledDescription": "更多精選流程會陸續出現在這裡。",
+    "featured": "精選",
+    "installCount": "{count} 次啟用",
+    "enabled": "啟用",
+    "disabled": "停用",
+    "remove": "移除",
+    "installing": "加入中…",
+    "add": "新增"
+  },
+  "detail": {
+    "loading": "正在載入 Skill 詳情…",
+    "notFoundTitle": "找不到此 Skill",
+    "notFoundDescription": "此 Skill 可能已封存，或你沒有存取權。",
+    "introduction": "Skill 介紹",
+    "pipeline": "工作流階段",
+    "pipelineDescription": "系統會依照此順序執行，並使用指定模型。",
+    "defaults": "預設設定",
+    "constraints": "約束與保證",
+    "installedTitle": "已加入我的 Skill",
+    "installedDescription": "建立新專案時即可選用。",
+    "unavailableTitle": "尚未啟用",
+    "unavailableDescription": "請先加入我的 Skill，再用於新專案。",
+    "useSkill": "用此 Skill 建立專案",
+    "addSkill": "加入我的 Skill",
+    "addingSkill": "加入中…",
+    "official": "官方",
+    "community": "社群",
+    "model": "模型",
+    "noDefaults": "此 Skill 會沿用你的專案偏好。",
+    "noConstraints": "沒有特殊約束。",
+    "stage": {
+      "analyze_script": "分析劇本",
+      "generate_keyframe": "產生關鍵幀",
+      "generate_storyboard_grid": "產生分鏡網格",
+      "generate_panel_image": "產生分鏡圖",
+      "generate_panel_video": "產生分鏡影片",
+      "composite_multi_shot": "合成多鏡頭",
+      "tts_voice_line": "產生台詞音訊",
+      "lip_sync": "對嘴同步",
+      "stitch_final": "組裝最終成片"
+    },
+    "defaultLabel": {
+      "aspectRatio": "畫面比例",
+      "durationPerShot": "每鏡時長",
+      "shotCount": "鏡頭數",
+      "storyboardGrid": "分鏡網格",
+      "resolution": "解析度",
+      "audioMode": "音訊模式",
+      "narration": "旁白",
+      "visualStyle": "視覺風格 ID"
+    },
+    "audioMode": {
+      "silent": "靜音",
+      "ambient": "環境音",
+      "bgm": "背景音樂",
+      "voiced": "台詞配音"
+    },
+    "narration": {
+      "never": "不使用",
+      "always": "一律使用",
+      "on_request": "依需求加入"
+    },
+    "constraint": {
+      "audioReference": "每個角色都必須綁定參考音訊。",
+      "portrait": "必須使用直式輸出。",
+      "landscape": "必須使用橫式輸出。",
+      "forbiddenSubjects": "不支援的主體：{subjects}"
+    }
+  }
+}

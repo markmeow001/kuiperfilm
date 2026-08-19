@@ -3,7 +3,10 @@
 import Link from 'next/link'
 import { useSession } from 'next-auth/react'
 import { AppIcon } from '@/components/ui/icons'
-import { V2_STEPS, type V2StepId, v2StepIndex } from './v2-types'
+import type { V2StepId } from './v2-types'
+import { ProductionBrand } from './ProductionBrand'
+import { ProductionProgress } from './ProductionProgress'
+import { getV2WorkspacePresentation } from './v2-workspace-presentation'
 
 interface SidebarProps {
   currentStep: V2StepId
@@ -18,43 +21,78 @@ interface UtilityLink {
 }
 
 export function Sidebar({ currentStep, onSelect, locale = 'zh' }: SidebarProps) {
-  const currentIdx = v2StepIndex(currentStep)
+  const presentation = getV2WorkspacePresentation(locale)
+  const currentIdx = presentation.steps.findIndex((step) => step.id === currentStep)
+  const previousStep = currentIdx > 0 ? presentation.steps[currentIdx - 1] : null
+  const nextStep =
+    currentIdx < presentation.steps.length - 1
+      ? presentation.steps[currentIdx + 1]
+      : null
   const projectsHref =
     currentStep === 'home'
       ? `/${locale}/v2`
       : `/${locale}/v2?carryStep=${currentStep}`
   const utilityLinks: UtilityLink[] = [
-    { href: `/${locale}/canvas`, icon: 'image', label: '無限畫布' },
-    { href: `/${locale}/playground`, icon: 'sparklesAlt', label: 'Playground' },
-    { href: `/${locale}/visual-development`, icon: 'brain', label: '角色視覺開發' },
-    { href: `/${locale}/live-composite`, icon: 'video', label: 'AI 實拍重製' },
+    { href: `/${locale}/canvas`, icon: 'image', label: presentation.utility.canvas },
+    {
+      href: `/${locale}/playground`,
+      icon: 'sparklesAlt',
+      label: presentation.utility.playground,
+    },
+    {
+      href: `/${locale}/visual-development`,
+      icon: 'brain',
+      label: presentation.utility.visualDevelopment,
+    },
+    {
+      href: `/${locale}/live-composite`,
+      icon: 'video',
+      label: presentation.utility.liveComposite,
+    },
   ]
 
   return (
     <>
-      <aside className="sticky top-0 hidden h-screen w-[88px] shrink-0 flex-col border-r border-white/[0.07] bg-[#080809] text-text-secondary lg:flex">
-        <Link
-          href={projectsHref}
-          aria-label="Kuiper 影界・回到專案列表"
-          className="flex h-20 shrink-0 items-center justify-center border-b border-white/[0.07]"
-        >
-          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-500 font-display text-xl font-black italic text-black transition-transform hover:scale-105">
-            K
-          </span>
-        </Link>
+      <aside className="kuiper-shell-rail sticky top-0 hidden h-screen w-[76px] shrink-0 flex-col border-r lg:flex xl:w-[284px]">
+        <div className="kuiper-shell-divider flex h-[76px] shrink-0 items-center border-b px-[18px] xl:px-5">
+          <span className="xl:hidden"><ProductionBrand locale={locale} compact href={projectsHref} tone="dark" /></span>
+          <span className="hidden xl:block"><ProductionBrand locale={locale} href={projectsHref} tone="dark" /></span>
+        </div>
 
-        <Link
-          href={projectsHref}
-          title="所有專案・切換專案"
-          className="group mx-2 mt-3 flex flex-col items-center gap-1.5 rounded-xl px-1 py-2.5 text-[10px] text-text-tertiary transition-colors hover:bg-white/[0.05] hover:text-text-primary"
-        >
-          <AppIcon name="folderOpen" className="h-[18px] w-[18px] group-hover:text-primary-400" />
-          <span>專案</span>
-        </Link>
+        <div className="px-2 pt-3 xl:px-3">
+          <Link
+            href={projectsHref}
+            title={presentation.allProjectsTitle}
+            className="kuiper-shell-nav-item group flex min-h-11 items-center justify-center gap-3 rounded-xl px-2 text-[13px] font-medium xl:justify-start xl:px-3"
+          >
+            <AppIcon name="arrowLeft" className="h-[18px] w-[18px] shrink-0 group-hover:text-[var(--process-cyan-strong)]" />
+            <span className="hidden xl:block">{presentation.backToProjects}</span>
+          </Link>
+        </div>
 
-        <nav aria-label="製作流程" className="min-h-0 flex-1 overflow-y-auto px-2 py-3">
-          <div className="space-y-1.5">
-            {V2_STEPS.map((step, idx) => {
+        <nav
+          aria-label={presentation.flowTitle}
+          className="min-h-0 flex-1 overflow-y-auto px-2 py-4 xl:px-3"
+        >
+          <div className="mb-3 hidden px-3 xl:block">
+            <div className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--process-cyan-strong)]">
+              {presentation.flowTitle}
+            </div>
+            <p className="mt-1 text-[12px] leading-5 text-[var(--darkroom-muted)]">
+              {presentation.flowDescription}
+            </p>
+          </div>
+
+          <div className="hidden xl:block">
+            <ProductionProgress
+              currentStep={currentStep}
+              locale={locale}
+              onSelect={onSelect}
+              tone="dark"
+            />
+          </div>
+          <div className="space-y-1 xl:hidden">
+            {presentation.steps.map((step, idx) => {
               const active = step.id === currentStep
               const completed = currentIdx > idx
               return (
@@ -63,27 +101,23 @@ export function Sidebar({ currentStep, onSelect, locale = 'zh' }: SidebarProps) 
                   type="button"
                   onClick={() => onSelect(step.id)}
                   aria-current={active ? 'step' : undefined}
-                  aria-label={`${step.num} ${step.label} ${step.subtitle}${active ? '（目前步驟）' : completed ? '（已完成）' : ''}`}
+                  aria-label={`${step.num} ${step.label} ${step.subtitle}${active ? ` · ${presentation.currentStep}` : completed ? ` · ${presentation.completed}` : ''}`}
                   title={`${step.num} · ${step.label} / ${step.subtitle}`}
-                  className={`group relative flex w-full flex-col items-center gap-1.5 rounded-xl px-1 py-2.5 text-[10px] transition-colors ${
-                    active
-                      ? 'bg-white/[0.07] text-white'
-                      : 'text-text-tertiary hover:bg-white/[0.04] hover:text-text-primary'
-                  }`}
+                  data-active={active}
+                  className="kuiper-shell-nav-item group relative flex min-h-12 w-full items-center justify-center rounded-xl text-[10px]"
                 >
                   <AppIcon
                     name={step.icon}
                     className={`h-[18px] w-[18px] ${
                       active
-                        ? 'text-primary-400'
+                        ? 'text-[var(--process-cyan-strong)]'
                         : completed
-                          ? 'text-primary-700'
-                          : 'text-current group-hover:text-primary-400'
+                          ? 'text-[var(--process-cyan)]'
+                          : 'text-current'
                     }`}
                   />
-                  <span className="max-w-full truncate">{step.label}</span>
                   {completed ? (
-                    <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-primary-600" />
+                    <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-[var(--process-cyan)]" />
                   ) : null}
                 </button>
               )
@@ -91,7 +125,7 @@ export function Sidebar({ currentStep, onSelect, locale = 'zh' }: SidebarProps) 
           </div>
         </nav>
 
-        <div className="border-t border-white/[0.07] px-2 py-3">
+        <div className="kuiper-shell-divider border-t px-2 py-3 xl:px-3">
           <div className="space-y-1">
             {utilityLinks.map((item) => (
               <Link
@@ -99,9 +133,10 @@ export function Sidebar({ currentStep, onSelect, locale = 'zh' }: SidebarProps) 
                 href={item.href}
                 title={item.label}
                 aria-label={item.label}
-                className="group flex h-10 items-center justify-center rounded-xl text-text-tertiary transition-colors hover:bg-white/[0.05] hover:text-primary-400"
+                className="kuiper-shell-nav-item group flex min-h-11 items-center justify-center gap-3 rounded-xl px-2 hover:text-[var(--process-cyan-strong)] xl:justify-start xl:px-3"
               >
                 <AppIcon name={item.icon} className="h-[18px] w-[18px]" />
+                <span className="hidden truncate text-[13px] font-medium xl:block">{item.label}</span>
               </Link>
             ))}
           </div>
@@ -110,27 +145,46 @@ export function Sidebar({ currentStep, onSelect, locale = 'zh' }: SidebarProps) 
       </aside>
 
       <nav
-        aria-label="行動版製作流程"
-        className="fixed inset-x-3 bottom-3 z-50 grid grid-cols-6 rounded-2xl border border-white/10 bg-[#111113]/95 p-1.5 shadow-2xl backdrop-blur-xl lg:hidden"
+        aria-label={presentation.mobileFlowLabel}
+        className="fixed inset-x-3 bottom-3 z-50 grid grid-cols-[44px_minmax(0,1fr)_auto] items-center gap-2 rounded-2xl border border-[var(--darkroom-border)] bg-[var(--studio-chrome)]/95 p-2 shadow-2xl backdrop-blur-xl lg:hidden"
       >
-        {V2_STEPS.map((step) => {
-          const active = step.id === currentStep
-          return (
-            <button
-              key={step.id}
-              type="button"
-              onClick={() => onSelect(step.id)}
-              aria-current={active ? 'step' : undefined}
-              aria-label={`${step.num} ${step.label} ${step.subtitle}`}
-              className={`flex min-w-0 flex-col items-center gap-1 rounded-xl px-1 py-1.5 text-[9px] transition-colors ${
-                active ? 'bg-white/[0.07] text-primary-400' : 'text-text-tertiary'
-              }`}
-            >
-              <AppIcon name={step.icon} className="h-4 w-4" />
-              <span className="max-w-full truncate">{step.label}</span>
-            </button>
-          )
-        })}
+        <button
+          type="button"
+          disabled={!previousStep}
+          onClick={() => previousStep && onSelect(previousStep.id)}
+          aria-label={
+            previousStep
+              ? presentation.previousStage(previousStep.label)
+              : presentation.firstStage
+          }
+          className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 text-text-secondary disabled:opacity-30"
+        >
+          <AppIcon name="chevronLeft" className="h-5 w-5" />
+        </button>
+        <label className="relative min-w-0">
+          <span className="sr-only">{presentation.switchStage}</span>
+          <select
+            value={currentStep}
+            onChange={(event) => onSelect(event.target.value as V2StepId)}
+            className="h-11 w-full appearance-none rounded-xl border border-white/10 bg-white/[0.06] px-3 pr-9 text-[13px] font-semibold text-white outline-none focus:border-[var(--process-cyan)]"
+          >
+            {presentation.steps.map((step) => (
+              <option key={step.id} value={step.id} className="bg-[var(--darkroom-surface)]">
+                {step.num} · {step.label}
+              </option>
+            ))}
+          </select>
+          <AppIcon name="chevronDown" className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-tertiary" />
+        </label>
+        <button
+          type="button"
+          disabled={!nextStep}
+          onClick={() => nextStep && onSelect(nextStep.id)}
+          className="flex h-11 items-center justify-center gap-1.5 rounded-xl bg-[var(--process-cyan)] px-3 text-[13px] font-semibold text-[#071014] disabled:bg-white/10 disabled:text-text-tertiary"
+        >
+          <span>{nextStep ? nextStep.label : presentation.complete}</span>
+          <AppIcon name="chevronRight" className="h-4 w-4" />
+        </button>
       </nav>
     </>
   )
@@ -138,13 +192,14 @@ export function Sidebar({ currentStep, onSelect, locale = 'zh' }: SidebarProps) 
 
 function SidebarSignedOutCTA({ locale }: { locale: string }) {
   const { data: session, status } = useSession()
+  const presentation = getV2WorkspacePresentation(locale)
   if (status === 'loading' || session?.user) return null
   return (
     <Link
       href={`/${locale}/auth/signin`}
-      aria-label="登入帳號"
-      title="登入帳號"
-      className="mt-2 flex h-10 items-center justify-center rounded-xl border border-primary-500/30 text-primary-400 transition-colors hover:bg-primary-500/10"
+      aria-label={presentation.signIn}
+      title={presentation.signIn}
+      className="mt-2 flex h-11 items-center justify-center rounded-xl border border-[var(--process-cyan)]/40 text-[var(--process-cyan-strong)] transition-colors hover:bg-[var(--process-cyan-soft)]"
     >
       <AppIcon name="user" className="h-4 w-4" />
     </Link>

@@ -67,7 +67,7 @@ export const POST = apiHandler(async (
       imageIndex: toNumber(body?.imageIndex)
     })
 
-  const extraImageAudit = sanitizeImageInputsForTaskPayload(
+  const extraImageAudit = await sanitizeImageInputsForTaskPayload(
     Array.isArray(body?.extraImageUrls) ? body.extraImageUrls : [],
   )
   const rejectedRelativePathCount = extraImageAudit.issues.filter(

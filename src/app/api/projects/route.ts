@@ -7,6 +7,58 @@ import { toMoneyNumber } from '@/lib/billing/money'
 import { STYLE_PROFILE_PRESETS } from '@/lib/style-profile/presets'
 import { normalizeGenerationMode, normalizeOpeningPacing } from '@/lib/novel-promotion/generation-mode'
 
+const PROJECT_LAST_STEPS = ['home', 'script', 'subjects', 'storyboard', 'voice', 'final'] as const
+type ProjectLastStep = (typeof PROJECT_LAST_STEPS)[number]
+
+type EffectiveProjectRole =
+  | 'owner'
+  | 'admin'
+  | 'ws_owner'
+  | 'ws_owner_legacy'
+  | 'editor'
+  | 'viewer'
+
+interface ProjectAccessProjection {
+  userId: string
+  workspaceId: string | null
+  collaborators: Array<{ role: string }>
+  workspace: {
+    ownerEditorId: string
+    members: Array<{ role: string }>
+  } | null
+  user: {
+    workspaceMemberships: Array<{ workspaceId: string }>
+  }
+}
+
+function normalizeLastStep(value: string | null | undefined): ProjectLastStep | null {
+  if (!value) return null
+  return (PROJECT_LAST_STEPS as readonly string[]).includes(value)
+    ? value as ProjectLastStep
+    : null
+}
+
+function normalizeProjectGrantRole(role: string | null | undefined): 'editor' | 'viewer' {
+  return role === UserRole.EDITOR ? UserRole.EDITOR : UserRole.VIEWER
+}
+
+function resolveEffectiveProjectRole(
+  project: ProjectAccessProjection,
+  requesterId: string,
+  requesterIsAdmin: boolean,
+): EffectiveProjectRole {
+  if (project.userId === requesterId) return UserRole.OWNER
+  if (requesterIsAdmin) return UserRole.ADMIN
+  if (project.workspace?.ownerEditorId === requesterId) return 'ws_owner'
+  if (project.workspaceId === null && project.user.workspaceMemberships.length > 0) {
+    return 'ws_owner_legacy'
+  }
+  if (project.collaborators[0]) {
+    return normalizeProjectGrantRole(project.collaborators[0].role)
+  }
+  return normalizeProjectGrantRole(project.workspace?.members[0]?.role)
+}
+
 // GET - 获取用户的项目（支持分页和搜索）
 export const GET = apiHandler(async (request: NextRequest) => {
   // 🔐 统一权限验证
@@ -33,6 +85,7 @@ export const GET = apiHandler(async (request: NextRequest) => {
   const where: Record<string, unknown> = {
     deletedAt: null,
   }
+  let requesterIsAdmin = false
 
   if (wsParam) {
     // Workspace mode: caller must be a member (owner or member row),
@@ -45,6 +98,7 @@ export const GET = apiHandler(async (request: NextRequest) => {
       }),
     ])
     const isAdminUser = isAdmin(requester?.role)
+    requesterIsAdmin = isAdminUser
     const isWsOwner = workspace?.ownerEditorId === session.user.id
     if (!workspace) {
       return NextResponse.json({
@@ -86,7 +140,35 @@ export const GET = apiHandler(async (request: NextRequest) => {
       where,
       orderBy: { updatedAt: 'desc' },  // 先按更新时间排序获取所有匹配项目
       skip: (page - 1) * pageSize,
-      take: pageSize
+      take: pageSize,
+      include: {
+        // These three narrow projections mirror requireProjectAccess's
+        // cascade without issuing one permission query per project.
+        collaborators: {
+          where: { userId: session.user.id },
+          select: { role: true },
+          take: 1,
+        },
+        workspace: {
+          select: {
+            ownerEditorId: true,
+            members: {
+              where: { userId: session.user.id },
+              select: { role: true },
+              take: 1,
+            },
+          },
+        },
+        user: {
+          select: {
+            workspaceMemberships: {
+              where: { workspace: { ownerEditorId: session.user.id } },
+              select: { workspaceId: true },
+              take: 1,
+            },
+          },
+        },
+      },
     })
   ])
 
@@ -109,8 +191,8 @@ export const GET = apiHandler(async (request: NextRequest) => {
   // 获取项目 ID 列表
   const projectIds = projects.map(p => p.id)
 
-  // ⚡ 并行获取：费用 + 项目统计（章节数、图片数、视频数）
-  const [costsByProject, novelProjects] = await Promise.all([
+  // ⚡ 并行获取：费用 + 项目统计（章节数、图片数、视频数）+ 使用者進度
+  const [costsByProject, novelProjects, projectStates] = await Promise.all([
     // 一次性获取所有项目的费用（代替 N+1 查询）
     prisma.usageCost.groupBy({
       by: ['projectId'],
@@ -154,12 +236,24 @@ export const GET = apiHandler(async (request: NextRequest) => {
           }
         }
       }
-    })
+    }),
+    // Per-user sticky step must be loaded in one batch. It describes where
+    // this requester last worked; it is not inferred from project assets.
+    prisma.userProjectState.findMany({
+      where: {
+        userId: session.user.id,
+        projectId: { in: projectIds },
+      },
+      select: { projectId: true, lastStep: true },
+    }),
   ])
 
   // 构建费用映射表
   const costMap = new Map(
     costsByProject.map(item => [item.projectId, toMoneyNumber(item._sum.cost)])
+  )
+  const lastStepMap = new Map(
+    projectStates.map(state => [state.projectId, normalizeLastStep(state.lastStep)])
   )
 
   // 构建统计映射表 + 第一集预览
@@ -189,11 +283,37 @@ export const GET = apiHandler(async (request: NextRequest) => {
     })
   )
 
-  // 合并项目、费用与统计
-  const projectsWithStats = projects.map(project => ({
-    ...project,
-    totalCost: costMap.get(project.id) ?? 0,
-    stats: statsMap.get(project.id) ?? { episodes: 0, images: 0, videos: 0, panels: 0, firstEpisodePreview: null }}))
+  // 合并项目、费用、统计、目前使用者進度與權限 view-model。
+  // Access-only relation projections are intentionally not exposed.
+  const projectsWithStats = projects.map(project => {
+    const effectiveRole = resolveEffectiveProjectRole(
+      project,
+      session.user.id,
+      requesterIsAdmin,
+    )
+    const canWrite = effectiveRole !== UserRole.VIEWER
+    const { collaborators, workspace, user, ...projectFields } = project
+    void collaborators
+    void workspace
+    void user
+
+    return {
+      ...projectFields,
+      lastStep: lastStepMap.get(project.id) ?? null,
+      effectiveRole,
+      canEdit: canWrite,
+      // DELETE /api/projects/:id uses the same write-access cascade.
+      canDelete: canWrite,
+      totalCost: costMap.get(project.id) ?? 0,
+      stats: statsMap.get(project.id) ?? {
+        episodes: 0,
+        images: 0,
+        videos: 0,
+        panels: 0,
+        firstEpisodePreview: null,
+      },
+    }
+  })
 
   return NextResponse.json({
     projects: projectsWithStats,

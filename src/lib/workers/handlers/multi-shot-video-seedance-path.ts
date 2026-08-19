@@ -55,14 +55,13 @@ import { buildAudioDirective } from './multi-shot-audio-directive'
 import { getMultiShotDurationWindow } from './multi-shot-duration-window'
 import { buildDialogueDrivenDurations, estimateSilentActionSeconds } from './speech-duration-estimator'
 import { buildMultiShotClipUpdate } from '@/lib/storyboard/multi-shot-clips'
+import {
+  requireNovelPromotionStoryboardInProject,
+  updateNovelPromotionStoryboardInProject,
+} from '@/lib/novel-promotion/project-scope'
 import { createScopedLogger } from '@/lib/logging/core'
 import { parseModelKeyStrict } from '@/lib/model-config-contract'
-import {
-  findCharacterByName,
-  parsePanelCharacterReferences,
-  parseImageUrls,
-  resolveNovelData,
-} from './image-task-handler-shared'
+import type { NovelProjectData } from './image-task-handler-shared'
 import {
   collectCharacterRefs as collectCharacterRefsShared,
   collectSceneRefs as collectSceneRefsShared,
@@ -159,18 +158,17 @@ export function shouldUseSeedanceComposite(videoModel: string): boolean {
   return parsed.provider === 'taijiai' && /^seedance-2\.0/.test(parsed.modelId)
 }
 
-type NovelData = Awaited<ReturnType<typeof resolveNovelData>>
+type NovelData = NovelProjectData
 
 /**
  * Walk panels and collect unique character references with their
  * appearance imageUrl. Mirrors the first pass of b-path's SubjectInfos
- * pipeline. Falls back to appearances[0] when no episode binding / panel
- * appearance hint is available — same priority as b-path.
+ * pipeline. The caller supplies a canonical roster where each referenced
+ * character has exactly one episode-authorised appearance.
  */
 export function collectCharacterRefs(
   panels: PanelLite[],
   projectData: NovelData,
-  episodeBindings: Map<string, string>,
   /** Extra free text (e.g. hand-edited rawPrompt) mined for character
    *  names so a name written only in the narrative still anchors to a
    *  reference image. Forwarded to the shared collector. (2026-05-28) */
@@ -179,7 +177,6 @@ export function collectCharacterRefs(
   return collectCharacterRefsShared(
     panels,
     projectData,
-    episodeBindings,
     MAX_CHARACTER_REFS,
     extraMiningText,
   )
@@ -439,6 +436,8 @@ export async function runMultiShotSeedanceComposite(params: {
   job: Job<TaskJobData>
   projectId: string
   validPanels: PanelLite[]
+  /** Canonical episode roster; every referenced character has one appearance. */
+  projectData: NovelData
   videoModel: string
   // sound / aspectRatio mirror the handler's payload shape — both can be
   // undefined when the API caller omits them. We default in-handler so
@@ -446,8 +445,6 @@ export async function runMultiShotSeedanceComposite(params: {
   // ratio defaults to the project's natural ratio if known, else 16:9).
   sound: boolean | undefined
   aspectRatio: string | undefined
-  /** Per-call character appearance overrides (UI swap-costume affordance). */
-  characterOverrides?: Array<{ characterId: string; appearanceId?: string }>
   /** Per-call location view overrides. */
   locationOverrides?: Array<{ locationId: string; viewName?: string }>
   /** User-edited / LLM-enriched narrative prompt from the GroupCard
@@ -486,7 +483,7 @@ export async function runMultiShotSeedanceComposite(params: {
     scenes: Array<{ id: string; name: string; imageUrl: string }>
   }
 }> {
-  const { job, projectId, validPanels } = params
+  const { job, projectId, validPanels, projectData } = params
   const sound = params.sound ?? true
   const aspectRatio = params.aspectRatio ?? '16:9'
   const { userId } = job.data
@@ -501,52 +498,27 @@ export async function runMultiShotSeedanceComposite(params: {
 
   await reportTaskProgress(job, 12, { stage: 'seedance_composite_collect_refs' })
 
-  // Per-call override maps — mirrors b-path's shape so the caller can
-  // pass the same raw arrays through both dispatches.
-  const charOverrideById = new Map<string, string>()
-  for (const o of params.characterOverrides ?? []) {
-    if (o.characterId && o.appearanceId) charOverrideById.set(o.characterId, o.appearanceId)
-  }
   const locOverrideById = new Map<string, string>()
   for (const o of params.locationOverrides ?? []) {
     if (o.locationId && o.viewName) locOverrideById.set(o.locationId, o.viewName)
   }
 
-  // Episode-level appearance bindings (same shape as b-path lines 1240+).
-  // All panels in a group live under one storyboard → one episode.
-  const episodeBindings = new Map<string, string>()
   // Phase S — per-group motion/camera reference video.
   let groupReferenceVideoUrl: string | null = null
   const firstStoryboardId = validPanels[0]?.storyboardId
   if (firstStoryboardId) {
     const sb = await prisma.novelPromotionStoryboard.findUnique({
       where: { id: firstStoryboardId },
-      select: { episodeId: true, referenceVideoUrl: true },
+      select: { referenceVideoUrl: true },
     })
-    if (sb?.episodeId) {
-      const rows = await prisma.episodeCharacter.findMany({
-        where: { episodeId: sb.episodeId, appearanceId: { not: null } },
-        select: { characterId: true, appearanceId: true },
-      })
-      for (const row of rows) {
-        if (row.appearanceId) episodeBindings.set(row.characterId, row.appearanceId)
-      }
-    }
     if (sb?.referenceVideoUrl) {
       groupReferenceVideoUrl = toSignedUrlIfCos(sb.referenceVideoUrl, 3600)
     }
   }
-  // Per-call override beats episode binding — match the b-path priority
-  // so the resolvedAppearance is consistent between dispatches.
-  for (const [charId, appearanceId] of charOverrideById) {
-    episodeBindings.set(charId, appearanceId)
-  }
-
-  const projectData = await resolveNovelData(projectId)
   const usedPanels = validPanels.slice(0, MAX_REFERENCE_IMAGES)
   // Mine hand-edited rawPrompt for @names so they bind to reference images
   // (parity with atlascloud/ark; seedance wrapper 4th arg = extraMiningText). (2026-05-30)
-  const characterRefs = collectCharacterRefs(usedPanels, projectData, episodeBindings, params.rawPrompt)
+  const characterRefs = collectCharacterRefs(usedPanels, projectData, params.rawPrompt)
   const sceneRefs = collectSceneRefs(usedPanels, projectData, locOverrideById)
 
   const { firstFrameUrl, referenceUrls } = planReferenceBudget({
@@ -760,6 +732,8 @@ export async function runMultiShotSeedanceComposite(params: {
   // uploadVideoSourceToCos accepts downloadHeaders so the redirect
   // chain completes correctly.
   const targetId = validPanels[0].storyboardId
+  await assertTaskActive(job, 'seedance_composite_persist')
+  await requireNovelPromotionStoryboardInProject(projectId, targetId)
   const cosKey = await uploadVideoSourceToCos(
     polled.url,
     `multi-shot-seedance/${targetId}`,
@@ -767,10 +741,11 @@ export async function runMultiShotSeedanceComposite(params: {
     polled.downloadHeaders,
   )
 
-  await prisma.novelPromotionStoryboard.update({
-    where: { id: targetId },
-    data: buildMultiShotClipUpdate([cosKey]),
-  })
+  await updateNovelPromotionStoryboardInProject(
+    projectId,
+    targetId,
+    buildMultiShotClipUpdate([cosKey]),
+  )
 
   await reportTaskProgress(job, 98, { stage: 'seedance_composite_done' })
 

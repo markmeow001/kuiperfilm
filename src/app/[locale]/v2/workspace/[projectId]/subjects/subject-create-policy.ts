@@ -66,7 +66,7 @@ export function getLocationCreatePolicy({
 export function resolveLocationCreateSubmission(mode: LocationCreateMode, description: string) {
   const trimmedDescription = description.trim()
   return {
-    apiDescription: mode === 'description' ? trimmedDescription : '',
+    apiDescription: trimmedDescription,
     summaryNote: mode === 'upload' ? trimmedDescription : '',
     shouldUpload: mode === 'upload',
   }

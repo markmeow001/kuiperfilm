@@ -1,8 +1,31 @@
 {
-  "title": "KuiperAI",
+  "title": "Kuiper 影界",
   "subtitle": "AI Film & TV Studio",
+  "eyebrow": "AI FILM PRODUCTION SYSTEM",
+  "heroTitle": "Turn creative intent into a traceable production flow",
+  "heroBody": "Keep scripts, cast, worlds, shots, generated takes, and delivery connected. Every choice has a source and a way back.",
   "enterWorkspace": "Enter Workspace",
   "getStarted": "Get Started",
+  "signIn": "Sign in to studio",
+  "invitationOnly": "Invitation-only studio",
+  "continueProject": "Continue recent project",
+  "pipelineTitle": "Production lineage",
+  "pipelineDescription": "From project to delivery, every asset knows where it came from and which shot selected it.",
+  "projectLabel": "Project",
+  "episodeLabel": "Episode",
+  "sceneLabel": "Scene",
+  "shotLabel": "Shot",
+  "takeLabel": "Take",
+  "deliveryLabel": "Delivery",
+  "capabilityScript": "Script and breakdown",
+  "capabilityScriptBody": "Keep episodes, scenes, characters, and props inside one production context. Downstream shots show when upstream work changes.",
+  "capabilityVisual": "Visual production",
+  "capabilityVisualBody": "Manage boards, candidate takes, and generation jobs together. Compare, approve, and understand cost without losing context.",
+  "capabilityFinish": "Edit and deliver",
+  "capabilityFinishBody": "Bring selected media into the cut and delivery while retaining provenance, approval state, and downloadable outputs.",
+  "statusLabel": "Current status",
+  "statusValue": "Private beta · Invite only",
+  "footerLine": "FROM SCRIPT TO DELIVERY",
   "learnMore": "Learn More",
   "features": {
     "title": "Unleash Infinite Creativity",
@@ -21,6 +44,6 @@
     }
   },
   "footer": {
-    "copyright": "2026 KuiperAI. All rights reserved."
+    "copyright": "2026 Kuiper 影界. All rights reserved."
   }
 }

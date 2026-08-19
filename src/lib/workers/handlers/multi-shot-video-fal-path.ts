@@ -44,9 +44,13 @@ import {
 } from '../utils'
 import { reportTaskProgress } from '../shared'
 import { buildMultiShotClipUpdate } from '@/lib/storyboard/multi-shot-clips'
+import {
+  requireNovelPromotionStoryboardInProject,
+  updateNovelPromotionStoryboardInProject,
+} from '@/lib/novel-promotion/project-scope'
 import { createScopedLogger } from '@/lib/logging/core'
 import { parseModelKeyStrict } from '@/lib/model-config-contract'
-import { resolveNovelData } from './image-task-handler-shared'
+import type { NovelProjectData } from './image-task-handler-shared'
 import {
   buildAudioDirective,
   buildSpeechDialogueBlock,
@@ -132,7 +136,7 @@ function shortBlurb(full: string): string {
 
 function describeCharacterForPrompt(
   ref: CharacterRef,
-  projectData: Awaited<ReturnType<typeof resolveNovelData>>,
+  projectData: NovelProjectData,
   mode: ModeKey,
 ): string {
   if (mode === 'r2v') return ''
@@ -151,7 +155,7 @@ function describeCharacterForPrompt(
 
 function describeSceneForPrompt(
   ref: SceneRef,
-  projectData: Awaited<ReturnType<typeof resolveNovelData>>,
+  projectData: NovelProjectData,
   mode: ModeKey,
 ): string {
   if (mode === 'r2v') return ''
@@ -166,7 +170,7 @@ function describeSceneForPrompt(
 
 function describePropForPrompt(
   ref: PropRef,
-  projectData: Awaited<ReturnType<typeof resolveNovelData>>,
+  projectData: NovelProjectData,
   mode: ModeKey,
 ): string {
   if (mode === 'r2v') return ''
@@ -193,7 +197,7 @@ function buildFalPrompt(
   characterRefs: CharacterRef[],
   sceneRefs: SceneRef[],
   propRefs: PropRef[],
-  projectData: Awaited<ReturnType<typeof resolveNovelData>>,
+  projectData: NovelProjectData,
   r2vRefOrder: Array<{ kind: 'char' | 'scene' | 'prop'; ref: CharacterRef | SceneRef | PropRef }>,
   soundEnabled: boolean = true,
 ): { prompt: string; dialogueBeatCount: number } {
@@ -265,6 +269,7 @@ export async function runMultiShotFalComposite(params: {
   job: Job<TaskJobData>
   projectId: string
   validPanels: PanelLite[]
+  projectData: NovelProjectData
   videoModel: string
   sound: boolean | undefined
   aspectRatio: string | undefined
@@ -274,12 +279,6 @@ export async function runMultiShotFalComposite(params: {
    *  atlascloud-path for full rationale. */
   totalDurationSeconds?: number
   visualStyleId?: string
-  /** Per-call character appearance overrides ("swap costume" from the
-   *  bindings rail). characterId → appearanceId. Wins over the episode
-   *  binding so a user who switches William to 半裸 actually gets that
-   *  appearance's reference image. 2026-05-28 — was missing entirely on
-   *  this path (parity gap with seedance/ark/atlascloud/b paths). */
-  characterOverrides?: Array<{ characterId: string; appearanceId?: string }>
   /** Per-call location view overrides. locationId → viewName. */
   locationOverrides?: Array<{ locationId: string; viewName?: string }>
 }): Promise<{
@@ -297,7 +296,7 @@ export async function runMultiShotFalComposite(params: {
     props: Array<{ id: string; name: string; imageUrl: string }>
   }
 }> {
-  const { job, projectId, validPanels, videoModel } = params
+  const { job, projectId, validPanels, projectData, videoModel } = params
   const sound = params.sound ?? true
   const aspectRatio = params.aspectRatio ?? '16:9'
   const { userId } = job.data
@@ -318,40 +317,18 @@ export async function runMultiShotFalComposite(params: {
 
   await reportTaskProgress(job, 12, { stage: 'fal_composite_collect_refs' })
 
-  // Episode-level appearance bindings (same as other vendor paths).
-  const episodeBindings = new Map<string, string>()
   // Phase S — per-group motion/camera reference video (mirrors atlascloud path).
   let groupReferenceVideoUrl: string | null = null
   const firstStoryboardId = validPanels[0]?.storyboardId
   if (firstStoryboardId) {
     const sb = await prisma.novelPromotionStoryboard.findUnique({
       where: { id: firstStoryboardId },
-      select: { episodeId: true, referenceVideoUrl: true },
+      select: { referenceVideoUrl: true },
     })
-    if (sb?.episodeId) {
-      const rows = await prisma.episodeCharacter.findMany({
-        where: { episodeId: sb.episodeId, appearanceId: { not: null } },
-        select: { characterId: true, appearanceId: true },
-      })
-      for (const row of rows) {
-        if (row.appearanceId) episodeBindings.set(row.characterId, row.appearanceId)
-      }
-    }
     if (sb?.referenceVideoUrl) {
       groupReferenceVideoUrl = toSignedUrlIfCos(sb.referenceVideoUrl, 3600)
     }
   }
-
-  // Per-call character appearance overrides ("swap costume" from the
-  // bindings rail) win over the episode binding — same merge order as
-  // seedance/atlascloud paths. Without this fal silently rendered the
-  // default appearance (2026-05-28 fix: user switched William to 半裸 but
-  // kept getting the full-suit default).
-  for (const o of params.characterOverrides ?? []) {
-    if (o.characterId && o.appearanceId) episodeBindings.set(o.characterId, o.appearanceId)
-  }
-
-  const projectData = await resolveNovelData(projectId)
   const usedPanels = validPanels.slice(0, MAX_REFERENCE_IMAGES)
 
   const locOverrideById = new Map<string, string>()
@@ -361,7 +338,7 @@ export async function runMultiShotFalComposite(params: {
   // Pass hand-edited rawPrompt as extra mining text so @names written only in
   // the narrative still bind to reference images (parity with atlascloud/ark).
   // Shared 5-arg collector: 4th=maxRefs(undefined), 5th=extraMiningText. (2026-05-30)
-  const characterRefs = collectCharacterRefs(usedPanels, projectData, episodeBindings, undefined, params.rawPrompt)
+  const characterRefs = collectCharacterRefs(usedPanels, projectData, undefined, params.rawPrompt)
   const sceneRefs = collectSceneRefs(usedPanels, projectData, locOverrideById)
   const propRefs = collectPropRefs(usedPanels, projectData)
 
@@ -596,6 +573,8 @@ export async function runMultiShotFalComposite(params: {
   await reportTaskProgress(job, 92, { stage: 'fal_composite_persist' })
 
   const targetId = validPanels[0].storyboardId
+  await assertTaskActive(job, 'fal_composite_persist')
+  await requireNovelPromotionStoryboardInProject(projectId, targetId)
   const cosKey = await uploadVideoSourceToCos(
     polled.url,
     `multi-shot-fal/${targetId}`,
@@ -603,10 +582,11 @@ export async function runMultiShotFalComposite(params: {
     polled.downloadHeaders,
   )
 
-  await prisma.novelPromotionStoryboard.update({
-    where: { id: targetId },
-    data: buildMultiShotClipUpdate([cosKey]),
-  })
+  await updateNovelPromotionStoryboardInProject(
+    projectId,
+    targetId,
+    buildMultiShotClipUpdate([cosKey]),
+  )
 
   await reportTaskProgress(job, 98, { stage: 'fal_composite_done' })
 

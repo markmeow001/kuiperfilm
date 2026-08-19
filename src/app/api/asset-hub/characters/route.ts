@@ -5,6 +5,7 @@ import { requireUserAuth, requireEditorAuth, isErrorResponse } from '@/lib/api-a
 import { ApiError, apiHandler } from '@/lib/api-errors'
 import { attachMediaFieldsToGlobalCharacter } from '@/lib/media/attach'
 import { resolveMediaRefFromLegacyValue } from '@/lib/media/service'
+import { assertUserMediaWriteReferenceAllowed } from '@/lib/media/write-policy'
 import { PRIMARY_APPEARANCE_INDEX } from '@/lib/constants'
 import { encodeImageUrls } from '@/lib/contracts/image-urls-contract'
 import { resolveTaskLocale } from '@/lib/task/resolve-locale'
@@ -14,15 +15,16 @@ function toObject(value: unknown): Record<string, unknown> {
     return value as Record<string, unknown>
 }
 
-// 多人系统：团队共享 — 所有成员都能看到全部角色（支持 folderId 筛选）
+// 角色资产按创建用户隔离（支持 folderId 筛选）
 export const GET = apiHandler(async (request: NextRequest) => {
     const authResult = await requireUserAuth()
     if (isErrorResponse(authResult)) return authResult
+    const { session } = authResult
 
     const { searchParams } = new URL(request.url)
     const folderId = searchParams.get('folderId')
 
-    const where: Record<string, unknown> = {}
+    const where: Record<string, unknown> = { userId: session.user.id }
     if (folderId === 'null') {
         where.folderId = null
     } else if (folderId) {
@@ -67,6 +69,8 @@ export const POST = apiHandler(async (request: NextRequest) => {
     if (!name) {
         throw new ApiError('INVALID_PARAMS')
     }
+
+    await assertUserMediaWriteReferenceAllowed(initialImageUrl || null)
 
     let allReferenceImages: string[] = []
     if (referenceImageUrls && Array.isArray(referenceImageUrls)) {

@@ -2,6 +2,7 @@ import { createScopedLogger } from '@/lib/logging/core'
 import COS from 'cos-nodejs-sdk-v5'
 import * as fs from 'fs/promises'
 import * as path from 'path'
+import { randomUUID } from 'crypto'
 import { decodeImageUrlsFromDb } from '@/lib/contracts/image-urls-contract'
 import { normalizeToBase64ForGeneration } from '@/lib/media/outbound-image'
 
@@ -221,16 +222,27 @@ export function contentTypeForKey(key: string): string {
 export async function uploadToCOS(buffer: Buffer, key: string, maxRetries: number = COS_MAX_RETRIES): Promise<string> {
   // ==================== 本地存储模式 ====================
   if (isLocalStorage) {
+    let temporaryPath: string | null = null
     try {
       const filePath = path.join(UPLOAD_DIR, key)
       await fs.mkdir(path.dirname(filePath), { recursive: true })
-      await fs.writeFile(filePath, buffer)
+      // A package retry may HEAD this exact task-stable key after an upload
+      // response is lost. Publish local objects with rename so a successful
+      // stat can never observe a partially written file.
+      temporaryPath = `${filePath}.upload-${randomUUID()}`
+      await fs.writeFile(temporaryPath, buffer)
+      await fs.rename(temporaryPath, filePath)
+      temporaryPath = null
       _ulogInfo(`[Local上传] 成功: ${key}`)
       return key
     } catch (error: unknown) {
       const errorInfo = extractErrorInfo(error)
       _ulogError(`[Local上传] 失败: ${key}`, errorInfo.message)
       throw new Error(`本地存储上传失败: ${key}`)
+    } finally {
+      if (temporaryPath) {
+        await fs.unlink(temporaryPath).catch(() => undefined)
+      }
     }
   }
 
@@ -350,8 +362,12 @@ export async function uploadToCOS(buffer: Buffer, key: string, maxRetries: numbe
 /**
  * 删除存储对象（COS或本地文件）
  * @param key 存储Key（例如：images/xxx.png）
+ * @param options.throwOnError 让需要补偿事务的调用方观察删除失败；默认维持既有 best-effort 行为
  */
-export async function deleteCOSObject(key: string): Promise<void> {
+export async function deleteCOSObject(
+  key: string,
+  options?: { throwOnError?: boolean },
+): Promise<void> {
   // ==================== 本地存储模式 ====================
   if (isLocalStorage) {
     try {
@@ -363,6 +379,7 @@ export async function deleteCOSObject(key: string): Promise<void> {
       // 文件不存在时忽略错误
       if (errorInfo.code !== 'ENOENT') {
         _ulogError(`[Local删除] 失败: ${key}`, errorInfo.message)
+        if (options?.throwOnError) throw error
       }
     }
     return
@@ -381,6 +398,7 @@ export async function deleteCOSObject(key: string): Promise<void> {
     } catch (error: unknown) {
       const errorInfo = extractErrorInfo(error)
       _ulogError(`[R2删除] 失败: ${key}`, errorInfo.message)
+      if (options?.throwOnError) throw error
     }
     return
   }
@@ -403,6 +421,80 @@ export async function deleteCOSObject(key: string): Promise<void> {
       }
     )
   })
+}
+
+function isStorageObjectNotFound(error: unknown): boolean {
+  const info = extractErrorInfo(error)
+  if (info.code === 'ENOENT' || info.code === 'NoSuchKey' || info.code === 'NotFound') return true
+  if (!error || typeof error !== 'object') return false
+  const record = error as UnknownRecord
+  if (record.statusCode === 404) return true
+  const metadata = record.$metadata
+  return !!metadata
+    && typeof metadata === 'object'
+    && (metadata as UnknownRecord).httpStatusCode === 404
+}
+
+/**
+ * Returns the exact stored byte length, or null when the object definitely does
+ * not exist. Other failures remain observable so callers never mistake an
+ * unknown storage outcome for absence and blindly upload/delete again.
+ */
+export async function getStorageObjectSize(key: string): Promise<number | null> {
+  if (!key || key.includes('..') || key.includes('\\') || path.isAbsolute(key)) {
+    throw new Error('STORAGE_OBJECT_KEY_INVALID')
+  }
+
+  if (isLocalStorage) {
+    const base = path.resolve(UPLOAD_DIR)
+    const filePath = path.resolve(base, key)
+    if (!filePath.startsWith(`${base}${path.sep}`)) {
+      throw new Error('STORAGE_OBJECT_KEY_INVALID')
+    }
+    try {
+      const metadata = await fs.stat(filePath)
+      return metadata.isFile() ? metadata.size : null
+    } catch (error) {
+      if (isStorageObjectNotFound(error)) return null
+      throw error
+    }
+  }
+
+  if (isR2Storage) {
+    try {
+      const { HeadObjectCommand } = await import('@aws-sdk/client-s3')
+      const client = await getR2Client()
+      const metadata = await client.send(new HeadObjectCommand({
+        Bucket: R2_BUCKET,
+        Key: key,
+      }))
+      return typeof metadata.ContentLength === 'number' ? metadata.ContentLength : null
+    } catch (error) {
+      if (isStorageObjectNotFound(error)) return null
+      throw error
+    }
+  }
+
+  try {
+    const metadata = await new Promise<UnknownRecord>((resolve, reject) => {
+      cos!.headObject(
+        { Bucket: BUCKET, Region: REGION, Key: key },
+        (error, data) => error ? reject(error) : resolve(data as unknown as UnknownRecord),
+      )
+    })
+    const headers = metadata.headers && typeof metadata.headers === 'object'
+      ? metadata.headers as UnknownRecord
+      : {}
+    const rawLength = headers['content-length'] ?? headers['Content-Length']
+    const length = typeof rawLength === 'number' ? rawLength : Number.parseInt(String(rawLength ?? ''), 10)
+    if (!Number.isFinite(length) || length < 0) {
+      throw new Error('STORAGE_OBJECT_SIZE_INVALID')
+    }
+    return length
+  } catch (error) {
+    if (isStorageObjectNotFound(error)) return null
+    throw error
+  }
 }
 
 /**

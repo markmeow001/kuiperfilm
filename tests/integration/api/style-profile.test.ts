@@ -164,6 +164,34 @@ describe('api PATCH /api/projects/[projectId]/style-profile', () => {
     )
   })
 
+  it('[owned mediaId points at a VoiceLine task output] -> [400 before style write]', async () => {
+    installAuthMocks()
+    mockAuthenticated('user-1')
+    mockProjectAuth('allow')
+    prismaMock.novelPromotionProject.findUnique.mockResolvedValueOnce({
+      id: 'np-1',
+      stylePositivePrompt: null,
+      styleNegativePrompt: null,
+      styleReferenceImages: null,
+    })
+    prismaMock.mediaObject.findMany.mockResolvedValueOnce([{
+      id: VALID_MEDIA_ID_OWN,
+      publicId: 'voice-task-output',
+      storageKey: `voice/project-a/episode-a/line-a/${'a'.repeat(32)}-${'b'.repeat(64)}.wav`,
+      ownerUserId: 'user-1',
+    }])
+
+    const route = await loadRoute()
+    const res = await route.PATCH(buildMockRequest({
+      path: '/api/projects/project-1/style-profile',
+      method: 'PATCH',
+      body: { styleReferenceImages: [VALID_MEDIA_ID_OWN] },
+    }), buildContext())
+
+    expect(res.status).toBe(400)
+    expect(prismaMock.novelPromotionProject.update).not.toHaveBeenCalled()
+  })
+
   it('stylePositivePrompt 超过 8000 chars -> 400', async () => {
     installAuthMocks()
     mockAuthenticated('user-1')

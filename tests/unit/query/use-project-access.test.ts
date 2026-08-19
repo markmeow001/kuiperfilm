@@ -51,6 +51,8 @@ describe('useProjectAccess', () => {
     expect(result.current.role).toBe('owner')
     expect(result.current.canEdit).toBe(true)
     expect(result.current.canView).toBe(true)
+    expect(result.current.isError).toBe(false)
+    expect(result.current.error).toBeNull()
   })
 
   it('returns canEdit=false for viewer role from 200 response', async () => {
@@ -82,6 +84,8 @@ describe('useProjectAccess', () => {
     expect(result.current.canEdit).toBe(false)
     expect(result.current.canView).toBe(false)
     expect(result.current.role).toBeNull()
+    expect(result.current.isError).toBe(false)
+    expect(result.current.error).toBeNull()
   })
 
   it('treats 404 as locked (project soft-deleted or doesn\'t exist)', async () => {
@@ -94,6 +98,27 @@ describe('useProjectAccess', () => {
     const { result } = renderHook(() => useProjectAccess('proj-1'), { wrapper })
 
     await waitFor(() => expect(result.current.isLoading).toBe(false))
+    expect(result.current.allowed).toBe(false)
+    expect(result.current.canEdit).toBe(false)
+    expect(result.current.isError).toBe(false)
+  })
+
+  it('HTTP 5xx -> exposes a retryable transport error instead of permission denial', async () => {
+    globalAny.fetch.mockResolvedValue({
+      ok: false,
+      status: 503,
+      json: async () => ({}),
+    })
+
+    const { result } = renderHook(() => useProjectAccess('proj-1'), { wrapper })
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false), {
+      timeout: 5_000,
+    })
+    expect(result.current.isError).toBe(true)
+    expect(result.current.error?.message).toBe(
+      'Project access fetch failed: HTTP 503',
+    )
     expect(result.current.allowed).toBe(false)
     expect(result.current.canEdit).toBe(false)
   })
@@ -116,5 +141,6 @@ describe('useProjectAccess', () => {
     expect(result.current.canEdit).toBe(false)
     expect(result.current.canView).toBe(false)
     expect(result.current.allowed).toBe(false)
+    expect(result.current.isError).toBe(false)
   })
 })

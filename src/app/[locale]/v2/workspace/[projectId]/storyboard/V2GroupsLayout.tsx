@@ -33,6 +33,7 @@ import { GroupCard, type GroupRegenOverrides } from './GroupCard'
 import { computeGroupRecommendedDurationSec } from '@/lib/workers/handlers/speech-duration-estimator'
 import type { UseMutationResult } from '@tanstack/react-query'
 import type { VideoFamily, PanelLike } from './storyboard-client-helpers'
+import type { ActiveCharacterAppearanceBindingState } from '../subjects/active-character-appearance'
 
 // PanelLike + PanelCharacterRef now live in storyboard-client-helpers as the
 // single shared declaration (2026-07-01 — three-way unification; GroupCard's
@@ -94,13 +95,7 @@ interface V2GroupsLayoutProps {
   updatePanelText: UpdatePanelTextMutation
   characterRoster?: CharacterRosterEntry[]
   locationRoster?: LocationRosterEntry[]
-  /**
-   * Per-episode character → appearance binding. The worker uses this to
-   * override panel.characters[i].appearance, so the chip rail must mirror
-   * the same resolution priority or 出場角色 and 演員綁定 visibly diverge
-   * (user-reported 2026-05-13).
-   */
-  episodeBindings?: Array<{ characterId: string; appearanceId: string | null }>
+  appearanceBindingState: ActiveCharacterAppearanceBindingState
   /** Used for download filename naming (`ep{N}_group{NN}.mp4`). */
   episodeNumber?: number | null
   /** Threads the project-level capability gate down to each GroupCard
@@ -152,12 +147,12 @@ export type GroupRegenSubmitResult = {
 }
 
 const GROUP_ACCENTS = [
-  'border-l-primary-500',
-  'border-l-rose-500',
-  'border-l-emerald-500',
-  'border-l-sky-500',
-  'border-l-violet-500',
-  'border-l-orange-500',
+  'border-l-[var(--production-blue-hover)]',
+  'border-l-[var(--production-blue)]',
+  'border-l-[var(--process-cyan-deep)]',
+  'border-l-[#408B9A]',
+  'border-l-[var(--process-cyan)]',
+  'border-l-[var(--process-cyan-strong)]',
 ] as const
 
 function accentForOrdinal(ordinal: number): string {
@@ -174,7 +169,7 @@ export function V2GroupsLayout({
   updatePanelText,
   characterRoster,
   locationRoster,
-  episodeBindings,
+  appearanceBindingState,
   episodeNumber,
   canMultiShot = true,
   videoFamily = null,
@@ -274,7 +269,7 @@ export function V2GroupsLayout({
   const hasNoGroups = groups.ordered.length === 0
 
   return (
-    <div className="kuiper-storyboard-shell flex flex-col">
+    <div className="kuiper-storyboard-shell flex flex-col [&_a]:min-h-11 [&_a]:min-w-11 [&_button]:min-h-11 [&_button]:min-w-11">
       <div className="border-b border-border-soft px-[var(--workspace-gutter)] pb-4 pt-5">
         {toolbarNode}
       </div>
@@ -325,7 +320,7 @@ export function V2GroupsLayout({
                   updatePanelText={updatePanelText}
                   characterRoster={characterRoster}
                   locationRoster={locationRoster}
-                  episodeBindings={episodeBindings}
+                  appearanceBindingState={appearanceBindingState}
                   segmentStartSec={timing?.startSec}
                   segmentDurationSeconds={timing?.durationSec}
                   targetSecPerGroup={targetSecPerGroup}

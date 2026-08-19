@@ -20,8 +20,10 @@
  */
 
 import { useEffect, useRef, useState } from 'react'
+import { useTranslations } from 'next-intl'
 import { AppIcon } from '@/components/ui/icons'
 import { getNamedSubjectCreatePolicy } from './subject-create-policy'
+import type { SubjectUploadTarget } from './subject-create-upload-flow'
 
 export type ManualAddSubjectType = 'character' | 'scene' | 'prop'
 
@@ -62,6 +64,8 @@ export interface V2ManualAddSubjectModalProps {
   onClose: () => void
   onSubmit: (params: { name: string; description: string; file: File | null }) => void | Promise<void>
   isSubmitting: boolean
+  uploadRecovery?: SubjectUploadTarget | null
+  uploadError?: string | null
 }
 
 export function V2ManualAddSubjectModal({
@@ -69,7 +73,10 @@ export function V2ManualAddSubjectModal({
   onClose,
   onSubmit,
   isSubmitting,
+  uploadRecovery = null,
+  uploadError = null,
 }: V2ManualAddSubjectModalProps) {
+  const t = useTranslations('v2Subjects')
   const meta = SUBJECT_META[subjectType]
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
@@ -118,6 +125,7 @@ export function V2ManualAddSubjectModal({
       className="kuiper-modal-backdrop fixed inset-0 z-50 flex items-center justify-center px-4 py-8"
       role="dialog"
       aria-modal="true"
+      aria-labelledby="v2-manual-subject-create-title"
       onClick={(e) => {
         // Close on backdrop click only — not on inner content
         if (e.target === e.currentTarget && !isSubmitting) onClose()
@@ -137,7 +145,7 @@ export function V2ManualAddSubjectModal({
               <AppIcon name="plus" className="h-3.5 w-3.5 text-primary-400" />
             </div>
             <div>
-              <div className="font-fraunces text-lg italic text-text-primary">{meta.title}</div>
+              <div id="v2-manual-subject-create-title" className="font-fraunces text-lg italic text-text-primary">{meta.title}</div>
               <div className="mt-0.5 font-mono text-[10px] uppercase tracking-[0.2em] text-primary-600/80">
                 {meta.iconLabel} · MANUAL
               </div>
@@ -236,6 +244,14 @@ export function V2ManualAddSubjectModal({
 
         {/* Footer */}
         <div className="border-t border-primary-900/20 bg-raised/30 px-6 py-4">
+          {uploadRecovery ? (
+            <div
+              role="alert"
+              className="mb-3 rounded-sm border border-rose-500/35 bg-rose-500/10 px-3 py-2 font-serif-cn text-sm text-rose-200"
+            >
+              {uploadError ?? t('uploadRecovery.message')}
+            </div>
+          ) : null}
           {createPolicy.hint ? (
             <div className="mb-3 font-mono text-[11px] tracking-wider text-primary-300/80" role="status">
               {createPolicy.hint}
@@ -252,13 +268,18 @@ export function V2ManualAddSubjectModal({
             </button>
             <button
               type="submit"
-              disabled={!createPolicy.canSubmit}
+              disabled={uploadRecovery ? isSubmitting : !createPolicy.canSubmit}
               className="flex items-center gap-2 rounded-sm bg-primary-500 px-5 py-2 font-serif-cn text-sm font-medium text-canvas transition-all hover:bg-primary-400 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isSubmitting ? (
                 <>
                   <AppIcon name="loader" className="h-4 w-4 animate-spin" />
                   建立中…
+                </>
+              ) : uploadRecovery ? (
+                <>
+                  <AppIcon name="upload" className="h-4 w-4" />
+                  {t('uploadRecovery.retry')}
                 </>
               ) : (
                 <>

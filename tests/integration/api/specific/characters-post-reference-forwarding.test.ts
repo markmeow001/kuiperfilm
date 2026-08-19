@@ -36,6 +36,7 @@ const mediaAttachMock = vi.hoisted(() => ({
 }))
 
 const mediaServiceMock = vi.hoisted(() => ({
+  classifyVoiceLineTaskOutputReference: vi.fn(async () => 'other' as const),
   resolveMediaRefFromLegacyValue: vi.fn(async () => null),
 }))
 

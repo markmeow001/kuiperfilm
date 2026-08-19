@@ -7,9 +7,11 @@
  */
 import { useEffect, useState } from 'react'
 import { AppIcon } from '@/components/ui/icons'
+import { Modal } from '@/components/v2/Modal'
 import { useUploadPlaygroundReference } from '@/lib/query/mutations/playground-mutations'
 import { createCanvasLibraryAsset, listUserCanvases, type CanvasSummary } from './lib/canvas-library-api'
 import { buildCanvasImportHref } from '../canvas/lib/canvas-import-intent'
+import styles from './LiveCompositeShell.module.css'
 
 const MAX_VIDEO_UPLOAD_BYTES = 50 * 1024 * 1024
 const MAX_IMAGE_UPLOAD_BYTES = 10 * 1024 * 1024
@@ -98,36 +100,38 @@ export function SaveToLibraryDialog({ asset, locale, onClose }: SaveToLibraryDia
   const busy = busyMessage !== null
 
   return (
-    <div role="dialog" aria-label="存入資產庫" className="fixed inset-0 z-40 grid place-items-center bg-black/60 p-6">
-      <div className="w-full max-w-md rounded-2xl border border-white/10 bg-stone-950 p-5 shadow-2xl">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 text-sm font-medium text-stone-100">
-            <AppIcon name="bookmark" className="h-4 w-4 text-cyan-300" />存入資產庫
-          </div>
-          <button type="button" aria-label="關閉存入資產庫視窗" onClick={onClose} className="grid h-8 w-8 place-items-center rounded-lg text-stone-500 hover:bg-white/10 hover:text-white">
-            ✕
-          </button>
-        </div>
-
-        <label className="mt-4 block text-xs text-stone-400">
+    <Modal open onClose={onClose} size="md" className={styles.libraryDialog}>
+      <Modal.Header
+        heading={(
+          <span className="flex items-center gap-2">
+            <AppIcon name="bookmark" className="h-4 w-4 text-cyan-300" />
+            存入資產庫
+          </span>
+        )}
+        subtitle="選擇畫布並保存這次輸出；只有按下保存按鈕才會上傳。"
+        onClose={onClose}
+        closeAriaLabel="關閉存入資產庫視窗"
+      />
+      <Modal.Body className={styles.libraryBody}>
+        <label className={styles.libraryField}>
           資產名稱
           <input
             aria-label="資產名稱"
             value={name}
             disabled={busy}
             onChange={(event) => setName(event.target.value)}
-            className="mt-1 h-9 w-full rounded-lg border border-white/10 bg-black/30 px-2 text-sm text-stone-200 focus:border-cyan-400/50 focus:outline-none disabled:opacity-40"
+            className={styles.libraryControl}
           />
         </label>
 
-        <label className="mt-3 block text-xs text-stone-400">
+        <label className={`${styles.libraryField} mt-3`}>
           目標畫布
           <select
             aria-label="目標畫布"
             value={canvasId}
             disabled={busy || canvases === null}
             onChange={(event) => setCanvasId(event.target.value)}
-            className="mt-1 h-9 w-full rounded-lg border border-white/10 bg-black/30 px-2 text-sm text-stone-200 focus:border-cyan-400/50 focus:outline-none disabled:opacity-40"
+            className={styles.libraryControl}
           >
             {canvases === null ? <option value="">載入畫布清單中…</option> : null}
             {canvases !== null && canvases.length === 0 ? <option value="">（沒有可用的畫布，請先建立畫布）</option> : null}
@@ -140,16 +144,17 @@ export function SaveToLibraryDialog({ asset, locale, onClose }: SaveToLibraryDia
         {busy ? <p role="status" className="mt-3 text-xs text-cyan-300">{busyMessage}</p> : null}
         {error ? <p role="alert" className="mt-3 text-xs leading-5 text-red-300">{error}</p> : null}
         {savedMessage ? <p role="status" className="mt-3 text-xs text-emerald-300">{savedMessage}</p> : null}
-
-        <div className="mt-5 flex justify-end gap-2">
-          <button type="button" disabled={busy} onClick={onClose} className="rounded-lg border border-white/10 px-3 py-2 text-sm text-stone-300 hover:bg-white/[0.06] disabled:opacity-40">
+      </Modal.Body>
+      <Modal.Footer>
+        <div className={styles.libraryActions} data-live-composite-library-actions>
+          <button type="button" disabled={busy} onClick={onClose} className={styles.librarySecondary}>
             {savedMessage ? '完成' : '取消'}
           </button>
           <button
             type="button"
             disabled={busy || canvases === null || canvases.length === 0 || Boolean(savedMessage)}
             onClick={() => void save(false)}
-            className="rounded-lg border border-cyan-400/40 px-3 py-2 text-sm font-medium text-cyan-200 hover:bg-cyan-400/10 disabled:opacity-40"
+            className={styles.librarySecondary}
           >
             存入資產庫
           </button>
@@ -157,12 +162,12 @@ export function SaveToLibraryDialog({ asset, locale, onClose }: SaveToLibraryDia
             type="button"
             disabled={busy || canvases === null || canvases.length === 0 || Boolean(savedMessage)}
             onClick={() => void save(true)}
-            className="rounded-lg bg-cyan-400 px-3 py-2 text-sm font-medium text-stone-950 hover:bg-cyan-300 disabled:opacity-40"
+            className={styles.libraryPrimary}
           >
             存入並在畫布建立節點
           </button>
         </div>
-      </div>
-    </div>
+      </Modal.Footer>
+    </Modal>
   )
 }

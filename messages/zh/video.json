@@ -82,6 +82,8 @@
     "completedShots": "{count} 个已生成",
     "failedShots": "{count} 个失败",
     "generateAll": "生成所有视频",
+    "batchMovedToV2": "批次生成已移至 V2 分鏡頁。",
+    "openV2Storyboard": "開啟 V2 分鏡頁",
     "batchConfigTitle": "批量生成参数",
     "batchConfigDesc": "先选择模型与参数，再一键生成所有视频",
     "confirmGenerateAll": "确认并生成全部",

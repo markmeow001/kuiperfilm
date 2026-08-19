@@ -43,6 +43,10 @@ const prismaMock = vi.hoisted(() => ({
   novelPromotionLocation: {
     findUnique: vi.fn(),
   },
+  mediaObject: {
+    findMany: vi.fn(),
+    findUnique: vi.fn(),
+  },
   $transaction: vi.fn(),
 }))
 
@@ -56,6 +60,8 @@ describe('POST /api/projects/[projectId]/import-location', () => {
 
     prismaMock.project.findUnique.mockResolvedValue({ id: 'proj-1', userId: 'user-a' })
     prismaMock.novelPromotionProject.findUnique.mockResolvedValue({ id: 'np-1' })
+    prismaMock.mediaObject.findMany.mockResolvedValue([])
+    prismaMock.mediaObject.findUnique.mockResolvedValue(null)
 
     txMock.novelPromotionLocation.create.mockResolvedValue({ id: 'npl-1' })
     txMock.locationImage.createMany.mockResolvedValue({ count: 0 })
@@ -163,6 +169,33 @@ describe('POST /api/projects/[projectId]/import-location', () => {
     const res = await mod.POST(req, { params: Promise.resolve({ projectId: 'proj-1' }) })
     expect(res.status).toBe(403)
     expect(txMock.novelPromotionLocation.create).not.toHaveBeenCalled()
+  })
+
+  it('[location image JSON contains a reserved VoiceLine output] -> [400 before transaction/copy]', async () => {
+    installAuthMocks()
+    mockAuthenticated('user-a')
+    prismaMock.globalLocation.findUnique.mockResolvedValue({
+      id: 'gl-reserved',
+      userId: 'user-a',
+      name: 'Unsafe location',
+      summary: null,
+      images: [{
+        imageUrl: JSON.stringify([
+          `voice/project-a/episode-a/line-a/${'a'.repeat(32)}-${'b'.repeat(64)}.wav`,
+        ]),
+        imageMediaId: null,
+      }],
+    })
+
+    const mod = await import('@/app/api/projects/[projectId]/import-location/route')
+    const res = await mod.POST(buildMockRequest({
+      path: '/api/projects/proj-1/import-location',
+      method: 'POST',
+      body: { globalLocationId: 'gl-reserved' },
+    }), { params: Promise.resolve({ projectId: 'proj-1' }) })
+
+    expect(res.status).toBe(400)
+    expect(prismaMock.$transaction).not.toHaveBeenCalled()
   })
 
   it('成功 + includeImages 預設 true -> 200, 寫入 NovelPromotionLocation + 2 個 LocationImage, sourceGlobalLocationId 對', async () => {

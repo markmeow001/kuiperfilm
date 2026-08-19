@@ -22,18 +22,10 @@
  */
 
 import { useEffect, useRef, useState } from 'react'
+import { useTranslations } from 'next-intl'
 import { AppIcon } from '@/components/ui/icons'
 import { V2CharacterAppearancesPanel } from './V2CharacterAppearancesPanel'
-import { useUploadProjectCharacterVoice } from '@/lib/query/mutations/character-voice-mutations'
-
-interface CharacterAppearanceLike {
-  id: string
-  appearanceIndex?: number
-  description?: string | null
-  changeReason?: string | null
-  imageUrl?: string | null
-  imageUrls?: string | string[] | null
-}
+import type { CharacterAppearanceLike } from './subjects-client-helpers'
 
 interface CharacterLike {
   id: string
@@ -57,7 +49,10 @@ interface CharacterLike {
 
 export interface V2CharacterEditModalProps {
   projectId: string
+  currentEpisodeId: string | null
   character: CharacterLike
+  activeAppearance: CharacterAppearanceLike
+  activeAppearanceSource: 'episode' | 'default'
   imageUrl: string | null
   onClose: () => void
   onZoomImage: (url: string) => void
@@ -89,12 +84,16 @@ export interface V2CharacterEditModalProps {
   // Profile lock + destructive
   onToggleLock: () => void
   isLocking: boolean
+  lockError?: string | null
   onDelete: () => void
   isDeleting: boolean
 }
 
 export function V2CharacterEditModal({
   character,
+  currentEpisodeId,
+  activeAppearance,
+  activeAppearanceSource,
   imageUrl,
   onClose,
   onZoomImage,
@@ -114,11 +113,14 @@ export function V2CharacterEditModal({
   isRedescribing,
   onToggleLock,
   isLocking,
+  lockError,
   onDelete,
   isDeleting,
   projectId,
 }: V2CharacterEditModalProps) {
-  const ap = character.appearances?.[0]
+  const t = useTranslations('v2Subjects.card')
+  const activeAppearanceT = useTranslations('v2Subjects.activeAppearance')
+  const ap = activeAppearance
   const initialName = character.name ?? ''
   const initialIntroduction = character.introduction ?? character.description ?? ''
   const initialVisualPrompt = ap?.description ?? ''
@@ -195,42 +197,61 @@ export function V2CharacterEditModal({
           {/* Left: image + image actions */}
           <div className="space-y-3">
             <div
-              className={`relative aspect-[3/4] overflow-hidden rounded-sm border border-border-soft bg-gradient-to-br from-overlay to-raised ${
+              role="status"
+              className="rounded-[10px] border border-[var(--production-border)] bg-[var(--production-tool-soft)] px-3 py-2 text-sm text-[var(--production-tool)]"
+            >
+              <div className="text-[12px] font-semibold tracking-wide text-[var(--production-ink-muted)]">
+                {activeAppearanceT('modalLabel')}
+              </div>
+              <div className="mt-0.5 break-words font-semibold">
+                {ap.changeReason ?? `#${(ap.appearanceIndex ?? 0) + 1}`}
+              </div>
+              <div className="mt-0.5 text-[12px] text-[var(--production-ink-muted)]">
+                {activeAppearanceSource === 'episode'
+                  ? activeAppearanceT('sourceEpisode')
+                  : activeAppearanceT('sourceDefault')}
+              </div>
+            </div>
+            <button
+              type="button"
+              disabled={!imageUrl}
+              aria-label={`圖片預覽：${character.name ?? '角色'}`}
+              className={`relative block w-full aspect-[3/4] overflow-hidden rounded-sm border border-border-soft bg-gradient-to-br from-overlay to-raised ${
                 imageUrl ? 'cursor-zoom-in' : ''
-              }`}
+              } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--production-focus)] disabled:cursor-default`}
               onClick={() => imageUrl && onZoomImage(imageUrl)}
             >
               {imageUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={imageUrl} alt={character.name ?? '角色'} className="h-full w-full object-cover" />
               ) : (
-                <div className="flex h-full w-full items-center justify-center">
+                <span className="flex h-full w-full items-center justify-center">
                   <AppIcon name="image" className="h-10 w-10 text-text-tertiary" />
-                </div>
+                </span>
               )}
               {isExpanding ? (
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-canvas/70 backdrop-blur-sm">
+                <span className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-canvas/70 backdrop-blur-sm">
                   <AppIcon name="sparklesAlt" className="h-6 w-6 animate-pulse text-primary-400" />
-                  <div className="font-mono text-[14px] tracking-wider text-primary-300">提交中…</div>
-                  <div className="px-4 text-center font-serif-cn text-[14px] text-text-secondary">
+                  <span className="font-mono text-[14px] tracking-wider text-primary-300">提交中…</span>
+                  <span className="px-4 text-center font-serif-cn text-[14px] text-text-secondary">
                     上傳參考圖,即將開始生 3 視角
-                  </div>
-                </div>
+                  </span>
+                </span>
               ) : isRegenerating ? (
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-canvas/70 backdrop-blur-sm">
+                <span className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-canvas/70 backdrop-blur-sm">
                   <AppIcon name="sparklesAlt" className="h-6 w-6 animate-pulse text-primary-400" />
-                  <div className="font-mono text-[14px] tracking-wider text-primary-300">生圖中…</div>
-                  <div className="px-4 text-center font-serif-cn text-[14px] text-text-secondary">
+                  <span className="font-mono text-[14px] tracking-wider text-primary-300">生圖中…</span>
+                  <span className="px-4 text-center font-serif-cn text-[14px] text-text-secondary">
                     Tencent VOD 60-180 秒,撞並發會自動 retry
-                  </div>
-                </div>
+                  </span>
+                </span>
               ) : isUploading ? (
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-canvas/70 backdrop-blur-sm">
+                <span className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-canvas/70 backdrop-blur-sm">
                   <AppIcon name="cloudUpload" className="h-6 w-6 animate-pulse text-primary-400" />
-                  <div className="font-mono text-[14px] tracking-wider text-primary-300">上傳中…</div>
-                </div>
+                  <span className="font-mono text-[14px] tracking-wider text-primary-300">上傳中…</span>
+                </span>
               ) : null}
-            </div>
+            </button>
 
             <div className="grid grid-cols-2 gap-2">
               <button
@@ -306,16 +327,31 @@ export function V2CharacterEditModal({
             <button
               type="button"
               onClick={onToggleLock}
-              disabled={isLocking}
-              className={`flex w-full items-center justify-center gap-1 rounded-sm border py-2 font-mono text-[14px] tracking-wider transition-all disabled:cursor-not-allowed disabled:opacity-50 ${
+              disabled={isLocking || Boolean(character.profileConfirmed)}
+              className={`flex min-h-11 w-full items-center justify-center gap-1 rounded-sm border py-2 font-mono text-[14px] tracking-wider transition-all disabled:cursor-not-allowed disabled:opacity-50 ${
                 character.profileConfirmed
                   ? 'border-primary-500/50 bg-primary-500/10 text-primary-400'
                   : 'border-border-soft bg-raised/50 text-text-secondary hover:border-primary-500/40 hover:text-primary-400'
               }`}
-              title={character.profileConfirmed ? '已標記為「定稿」— 純註記,沒有實際 binding 行為' : '標記為「定稿」— 純註記用,代表你確認這個角色設定完成。角色與集數的綁定是自動的(analyze + 分鏡時會自動建立 EpisodeCharacter),不需要先鎖定。'}
+              title={character.profileConfirmed ? t('lockedTitle') : t('lockTitle')}
             >
-              {isLocking ? '處理中…' : character.profileConfirmed ? '✓ 已鎖定檔案' : '⊙ 鎖定檔案'}
+              {isLocking
+                ? t('locking')
+                : character.profileConfirmed
+                  ? t('locked')
+                  : lockError
+                    ? t('retryLock')
+                    : t('lock')}
             </button>
+            {lockError ? (
+              <div
+                role="alert"
+                className="rounded-sm border border-[var(--production-danger)]/35 bg-[var(--production-danger)]/10 px-3 py-2 text-sm text-[var(--production-danger)]"
+              >
+                <span className="font-semibold">{t('lockFailed')}</span>{' '}
+                <span>{lockError}</span>
+              </div>
+            ) : null}
           </div>
 
           {/* Right: text editors */}
@@ -446,11 +482,7 @@ export function V2CharacterEditModal({
 
             <CharacterTagsSection profileData={character.profileData ?? null} />
 
-            <CharacterVoiceSection
-              projectId={projectId}
-              characterId={character.id}
-              customVoiceUrl={character.customVoiceUrl ?? null}
-            />
+            <CharacterVoiceSection />
 
             {/* Phase 11.4 — multi-appearance per-episode binding.
                 imageUrl + description threaded through so the management
@@ -459,6 +491,8 @@ export function V2CharacterEditModal({
             <V2CharacterAppearancesPanel
               projectId={projectId}
               characterId={character.id}
+              currentEpisodeId={currentEpisodeId}
+              activeAppearanceId={activeAppearance.id}
               appearances={(character.appearances ?? []).map((a) => {
                 // imageUrl priority: explicit a.imageUrl > first entry of
                 // a.imageUrls (when it's an array or stringified array) >
@@ -564,7 +598,7 @@ function CharacterTagsSection({ profileData }: { profileData: string | null }) {
       </div>
       <div className="flex flex-wrap gap-1.5">
         {archetype ? <Chip color="amber">{archetype}</Chip> : null}
-        {eraPeriod ? <Chip color="violet">{eraPeriod}</Chip> : null}
+        {eraPeriod ? <Chip color="cyan">{eraPeriod}</Chip> : null}
         {costumeTier !== null ? <Chip color="emerald">服裝層級 {costumeTier}/5</Chip> : null}
         {ageRange ? <Chip color="stone">{ageRange}</Chip> : null}
         {personalityTags.map((t) => <Chip key={`p-${t}`} color="rose">{t}</Chip>)}
@@ -574,12 +608,12 @@ function CharacterTagsSection({ profileData }: { profileData: string | null }) {
   )
 }
 
-function Chip({ children, color }: { children: React.ReactNode; color: 'amber' | 'rose' | 'emerald' | 'violet' | 'sky' | 'stone' }) {
+function Chip({ children, color }: { children: React.ReactNode; color: 'amber' | 'rose' | 'emerald' | 'cyan' | 'sky' | 'stone' }) {
   const palette = {
     amber: 'border-primary-500/40 bg-primary-500/10 text-primary-300',
     rose: 'border-rose-500/40 bg-rose-500/10 text-rose-300',
     emerald: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300',
-    violet: 'border-violet-500/40 bg-violet-500/10 text-violet-300',
+    cyan: 'border-[var(--process-cyan)]/40 bg-[var(--process-cyan-soft)] text-[var(--process-cyan-strong)]',
     sky: 'border-sky-500/40 bg-sky-500/10 text-sky-300',
     stone: 'border-border-strong bg-raised/60 text-text-secondary',
   }[color]
@@ -590,63 +624,39 @@ function Chip({ children, color }: { children: React.ReactNode; color: 'amber' |
   )
 }
 
-/**
- * Voice reference uploader. Sits inside V2CharacterEditModal under the
- * tags strip. When a voice file is uploaded, customVoiceUrl is written
- * on the character and downstream voice-line generation can use it as
- * the reference timbre. Existing audio plays inline.
- */
-function CharacterVoiceSection({
-  projectId,
-  characterId,
-  customVoiceUrl,
-}: {
-  projectId: string
-  characterId: string
-  customVoiceUrl: string | null
-}) {
-  const upload = useUploadProjectCharacterVoice(projectId)
-  const inputRef = useRef<HTMLInputElement | null>(null)
-
-  function handleFile(file: File) {
-    upload.mutate({ file, characterId }, {
-      onError: (err) => alert(`音色上傳失敗:${(err as Error)?.message ?? '未知錯誤'}`),
-    })
-  }
+/** Project custom voice sources remain closed until consent data is durable. */
+function CharacterVoiceSection() {
+  const voiceT = useTranslations('voice.inlineBinding')
 
   return (
     <div className="rounded-sm border border-border-soft/60 bg-raised/40 p-3">
-      <div className="mb-2 flex items-center justify-between">
-        <div className="font-mono text-[14px] tracking-wider text-text-tertiary">參考音色</div>
+      <div className="mb-2 font-mono text-[14px] tracking-wider text-text-tertiary">
+        {voiceT('catalogLabel')}
+      </div>
+      <div className="flex flex-wrap gap-2" aria-describedby="project-custom-voice-unavailable">
         <button
           type="button"
-          onClick={() => inputRef.current?.click()}
-          disabled={upload.isPending}
-          className="flex items-center gap-1 rounded-sm border border-primary-500/40 bg-primary-500/10 px-2 py-1 font-mono text-[14px] tracking-wider text-primary-300 transition-all hover:bg-primary-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+          disabled
+          className="flex items-center gap-1 rounded-sm border border-border-soft bg-raised/50 px-2 py-1 font-mono text-[14px] tracking-wider text-text-tertiary disabled:cursor-not-allowed disabled:opacity-50"
         >
           <AppIcon name="cloudUpload" className="h-3 w-3" />
-          {upload.isPending ? '上傳中…' : customVoiceUrl ? '替換' : '上傳音色'}
+          {voiceT('uploadAudio')}
         </button>
-        <input
-          ref={inputRef}
-          type="file"
-          accept="audio/mpeg,audio/wav,audio/x-m4a,audio/mp4,audio/aac"
-          className="hidden"
-          onChange={(e) => {
-            const file = e.target.files?.[0]
-            if (file) handleFile(file)
-            if (inputRef.current) inputRef.current.value = ''
-          }}
-        />
+        <button
+          type="button"
+          disabled
+          className="flex items-center gap-1 rounded-sm border border-border-soft bg-raised/50 px-2 py-1 font-mono text-[14px] tracking-wider text-text-tertiary disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <AppIcon name="bolt" className="h-3 w-3" />
+          {voiceT('aiDesign')}
+        </button>
       </div>
-      {customVoiceUrl ? (
-         
-        <audio src={customVoiceUrl} controls className="w-full max-w-md" />
-      ) : (
-        <div className="font-body text-[11px] italic text-text-tertiary">
-          (還沒上傳音色 — 配音生成會用預設嗓音。支援 MP3 / WAV / M4A 等。)
-        </div>
-      )}
+      <p
+        id="project-custom-voice-unavailable"
+        className="mt-2 font-body text-[12px] leading-relaxed text-text-tertiary"
+      >
+        {voiceT('customSourceUnavailable')}
+      </p>
     </div>
   )
 }

@@ -2,6 +2,7 @@
 
 import { DEFAULT_CHARACTER_APPEARANCE } from './lib/character-appearance'
 import type { VirtualCharacterAppearance } from './live-composite-types'
+import styles from './LiveCompositeShell.module.css'
 
 interface CharacterAppearancePanelProps {
   value?: VirtualCharacterAppearance
@@ -21,7 +22,7 @@ interface ControlProps {
 }
 
 function Control({ label, value, min, max, step, disabled, onChange }: ControlProps) {
-  return <label className="block text-[11px] text-stone-500"><span className="mb-1 flex justify-between"><span>{label}</span><span className="font-mono text-stone-300">{value.toFixed(step < 1 ? 2 : 0)}</span></span><input aria-label={label} type="range" value={value} min={min} max={max} step={step} disabled={disabled} onChange={(event) => onChange(Number(event.target.value))} className="w-full accent-cyan-400" /></label>
+  return <label className={`${styles.specialControlHitArea} block text-[11px] text-stone-500`} data-live-composite-control-hit-area><span className="mb-1 flex justify-between"><span>{label}</span><span className="font-mono text-stone-300">{value.toFixed(step < 1 ? 2 : 0)}</span></span><input aria-label={label} type="range" value={value} min={min} max={max} step={step} disabled={disabled} onChange={(event) => onChange(Number(event.target.value))} className="w-full accent-cyan-400" /></label>
 }
 
 export function CharacterAppearancePanel({ value, disabled, onChange, onAutoMatch }: CharacterAppearancePanelProps) {

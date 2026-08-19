@@ -1,0 +1,92 @@
+{
+  "shell": {
+    "eyebrow": "Production tools",
+    "libraryTitle": "Skill Library",
+    "libraryDescription": "Reusable production workflows for every project.",
+    "detailTitle": "Skill Detail",
+    "backToProduction": "Back to production",
+    "backToLibrary": "Back to Skill Library",
+    "createProject": "New project"
+  },
+  "library": {
+    "tabsLabel": "Skill library views",
+    "mineTab": "My Skills",
+    "browseTab": "Featured Skills",
+    "loading": "Loading Skill Library…",
+    "loadErrorTitle": "Unable to load Skill Library",
+    "loadErrorDescription": "Try again in a moment.",
+    "emptyMineEyebrow": "Your library",
+    "emptyMineTitle": "No Skills enabled yet",
+    "emptyMineDescription": "Choose a featured workflow to begin.",
+    "browseFeatured": "Browse featured Skills",
+    "allEnabledTitle": "All official Skills are enabled",
+    "allEnabledDescription": "More curated workflows will appear here.",
+    "featured": "Featured",
+    "installCount": "{count} activations",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "remove": "Remove",
+    "installing": "Adding…",
+    "add": "Add"
+  },
+  "detail": {
+    "loading": "Loading Skill details…",
+    "notFoundTitle": "Skill not found",
+    "notFoundDescription": "It may be archived or unavailable to you.",
+    "introduction": "Overview",
+    "pipeline": "Workflow stages",
+    "pipelineDescription": "Stages run in this order with the specified models.",
+    "defaults": "Defaults",
+    "constraints": "Constraints",
+    "installedTitle": "Added to My Skills",
+    "installedDescription": "It is ready when you create a project.",
+    "unavailableTitle": "Not enabled",
+    "unavailableDescription": "Add it to My Skills before using it.",
+    "useSkill": "Create project with this Skill",
+    "addSkill": "Add to My Skills",
+    "addingSkill": "Adding…",
+    "official": "Official",
+    "community": "Community",
+    "model": "model",
+    "noDefaults": "This Skill uses your project preferences.",
+    "noConstraints": "No special constraints.",
+    "stage": {
+      "analyze_script": "Analyze script",
+      "generate_keyframe": "Generate keyframe",
+      "generate_storyboard_grid": "Generate storyboard grid",
+      "generate_panel_image": "Generate panel image",
+      "generate_panel_video": "Generate panel video",
+      "composite_multi_shot": "Compose multiple shots",
+      "tts_voice_line": "Generate dialogue audio",
+      "lip_sync": "Lip sync",
+      "stitch_final": "Assemble final cut"
+    },
+    "defaultLabel": {
+      "aspectRatio": "Aspect ratio",
+      "durationPerShot": "Shot duration",
+      "shotCount": "Shot count",
+      "storyboardGrid": "Storyboard grid",
+      "resolution": "Resolution",
+      "audioMode": "Audio mode",
+      "narration": "Narration",
+      "visualStyle": "Visual style ID"
+    },
+    "audioMode": {
+      "silent": "Silent",
+      "ambient": "Ambient",
+      "bgm": "Music",
+      "voiced": "Dialogue"
+    },
+    "narration": {
+      "never": "Never",
+      "always": "Always",
+      "on_request": "On request"
+    },
+    "constraint": {
+      "audioReference": "Every character requires a reference voice.",
+      "portrait": "Portrait output is required.",
+      "landscape": "Landscape output is required.",
+      "forbiddenSubjects": "Unavailable subjects: {subjects}"
+    }
+  }
+}

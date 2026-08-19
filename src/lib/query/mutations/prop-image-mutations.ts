@@ -76,8 +76,16 @@ export function useRegenerateSinglePropImage(projectId: string) {
  */
 export function useUploadProjectPropImage(projectId: string) {
   const queryClient = useQueryClient()
-  const invalidateProjectAssets = () =>
-    invalidateQueryTemplates(queryClient, [queryKeys.projectAssets.all(projectId)])
+  const invalidateProjectAssets = async () => {
+    await queryClient.invalidateQueries({
+      queryKey: queryKeys.projectAssets.all(projectId),
+      exact: true,
+    })
+    await queryClient.invalidateQueries({
+      queryKey: queryKeys.projectAssets.props(projectId),
+      exact: true,
+    })
+  }
 
   return useMutation({
     mutationFn: async (params: { file: File; propId: string; labelText?: string }) => {

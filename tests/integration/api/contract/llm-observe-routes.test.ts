@@ -42,6 +42,13 @@ const configServiceMock = vi.hoisted(() => ({
 }))
 
 const prismaMock = vi.hoisted(() => ({
+  novelPromotionPanel: {
+    findFirst: vi.fn(async () => ({
+      id: 'panel-1',
+      storyboardId: 'storyboard-1',
+      storyboard: { id: 'storyboard-1', episodeId: 'episode-1' },
+    })),
+  },
   globalCharacter: {
     findUnique: vi.fn(async () => ({
       id: 'global-character-1',

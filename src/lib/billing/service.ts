@@ -32,6 +32,7 @@ import type {
   TaskBillingInfo,
 } from './types'
 import { BUILTIN_PRICING_VERSION } from '@/lib/model-pricing/version'
+import { countUnicodeCodePoints } from '@/lib/voice/atlascloud-seed-audio-input'
 
 type CostInput = {
   apiType: ApiType
@@ -106,7 +107,7 @@ function resolveCost(input: CostInput) {
       return asMoney(calcVideo(input.model, resolution, input.quantity, input.metadata, input.customPricing))
     }
     case 'voice':
-      return asMoney(calcVoice(input.quantity))
+      return asMoney(calcVoice(input.model, input.quantity))
     case 'voice-design':
       return asMoney(calcVoiceDesign())
     case 'lip-sync':
@@ -219,14 +220,28 @@ async function ensureFreezeCoverage(params: {
   userId: string
   actualCost: number
   quotedCost: number
+  preserveFreezeOnFailure?: boolean
+  billingKey?: string
 }): Promise<number> {
   const normalizedQuoted = normalizeMoney(params.quotedCost)
   const chargedCost = clampChargedCost(params.actualCost, normalizedQuoted)
-  if (chargedCost <= normalizedQuoted + MONEY_EPSILON) {
+  let coveredCost = normalizedQuoted
+  if (params.billingKey) {
+    const snapshot = await getFreezeByIdempotencyKey(params.billingKey)
+    if (snapshot?.id === params.freezeId) {
+      if (snapshot.status === 'confirmed') {
+        return chargedCost
+      }
+      if (snapshot.status === 'pending') {
+        coveredCost = Math.max(coveredCost, normalizeMoney(snapshot.amount))
+      }
+    }
+  }
+  if (chargedCost <= coveredCost + MONEY_EPSILON) {
     return chargedCost
   }
 
-  const overage = normalizeMoney(chargedCost - normalizedQuoted)
+  const overage = normalizeMoney(chargedCost - coveredCost)
   if (overage <= MONEY_EPSILON) {
     return chargedCost
   }
@@ -235,7 +250,9 @@ async function ensureFreezeCoverage(params: {
     return chargedCost
   }
 
-  await rollbackFreeze(params.freezeId)
+  if (!params.preserveFreezeOnFailure) {
+    await rollbackFreeze(params.freezeId)
+  }
   const balance = await getBalance(params.userId)
   throw new InsufficientBalanceError(chargedCost, balance.balance)
 }
@@ -263,6 +280,24 @@ function resolveActualForSync<T>(
   if (params.extractActualQuantity) {
     const actualQuantity = asNumber(params.extractActualQuantity(result))
     if (actualQuantity !== null && actualQuantity >= 0) {
+      if (params.apiType === 'voice') {
+        if (!Number.isInteger(actualQuantity) || actualQuantity !== params.quantity) {
+          throw new BillingOperationError(
+            'BILLING_INVALID_USAGE_QUANTITY',
+            'Voice actualCharacters must equal the pinned provider text character count',
+            {
+              apiType: 'voice',
+              model: params.model,
+              submittedCharacters: params.quantity,
+              actualCharacters: actualQuantity,
+            },
+          )
+        }
+        return {
+          actualCost: quotedCost,
+          actualQuantity,
+        }
+      }
       return {
         actualCost: resolveCost({
           apiType: params.apiType,
@@ -306,16 +341,50 @@ function resolveTaskActual(
   }
 
   const payload = options?.result && typeof options.result === 'object' ? options.result : null
-  const actualQuantity = payload
-    ? asNumber(
-      (payload as Record<string, unknown>).actualQuantity
-      ?? (payload as Record<string, unknown>).actualSeconds
-      ?? (payload as Record<string, unknown>).actualDurationSeconds
-      ?? (payload as Record<string, unknown>).actualCharacters
+  const actualQuantity = (() => {
+    if (!payload) return null
+    if (info.apiType === 'voice') {
+      const rawCharacters = payload.actualCharacters
+      if (rawCharacters === undefined) return null
+      if (
+        typeof rawCharacters !== 'number'
+        || !Number.isInteger(rawCharacters)
+        || rawCharacters < 0
+      ) {
+        throw new BillingOperationError(
+          'BILLING_INVALID_USAGE_QUANTITY',
+          'Voice actualCharacters must be a non-negative integer',
+          { apiType: 'voice', model: info.model, actualCharacters: rawCharacters },
+        )
+      }
+      return rawCharacters
+    }
+    return asNumber(
+      payload.actualQuantity
+      ?? payload.actualSeconds
+      ?? payload.actualDurationSeconds,
     )
-    : null
+  })()
 
   if (actualQuantity !== null && actualQuantity >= 0) {
+    if (info.apiType === 'voice') {
+      if (actualQuantity !== info.quantity) {
+        throw new BillingOperationError(
+          'BILLING_INVALID_USAGE_QUANTITY',
+          'Voice actualCharacters must equal the frozen provider text character count',
+          {
+            apiType: 'voice',
+            model: info.model,
+            submittedCharacters: info.quantity,
+            actualCharacters: actualQuantity,
+          },
+        )
+      }
+      return {
+        actualCost: quotedCost,
+        actualQuantity,
+      }
+    }
     return {
       actualCost: resolveCost({
         apiType: info.apiType,
@@ -693,27 +762,26 @@ export async function withVideoBilling<T>(
 
 export async function withVoiceBilling<T>(
   userId: string,
-  maxFreezeSeconds: number,
+  model: string,
+  providerText: string,
   recordParams: BillingRecordParams,
   generateFn: () => Promise<T>,
 ): Promise<T> {
+  const submittedCharacters = countUnicodeCodePoints(providerText)
   return await withSyncBillingCore(
     {
       userId,
       projectId: recordParams.projectId,
       action: recordParams.action,
       apiType: 'voice',
-      model: 'index-tts2',
-      quantity: maxFreezeSeconds,
-      unit: 'second',
-      metadata: recordParams.metadata,
-      maxCost: calcVoice(maxFreezeSeconds),
+      model,
+      quantity: submittedCharacters,
+      unit: 'character',
+      metadata: { ...recordParams.metadata, submittedCharacters },
+      maxCost: calcVoice(model, submittedCharacters),
       extractActualQuantity: (result) => {
         if (!result || typeof result !== 'object') return null
-        const value =
-          (result as Record<string, unknown>).actualDurationSeconds
-          ?? (result as Record<string, unknown>).actualSeconds
-        return asNumber(value)
+        return asNumber((result as Record<string, unknown>).actualCharacters)
       },
     },
     recordParams,
@@ -870,6 +938,7 @@ export async function settleTaskBilling(task: {
 }, options?: {
   result?: Record<string, unknown> | void
   textUsage?: TextUsageEntry[]
+  preserveFreezeOnFailure?: boolean
 }) {
   const info = task.billingInfo
   if (!info || !info.billable) return info
@@ -984,6 +1053,8 @@ export async function settleTaskBilling(task: {
     userId: task.userId,
     actualCost: actual.actualCost,
     quotedCost,
+    preserveFreezeOnFailure: options?.preserveFreezeOnFailure,
+    billingKey: info.billingKey || task.id,
   })
   const recordModel = resolveRecordModel(info.model, actual.metadata)
   try {
@@ -1015,6 +1086,16 @@ export async function settleTaskBilling(task: {
       { chargedAmount: chargedCost },
     )
   } catch (error) {
+    if (options?.preserveFreezeOnFailure) {
+      if (error instanceof BillingOperationError) {
+        throw new BillingOperationError(error.code, error.message, {
+          ...(error.details || {}),
+          taskId: task.id,
+          freezeId: info.freezeId,
+        }, error)
+      }
+      throw error
+    }
     const rolledBack = (await rollbackTaskBilling({
       id: task.id,
       billingInfo: info,
@@ -1052,10 +1133,10 @@ export async function rollbackTaskBilling(task: {
   if (info.modeSnapshot !== 'ENFORCE') return info
 
   try {
-    await rollbackFreeze(info.freezeId)
+    const rolledBack = await rollbackFreeze(info.freezeId)
     return {
       ...info,
-      status: 'rolled_back',
+      status: rolledBack ? 'rolled_back' : 'failed',
     } satisfies TaskBillingInfo
   } catch (error) {
     _ulogError('[Billing] rollback task freeze failed:', error)

@@ -1,0 +1,226 @@
+.root {
+  --surface-canvas: var(--darkroom-canvas);
+  --surface-raised: var(--darkroom-raised);
+  --surface-overlay: color-mix(
+    in srgb,
+    var(--darkroom-raised) 84%,
+    var(--darkroom-text)
+  );
+  --surface-inset: color-mix(
+    in srgb,
+    var(--darkroom-canvas) 82%,
+    var(--darkroom-surface)
+  );
+  --surface-glass: color-mix(in srgb, var(--darkroom-surface) 90%, transparent);
+  --text-primary: var(--darkroom-text);
+  --text-secondary: color-mix(
+    in srgb,
+    var(--darkroom-text) 72%,
+    var(--darkroom-muted)
+  );
+  --text-tertiary: var(--darkroom-muted);
+  --border-soft: var(--darkroom-border);
+  --border-strong: color-mix(
+    in srgb,
+    var(--darkroom-border) 68%,
+    var(--darkroom-text)
+  );
+  --border-primary: color-mix(in srgb, var(--process-cyan) 52%, transparent);
+  --primary-300: color-mix(in srgb, var(--process-cyan) 72%, white);
+  --primary-400: var(--process-cyan);
+  --primary-500: color-mix(
+    in srgb,
+    var(--process-cyan) 82%,
+    var(--darkroom-canvas)
+  );
+  --primary-600: color-mix(
+    in srgb,
+    var(--process-cyan) 68%,
+    var(--darkroom-canvas)
+  );
+  --primary-700: color-mix(
+    in srgb,
+    var(--process-cyan) 52%,
+    var(--darkroom-canvas)
+  );
+  --primary-900: color-mix(
+    in srgb,
+    var(--process-cyan) 24%,
+    var(--darkroom-canvas)
+  );
+  --media-stage: color-mix(in srgb, var(--darkroom-canvas) 88%, black);
+  --media-chrome: var(--darkroom-surface);
+  --media-gold: var(--editorial-500);
+  position: relative;
+  isolation: isolate;
+  min-height: 100%;
+  overflow: clip;
+  color: var(--text-primary);
+  background:
+    radial-gradient(
+      circle at 52% -14%,
+      color-mix(in srgb, var(--process-cyan) 13%, transparent),
+      transparent 35rem
+    ),
+    linear-gradient(
+      180deg,
+      var(--darkroom-surface) 0%,
+      var(--surface-canvas) 42%,
+      var(--darkroom-canvas) 100%
+    );
+}
+
+.root::before {
+  position: absolute;
+  z-index: -1;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 1px;
+  content: '';
+  background: linear-gradient(
+    90deg,
+    transparent 4%,
+    color-mix(in srgb, var(--process-cyan) 70%, transparent),
+    transparent 72%
+  );
+  opacity: 0.8;
+  pointer-events: none;
+}
+
+.root :global(.kuiper-surface-card),
+.root :global(.kuiper-inspector) {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.018), transparent 7rem),
+    var(--surface-raised);
+  box-shadow:
+    inset 0 1px rgba(255, 255, 255, 0.025),
+    0 12px 34px rgba(2, 7, 12, 0.18);
+}
+
+.root :global(.kuiper-surface-card:hover) {
+  transform: none;
+}
+
+.root :global(:focus-visible) {
+  outline-color: var(--primary-400);
+  outline-offset: 3px;
+}
+
+.editorFrame {
+  border-color: var(--border-strong);
+  background: var(--media-stage);
+  box-shadow:
+    inset 0 1px rgba(255, 255, 255, 0.035),
+    0 24px 60px rgba(2, 7, 12, 0.34);
+}
+
+.chrome {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.018), transparent),
+    var(--media-chrome);
+}
+
+.stage {
+  background-color: var(--media-stage);
+  background-image:
+    radial-gradient(
+      circle at 50% 40%,
+      color-mix(in srgb, var(--process-cyan) 10%, transparent),
+      transparent 46%
+    ),
+    linear-gradient(
+      color-mix(in srgb, var(--darkroom-text) 2.5%, transparent) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--darkroom-text) 2.5%, transparent) 1px,
+      transparent 1px
+    );
+  background-size:
+    auto,
+    32px 32px,
+    32px 32px;
+  box-shadow: inset 0 0 80px rgba(1, 5, 9, 0.38);
+}
+
+.mediaWell {
+  background:
+    radial-gradient(
+      circle at 50% 45%,
+      color-mix(in srgb, var(--process-cyan) 11%, transparent),
+      transparent 65%
+    ),
+    var(--media-stage);
+}
+
+.mobileDock {
+  border-color: var(--border-strong);
+  background: color-mix(in srgb, var(--media-chrome) 94%, transparent);
+  box-shadow: 0 18px 52px rgba(1, 5, 9, 0.48);
+}
+
+.deliveryPanel {
+  border-color: color-mix(in srgb, var(--editorial-500) 30%, transparent);
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--editorial-500) 7%, transparent),
+      transparent 8rem
+    ),
+    var(--surface-raised);
+}
+
+.deliverCue {
+  color: color-mix(in srgb, var(--editorial-500) 82%, white);
+}
+
+.deliverCue:hover {
+  background: color-mix(in srgb, var(--editorial-500) 8%, transparent);
+  color: color-mix(in srgb, var(--editorial-500) 68%, white);
+}
+
+.deliverAction {
+  border-color: color-mix(in srgb, var(--editorial-500) 82%, white);
+  background: var(--media-gold);
+  color: color-mix(in srgb, var(--editorial-500) 16%, black);
+  box-shadow: 0 8px 24px rgba(92, 70, 21, 0.22);
+}
+
+.deliverAction:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--editorial-500) 70%, white);
+  background: color-mix(in srgb, var(--editorial-500) 84%, white);
+  color: color-mix(in srgb, var(--editorial-500) 10%, black);
+}
+
+.deliverAction:focus-visible {
+  outline-color: color-mix(in srgb, var(--editorial-500) 70%, white);
+}
+
+@media (max-width: 767px) {
+  .root {
+    background:
+      radial-gradient(
+        circle at 52% -8%,
+        color-mix(in srgb, var(--process-cyan) 11%, transparent),
+        transparent 24rem
+      ),
+      linear-gradient(
+        180deg,
+        var(--darkroom-surface) 0%,
+        var(--darkroom-canvas) 100%
+      );
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .root *,
+  .root *::before,
+  .root *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -1,10 +1,15 @@
 import { logInfo as _ulogInfo } from '@/lib/logging/core'
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
 import { getSignedUrl, generateUniqueKey, downloadAndUploadToCOS, toFetchableUrl } from '@/lib/cos'
 import { resolveStorageKeyFromMediaValue } from '@/lib/media/service'
+import { assertUserMediaWriteReferenceAllowed } from '@/lib/media/write-policy'
 import { requireProjectAuthLight, isErrorResponse } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
+import {
+  findNovelPromotionPanelInProject,
+  NovelPromotionProjectScopeError,
+  updateNovelPromotionPanelInProject,
+} from '@/lib/novel-promotion/project-scope'
 
 interface PanelHistoryEntry {
   url: string
@@ -53,12 +58,21 @@ export const POST = apiHandler(async (
     throw new ApiError('INVALID_PARAMS')
   }
 
+  const panel = await findNovelPromotionPanelInProject(projectId, panelId)
+  if (!panel) {
+    throw new ApiError('NOT_FOUND')
+  }
+
   // === 取消操作 ===
   if (action === 'cancel') {
-    await prisma.novelPromotionPanel.update({
-      where: { id: panelId },
-      data: { candidateImages: null }
-    })
+    try {
+      await updateNovelPromotionPanelInProject(projectId, panel.id, { candidateImages: null })
+    } catch (error) {
+      if (error instanceof NovelPromotionProjectScopeError) {
+        throw new ApiError('NOT_FOUND')
+      }
+      throw error
+    }
 
     return NextResponse.json({
       success: true,
@@ -70,15 +84,7 @@ export const POST = apiHandler(async (
   if (!selectedImageUrl) {
     throw new ApiError('INVALID_PARAMS')
   }
-
-  // 获取 Panel
-  const panel = await prisma.novelPromotionPanel.findUnique({
-    where: { id: panelId }
-  })
-
-  if (!panel) {
-    throw new ApiError('NOT_FOUND')
-  }
+  await assertUserMediaWriteReferenceAllowed(selectedImageUrl)
 
   // 验证选择的图片是否在候选列表中
   const candidateImages = parseUnknownArray(panel.candidateImages)
@@ -106,25 +112,35 @@ export const POST = apiHandler(async (
 
   // 选择候选图时优先复用已存在的 COS key，避免重复下载上传（也避免 /m/* 相对URL被 Node fetch 解析失败）
   let finalImageKey = selectedCosKey as string
+  let copiedSelectionKey: string | null = null
   const isReusableKey = !finalImageKey.startsWith('http://') && !finalImageKey.startsWith('https://') && !finalImageKey.startsWith('/')
 
   if (!isReusableKey) {
     const sourceUrl = toFetchableUrl(selectedImageUrl)
     const cosKey = generateUniqueKey(`panel-${panelId}-selected`, 'png')
     finalImageKey = await downloadAndUploadToCOS(sourceUrl, cosKey)
+    copiedSelectionKey = finalImageKey
   }
 
   const signedUrl = getSignedUrl(finalImageKey, 7 * 24 * 3600)
 
   // 更新 Panel：设置新图片，清空候选列表
-  await prisma.novelPromotionPanel.update({
-    where: { id: panelId },
-    data: {
+  try {
+    await updateNovelPromotionPanelInProject(projectId, panel.id, {
       imageUrl: finalImageKey,
       imageHistory: JSON.stringify(currentHistory),
-      candidateImages: null
+      candidateImages: null,
+    })
+  } catch (error) {
+    if (copiedSelectionKey) {
+      const { deleteCOSObject } = await import('@/lib/cos')
+      await deleteCOSObject(copiedSelectionKey).catch(() => undefined)
     }
-  })
+    if (error instanceof NovelPromotionProjectScopeError) {
+      throw new ApiError('NOT_FOUND')
+    }
+    throw error
+  }
 
   return NextResponse.json({
     success: true,

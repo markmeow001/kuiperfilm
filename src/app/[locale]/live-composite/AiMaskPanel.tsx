@@ -56,7 +56,7 @@ export function AiMaskPanel({
             value={engine}
             disabled={busy}
             onChange={(event) => setEngine(event.target.value as AiMaskEngine)}
-            className="mt-1.5 w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-stone-300"
+            className="mt-1.5 h-11 w-full rounded-lg border border-white/10 bg-black/30 px-3 text-sm text-stone-300 outline-none transition-colors focus-visible:border-cyan-300/45 focus-visible:ring-2 focus-visible:ring-cyan-300/70"
           >
             <option value="rvm">RVM（推薦・逐幀時序）</option>
             <option value="selfie">Selfie Segmenter（舊版・單幀）</option>
@@ -70,7 +70,7 @@ export function AiMaskPanel({
             value={interval}
             disabled={busy}
             onChange={(event) => setIntervalValue(Number(event.target.value))}
-            className="mt-1.5 w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-stone-300"
+            className="mt-1.5 h-11 w-full rounded-lg border border-white/10 bg-black/30 px-3 text-sm text-stone-300 outline-none transition-colors focus-visible:border-cyan-300/45 focus-visible:ring-2 focus-visible:ring-cyan-300/70"
           >
             <option value={0.25}>0.25 秒（精細追蹤）</option>
             <option value={0.5}>0.5 秒（較細緻）</option>
@@ -90,7 +90,7 @@ export function AiMaskPanel({
             value={threshold}
             disabled={busy}
             onChange={(event) => setThreshold(Number(event.target.value))}
-            className="mt-2 w-full accent-violet-400"
+            className="mt-1 min-h-11 w-full cursor-pointer accent-cyan-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70"
           />
         </label>
 
@@ -111,18 +111,18 @@ export function AiMaskPanel({
             value={edgeSoftness}
             disabled={busy}
             onChange={(event) => setEdgeSoftness(Number(event.target.value))}
-            className="mt-2 w-full accent-violet-400"
+            className="mt-1 min-h-11 w-full cursor-pointer accent-cyan-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70"
           />
         </label>
 
-        <label className="flex items-start gap-2 text-xs text-stone-400">
+        <label className="flex min-h-11 items-start gap-2 rounded-lg text-xs text-stone-400 focus-within:ring-2 focus-within:ring-cyan-300/70">
           <input
             aria-label="深度淨化"
             type="checkbox"
             checked={depthCleanup}
             disabled={busy}
             onChange={(event) => setDepthCleanup(event.target.checked)}
-            className="mt-0.5 accent-violet-400"
+            className="mt-0.5 h-4 w-4 shrink-0 accent-cyan-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70"
           />
           <span>
             深度淨化
@@ -138,7 +138,7 @@ export function AiMaskPanel({
           type="button"
           disabled={!canAnalyze || busy}
           onClick={() => onAnalyzeCurrent(settings)}
-          className="flex items-center justify-center gap-1.5 rounded-lg border border-violet-400/30 px-2 py-2 text-xs text-violet-200 hover:bg-violet-400/10 disabled:opacity-30"
+          className="flex min-h-11 items-center justify-center gap-1.5 rounded-lg border border-cyan-300/30 px-2 py-2 text-xs text-cyan-100 transition-colors hover:bg-cyan-300/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70 disabled:opacity-30"
         >
           <AppIcon name="scanLine" className="h-3.5 w-3.5" />目前影格 {currentTime.toFixed(1)}s
         </button>
@@ -146,22 +146,22 @@ export function AiMaskPanel({
           type="button"
           disabled={!canAnalyze || busy}
           onClick={() => onAnalyzeClip(settings)}
-          className="flex items-center justify-center gap-1.5 rounded-lg bg-violet-400 px-2 py-2 text-xs font-medium text-stone-950 hover:bg-violet-300 disabled:opacity-30"
+          className="flex min-h-11 items-center justify-center gap-1.5 rounded-lg bg-cyan-300 px-2 py-2 text-xs font-medium text-stone-950 transition-colors hover:bg-cyan-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70 disabled:opacity-30"
         >
           <AppIcon name="sparkles" className="h-3.5 w-3.5" />掃描整段影片
         </button>
       </div>
 
       {busy ? (
-        <div className="mt-3 rounded-lg border border-violet-400/20 bg-violet-400/[0.06] p-3">
-          <div className="flex items-center justify-between text-xs text-violet-200">
+        <div className="mt-3 rounded-lg border border-cyan-300/20 bg-cyan-300/[0.06] p-3">
+          <div className="flex items-center justify-between text-xs text-cyan-100">
             <span>{progress.message}</span>
             <span className="font-mono">{percentage}%</span>
           </div>
           <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-black/40">
-            <div className="h-full rounded-full bg-violet-400 transition-[width]" style={{ width: `${percentage}%` }} />
+            <div className="h-full rounded-full bg-cyan-300 transition-[width]" style={{ width: `${percentage}%` }} />
           </div>
-          <button type="button" onClick={onCancel} className="mt-2 text-xs text-stone-500 hover:text-white">分析完目前影格後取消</button>
+          <button type="button" onClick={onCancel} className="mt-2 min-h-11 rounded-md px-2 text-xs text-stone-400 hover:bg-white/[0.05] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70">分析完目前影格後取消</button>
         </div>
       ) : progress.message ? (
         <p role={progress.status === 'failed' ? 'alert' : 'status'} className={`mt-3 text-xs leading-5 ${progress.status === 'failed' ? 'text-red-300' : 'text-stone-500'}`}>

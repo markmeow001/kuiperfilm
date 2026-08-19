@@ -6,7 +6,7 @@ import { resolveRequiredTaskLocale } from '@/lib/task/resolve-locale'
 import { TASK_TYPE } from '@/lib/task/types'
 import { buildDefaultTaskBillingInfo } from '@/lib/billing'
 import { getProjectModelConfig } from '@/lib/config-service'
-import { prisma } from '@/lib/prisma'
+import { findNovelPromotionStoryboardInProject } from '@/lib/novel-promotion/project-scope'
 
 export const POST = apiHandler(async (
   request: NextRequest,
@@ -30,10 +30,7 @@ export const POST = apiHandler(async (
   // (src/lib/task/episode-conflict-matrix.ts) can refuse this task
   // when a concurrent script_to_storyboard_run / clips_build /
   // insert_panel is mutating the same episode's panel graph.
-  const storyboardRef = await prisma.novelPromotionStoryboard.findUnique({
-    where: { id: storyboardId },
-    select: { episodeId: true },
-  })
+  const storyboardRef = await findNovelPromotionStoryboardInProject(projectId, storyboardId)
   if (!storyboardRef) {
     throw new ApiError('NOT_FOUND', { message: 'storyboard not found' })
   }

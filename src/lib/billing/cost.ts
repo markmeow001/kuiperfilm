@@ -34,7 +34,7 @@ export const MARKUP = {
 export type MarkupCategory = keyof typeof MARKUP
 
 export type ApiType = 'text' | 'image' | 'video' | 'voice' | 'voice-design' | 'lip-sync'
-export type UsageUnit = 'token' | 'image' | 'video' | 'second' | 'call'
+export type UsageUnit = 'token' | 'image' | 'video' | 'second' | 'character' | 'call'
 
 export interface LlmCustomPricing {
   inputPerMillion?: number
@@ -52,7 +52,6 @@ export interface ModelCustomPricing {
   video?: MediaCustomPricing
 }
 
-const DEFAULT_VOICE_MODEL_ID = 'index-tts2'
 const DEFAULT_VOICE_DESIGN_MODEL_ID = 'qwen-voice-design'
 const DEFAULT_LIP_SYNC_MODEL_ID = 'kling'
 
@@ -548,13 +547,47 @@ export function calcVideo(
   return unitPrice * quantity * getMarkup('video')
 }
 
-export function calcVoice(durationSeconds: number): number {
-  const seconds = Math.max(0, Number(durationSeconds) || 0)
-  const unitPrice = resolveModelPriceStrict({
+export function calcVoice(model: string, characterCount: number): number {
+  const characters = Number(characterCount)
+  if (!Number.isInteger(characters) || characters < 0) {
+    throw new BillingOperationError(
+      'BILLING_INVALID_USAGE_QUANTITY',
+      'Voice character count must be a non-negative integer',
+      { apiType: 'voice', model, characterCount },
+    )
+  }
+  const resolved = resolveBuiltinPricing({
     apiType: 'voice',
-    model: DEFAULT_VOICE_MODEL_ID,
+    model,
   })
-  return unitPrice * seconds * getMarkup('voice')
+  if (resolved.status !== 'resolved') {
+    return resolveModelPriceStrict({ apiType: 'voice', model }) * characters * getMarkup('voice')
+  }
+  if (resolved.entry.pricing.mode !== 'usage') {
+    throw new BillingOperationError(
+      'BILLING_PRICING_USAGE_REQUIRED',
+      `Voice model must use character pricing: ${model}`,
+      { apiType: 'voice', model, pricingMode: resolved.entry.pricing.mode },
+    )
+  }
+  const { currency, unit, unitAmount, countScale } = resolved.entry.pricing
+  if (
+    currency !== 'USD'
+    || unit !== 'character'
+    || typeof unitAmount !== 'number'
+    || !Number.isFinite(unitAmount)
+    || unitAmount < 0
+    || typeof countScale !== 'number'
+    || !Number.isInteger(countScale)
+    || countScale <= 0
+  ) {
+    throw new BillingOperationError(
+      'BILLING_PRICING_USAGE_INVALID',
+      `Voice character pricing is invalid: ${model}`,
+      { apiType: 'voice', model },
+    )
+  }
+  return (characters / countScale) * unitAmount * USD_TO_CNY * getMarkup('voice')
 }
 
 export function calcVoiceDesign(): number {

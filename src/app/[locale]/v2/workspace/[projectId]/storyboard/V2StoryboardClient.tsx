@@ -13,45 +13,87 @@
  * Read-only for now — clicking panels just changes the selection.
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { useTranslations } from 'next-intl'
+import Link from 'next/link'
+import { useLocale, useTranslations } from 'next-intl'
 import { AppIcon } from '@/components/ui/icons'
+import { PageHeader } from '@/components/v2/PageHeader'
+import { StatusPill } from '@/components/v2/StatusPill'
+import { MediaWorkspaceSurface } from '@/components/v2/MediaWorkspaceSurface'
 import { useProjectData } from '@/lib/query/hooks/useProjectData'
 import { useProjectAccess } from '@/lib/query/hooks/useProjectAccess'
 import { VideoModelPickerInline } from './VideoModelPickerInline'
-import { getVideoModelVariant, isMultiShotCapable } from '@/lib/video-models/variants'
+import {
+  getVideoModelVariant,
+  isMultiShotCapable,
+} from '@/lib/video-models/variants'
 import { videoModelToleratesTextOnlyPanels } from '@/lib/video-models/multi-shot-text-only'
 import { resolveGenerationModeBehavior } from '@/lib/novel-promotion/generation-mode'
+import {
+  prepareMultiShotPanels,
+  resolveMultiShotPanelLimit,
+} from '@/lib/novel-promotion/multi-shot-submission'
+import {
+  isManualStoryboardOutcomeUnknown,
+  manualStoryboardRecoveryMatchesEpisode,
+} from '@/lib/novel-promotion/manual-storyboard-recovery'
 import {
   useStoryboards,
   useUpdatePanelText,
   useGenerateVideo,
+  useEstimateStoryboardBatchVideos,
+  useSubmitStoryboardBatchVideos,
 } from '@/lib/query/hooks/useStoryboards'
+import { useGenerationJobs } from '@/lib/query/hooks/useGenerationJobs'
+import { useCancelGenerationJob } from '@/lib/query/mutations/task-mutations'
 import {
   useRegenerateProjectPanelImage,
   useUpdateProjectPanel,
-  useCreateProjectPanel,
   useCreateProjectStoryboardGroup,
+  useInsertManualProjectPanel,
+  useMoveManualProjectPanel,
+  useDeleteManualProjectPanel,
 } from '@/lib/query/mutations/storyboard-panel-mutations'
 import { useAutoGroupMultiShot } from '@/lib/query/mutations/auto-group-multi-shot-mutation'
-import { useTaskSnapshot, useActiveTasks, useTaskList } from '@/lib/query/hooks/useTaskStatus'
+import {
+  useTaskSnapshot,
+  useActiveTasks,
+  useTaskList,
+} from '@/lib/query/hooks/useTaskStatus'
 import { useProjectAssets } from '@/lib/query/hooks/useProjectAssets'
 import { useEpisodeCharacterBindings } from '@/lib/query/mutations/episode-character-binding-mutations'
 import { queryKeys } from '@/lib/query/keys'
 import { useCurrentEpisode } from '../hooks/useCurrentEpisode'
+import { useEpisodePreservingHref } from '../hooks/useEpisodePreservingHref'
 import { V2StoryboardGroupsView } from './V2StoryboardGroupsView'
 import { V2StoryboardGalleryView } from './V2StoryboardGalleryView'
 import { V2StoryboardTimelineView } from './V2StoryboardTimelineView'
 import { V2ManualPanelModal, type ManualPanelDraft } from './V2ManualPanelModal'
 import { StaleStoryboardCleanupModal } from './StaleStoryboardCleanupModal'
-import { resolveErrorDisplay } from '@/lib/errors/display'
-import { PromptChipGroup } from './PromptChipGroup'
+import { StoryboardLoadErrorState } from './StoryboardLoadErrorState'
+import { StoryboardEpisodeAppearanceNotice } from './StoryboardEpisodeAppearanceNotice'
+import { StoryboardBatchVideoRunSheet } from './StoryboardBatchVideoRunSheet'
+import { AutoGroupTaskBanner } from './AutoGroupTaskBanner'
+import { StoryboardShotEditControls } from './StoryboardShotEditControls'
 import {
-  KLING_GROUP_SIZE,
-  GROUP_ACCENTS,
+  classifyStoryboardBatchVideoSubmitError,
+  collectTerminalPanelVideoIds,
+  initialStoryboardBatchVideoState,
+  releaseTerminalPanelInFlightIds,
+  resolveStoryboardBatchVideoEpisodeContext,
+  resolveStoryboardBatchJobsLoadState,
+  selectStoryboardBatchVideoJobs,
+  storyboardBatchVideoReducer,
+  summarizeStoryboardBatchVideoRun,
+} from './storyboard-batch-video-state'
+import {
+  buildStoryboardEpisodeAppearanceViewModel,
+  deriveStoryboardEpisodeAppearanceBindingState,
+} from './storyboard-episode-appearance-policy'
+import { resolveErrorDisplay } from '@/lib/errors/display'
+import {
   aspectClassFromRatio,
-  accentForGroupId,
   chunk,
   type PanelLike,
   type StoryboardLike,
@@ -65,8 +107,17 @@ interface V2StoryboardClientProps {
   projectId: string
 }
 
+const EMPTY_MANUAL_PANEL_DRAFT: ManualPanelDraft = {
+  description: '',
+  characterNames: [],
+  locationName: null,
+  durationSeconds: 5,
+}
+
 export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
   const t = useTranslations('v2Storyboard')
+  const locale = useLocale()
+  const buildHref = useEpisodePreservingHref()
   const queryClient = useQueryClient()
   const projectQuery = useProjectData(projectId)
   const project = projectQuery.data as ProjectLikeFull | undefined
@@ -80,11 +131,14 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
   // honors user pick instead of always defaulting to 720p. taijiai /
   // atlascloud / fal Seedance routes ignore this (their model id bakes
   // resolution).
-  const projectVideoResolution = (project?.novelPromotionData?.videoResolution ?? '720p') as '480p' | '720p' | '1080p'
+  const projectVideoResolution = (project?.novelPromotionData
+    ?.videoResolution ?? '720p') as '480p' | '720p' | '1080p'
   const aspectClass = aspectClassFromRatio(projectVideoRatio)
   const projectVideoModel = project?.novelPromotionData?.videoModel ?? ''
   // 2026-05-29 — per-project generation mode behavior (auto-chain, picker filter).
-  const modeBehavior = resolveGenerationModeBehavior(project?.novelPromotionData?.generationMode)
+  const modeBehavior = resolveGenerationModeBehavior(
+    project?.novelPromotionData?.generationMode,
+  )
   // 2026-05-17 — Derived from variant registry. Drives multi-shot button
   // disable + tooltip; null/unknown ids fail closed.
   const canMultiShot = isMultiShotCapable(projectVideoModel)
@@ -107,29 +161,59 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
   const { currentEpisodeId, currentEpisode } = useCurrentEpisode(projectId)
 
   const storyboardsQuery = useStoryboards(projectId, currentEpisodeId)
-  const storyboardsData = storyboardsQuery.data as { storyboards?: StoryboardLike[] } | undefined
+  const storyboardsData = storyboardsQuery.data as
+    | { storyboards?: StoryboardLike[] }
+    | undefined
   const projectAssetsQuery = useProjectAssets(projectId)
-  const characterRoster = projectAssetsQuery.data?.characters ?? []
+  const characterRoster = useMemo(
+    () => projectAssetsQuery.data?.characters ?? [],
+    [projectAssetsQuery.data?.characters],
+  )
   const locationRoster = projectAssetsQuery.data?.locations ?? []
   // Phase 11.4 — per-episode character appearance bindings. Lets the
   // CAST chip in the inspector show which appearance the worker would
   // actually use when generating panels for THIS episode (instead of
   // the user having to navigate back to the subjects page to verify).
-  const episodeBindingsQuery = useEpisodeCharacterBindings(projectId, currentEpisodeId)
-  const episodeBindings = episodeBindingsQuery.data ?? []
+  const episodeBindingsQuery = useEpisodeCharacterBindings(
+    projectId,
+    currentEpisodeId,
+  )
   const regenPanel = useRegenerateProjectPanelImage(projectId)
   const updatePanel = useUpdateProjectPanel(projectId)
   const updatePanelText = useUpdatePanelText(projectId, currentEpisodeId)
   const generateVideo = useGenerateVideo(projectId, currentEpisodeId)
-  const autoGroup = useAutoGroupMultiShot(projectId)
-  const createPanel = useCreateProjectPanel(projectId)
+  const autoGroup = useAutoGroupMultiShot(projectId, currentEpisodeId, {
+    canCancelTasks: canEdit,
+    messages: {
+      submitFailed: t('errors.submitFailedGeneric'),
+      outcomeUnknown: t('errors.autoGroupOutcomeUnknown'),
+      invalidResponse: t('errors.autoGroupInvalidResponse'),
+      cancelFailed: t('errors.autoGroupCancelFailed'),
+    },
+  })
   const createStoryboardGroup = useCreateProjectStoryboardGroup(projectId)
+  const insertManualPanel = useInsertManualProjectPanel(projectId, currentEpisodeId)
+  const moveManualPanel = useMoveManualProjectPanel(projectId, currentEpisodeId)
+  const deleteManualPanel = useDeleteManualProjectPanel(projectId, currentEpisodeId)
 
-  // 手動新增分鏡 (Phase 1 of B 組 free-prompt workflow):
-  // open via the toolbar button, submit creates panel + auto-triggers
-  // image gen. State is intentionally local — only one modal at a time.
+  // Manual create is intentionally a database-only action. It creates one
+  // group + one real panel atomically; image generation remains a separate,
+  // explicit action after the draft is visible in the storyboard.
   const [manualPanelOpen, setManualPanelOpen] = useState(false)
   const [manualPanelSubmitting, setManualPanelSubmitting] = useState(false)
+  const [manualPanelError, setManualPanelError] = useState<string | null>(null)
+  const [manualPanelDraft, setManualPanelDraft] = useState<ManualPanelDraft>(
+    EMPTY_MANUAL_PANEL_DRAFT,
+  )
+  const [manualPanelOutcomeUnknown, setManualPanelOutcomeUnknown] = useState(false)
+  const [manualPanelPosition, setManualPanelPosition] = useState<'append' | 'before' | 'after'>('append')
+  const [shotEditError, setShotEditError] = useState<string | null>(null)
+  // Keep the key after an error (including an outcome-unknown network error).
+  // Retrying the unchanged draft can then reconcile the same server records
+  // instead of creating a duplicate group or panel.
+  const manualPanelIdempotencyKeyRef = useRef<string | null>(null)
+  const manualPanelRecoveryEpisodeIdRef = useRef<string | null>(null)
+  const manualPanelAnchorIdRef = useRef<string | null>(null)
   // 2026-05-13 — stale storyboard cleanup modal. Lets the user nuke a
   // single storyboard (and all its panels) when a partial re-analyze
   // left old panels in the DB. See StaleStoryboardCleanupModal.
@@ -139,15 +223,21 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
   // Lets the user turn audio off when a provider's audio moderation
   // false-flags Seedance's native audio and blocks the whole clip.
   const [soundEnabled, setSoundEnabled] = useState(true)
-  const [multiShotState, setMultiShotState] = useState<MultiShotState>({ status: 'idle' })
-  const [analyzeState, setAnalyzeState] = useState<AnalyzeState>({ status: 'idle' })
+  const [multiShotState, setMultiShotState] = useState<MultiShotState>({
+    status: 'idle',
+  })
+  const [analyzeState, setAnalyzeState] = useState<AnalyzeState>({
+    status: 'idle',
+  })
   // 2026-05-13 — Selected Shot 圖/視頻顯示切換。
   // 以前 render 只看 videoUrl 有無 → 一旦 panel 跑過 B 路徑就只能看視頻、
   // 看不回原圖（user 報「無法切回去圖」）。改成 per-panel override：
   // - 沒紀錄 → auto（有 video 顯示 video，否則顯示 image，等同舊行為）
   // - user 點 toggle → 紀錄 'image' / 'video'，下次選回同個 panel 還記得
   // MediaDisplayMode imported from storyboard-client-helpers (Phase 1 step 4 prep).
-  const [mediaDisplayOverride, setMediaDisplayOverride] = useState<Record<string, MediaDisplayMode>>({})
+  const [mediaDisplayOverride, setMediaDisplayOverride] = useState<
+    Record<string, MediaDisplayMode>
+  >({})
   // Lightbox: when set, render a full-screen overlay of this URL. Lets
   // the timeline-view Selected Shot stay tile-sized (matching the
   // multi-shot 9:16 player on the right) while preserving zoom-in for
@@ -156,8 +246,95 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
   // Batch-generate progress state. Exposed to the user via toolbar
   // status pills so they know N panels are being processed without
   // having to scroll the strip and watch each thumbnail's overlay.
-  const [batchImageState, setBatchImageState] = useState<{ submitted: number; total: number } | null>(null)
-  const [batchVideoState, setBatchVideoState] = useState<{ submitted: number; total: number } | null>(null)
+  const [batchImageState, setBatchImageState] = useState<{
+    submitted: number
+    total: number
+  } | null>(null)
+  const [batchVideoOpen, setBatchVideoOpen] = useState(false)
+  const [batchVideoOnline, setBatchVideoOnline] = useState(true)
+  const [batchVideoRunState, dispatchBatchVideoRun] = useReducer(
+    storyboardBatchVideoReducer,
+    initialStoryboardBatchVideoState,
+  )
+  const batchVideoQuoteInFlightRef = useRef(false)
+  const batchVideoSubmitInFlightRef = useRef(false)
+  const batchVideoEpisodeContext = resolveStoryboardBatchVideoEpisodeContext(
+    currentEpisodeId,
+    batchVideoRunState,
+  )
+  const estimateBatchVideos = useEstimateStoryboardBatchVideos(
+    projectId,
+    currentEpisodeId,
+  )
+  const submitBatchVideos = useSubmitStoryboardBatchVideos(
+    projectId,
+    batchVideoEpisodeContext.pinnedEpisodeId,
+  )
+  const cancelBatchVideoJob = useCancelGenerationJob(projectId)
+  const trackBatchVideoJobs =
+    batchVideoOpen ||
+    batchVideoRunState.phase === 'tracking' ||
+    batchVideoRunState.phase === 'outcome_unknown'
+  const batchVideoJobsQuery = useGenerationJobs({
+    projectId,
+    episodeId: batchVideoEpisodeContext.pinnedEpisodeId,
+    types: ['video_panel'],
+    limit: 200,
+    enabled: trackBatchVideoJobs,
+  })
+  const allBatchVideoJobs = useMemo(
+    () => batchVideoJobsQuery.data?.pages.flatMap((page) => page.tasks) ?? [],
+    [batchVideoJobsQuery.data?.pages],
+  )
+  const batchVideoJobs = useMemo(
+    () => selectStoryboardBatchVideoJobs(batchVideoRunState, allBatchVideoJobs),
+    [allBatchVideoJobs, batchVideoRunState],
+  )
+  const batchVideoJobsLoadState = resolveStoryboardBatchJobsLoadState({
+    hasData: Boolean(batchVideoJobsQuery.data),
+    isPending: batchVideoJobsQuery.isPending,
+    isError: batchVideoJobsQuery.isError,
+  })
+  const batchVideoSummary = useMemo(
+    () => summarizeStoryboardBatchVideoRun(batchVideoRunState, batchVideoJobs),
+    [batchVideoJobs, batchVideoRunState],
+  )
+  const batchVideoToolbarMode: 'idle' | 'busy' | 'view' =
+    batchVideoRunState.phase === 'quoting' ||
+    batchVideoRunState.phase === 'submitting'
+      ? 'busy'
+      : batchVideoRunState.phase === 'quoted' ||
+          batchVideoRunState.phase === 'outcome_unknown' ||
+          (batchVideoRunState.phase === 'tracking' &&
+            batchVideoSummary.active > 0)
+        ? 'view'
+        : 'idle'
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const updateOnlineState = () => setBatchVideoOnline(window.navigator.onLine)
+    updateOnlineState()
+    window.addEventListener('online', updateOnlineState)
+    window.addEventListener('offline', updateOnlineState)
+    return () => {
+      window.removeEventListener('online', updateOnlineState)
+      window.removeEventListener('offline', updateOnlineState)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (
+      !trackBatchVideoJobs ||
+      !batchVideoJobsQuery.hasNextPage ||
+      batchVideoJobsQuery.isFetchingNextPage
+    ) {
+      return
+    }
+    void batchVideoJobsQuery.fetchNextPage()
+  }, [
+    batchVideoJobsQuery,
+    trackBatchVideoJobs,
+  ])
 
   // Stage 1 chip-rail bookkeeping. We persist the most-recent
   // multi-shot taskId per groupId so the chip rail survives page
@@ -173,7 +350,8 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
       const raw = window.localStorage.getItem(taskByGroupStorageKey)
       if (!raw) return {}
       const parsed = JSON.parse(raw)
-      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed))
+        return {}
       const out: Record<string, string> = {}
       for (const [k, v] of Object.entries(parsed)) {
         if (typeof v === 'string') out[k] = v
@@ -213,7 +391,10 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
   useEffect(() => {
     if (typeof window === 'undefined' || !taskByGroupStorageKey) return
     try {
-      window.localStorage.setItem(taskByGroupStorageKey, JSON.stringify(taskByGroup))
+      window.localStorage.setItem(
+        taskByGroupStorageKey,
+        JSON.stringify(taskByGroup),
+      )
     } catch {
       // Quota error or private mode; ignore — bookkeeping is best-effort.
     }
@@ -240,7 +421,9 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
           `/api/novel-promotion/${projectId}/episodes/${currentEpisodeId}/multi-shot-tasks-by-group`,
         )
         if (!res.ok) return
-        const body = (await res.json()) as { tasksByGroup?: Record<string, string> }
+        const body = (await res.json()) as {
+          tasksByGroup?: Record<string, string>
+        }
         const fromServer = body.tasksByGroup ?? {}
         if (cancelled) return
         setTaskByGroup((prev) => {
@@ -271,7 +454,9 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
   // Persisted in localStorage so the user's choice sticks across
   // navigation. Default is gallery per user decision 「V3變成主板」,
   // but a smarter default kicks in below for B-path video models.
-  const [layoutMode, setLayoutMode] = useState<'gallery' | 'timeline' | 'groups'>(() => {
+  const [layoutMode, setLayoutMode] = useState<
+    'gallery' | 'timeline' | 'groups'
+  >(() => {
     if (typeof window === 'undefined') return 'gallery'
     const stored = window.localStorage.getItem('v2-storyboard-layout')
     if (stored === 'timeline' || stored === 'groups') return stored
@@ -308,7 +493,8 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
   })
   const analyzeStatus = analyzeSnapshot.data?.status ?? null
   const analyzeProgress = analyzeSnapshot.data?.progress ?? 0
-  const isAnalyzing = analyzeStatus === 'queued' || analyzeStatus === 'processing'
+  const isAnalyzing =
+    analyzeStatus === 'queued' || analyzeStatus === 'processing'
   // Unified state for the 重新分析 button / banner. Covers the click → worker-
   // surfaces gap (analyzeState.status) AND the worker progress phase
   // (analyzeStatus from the snapshot poll). Without this, the user clicks
@@ -359,26 +545,41 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
   // (chicken-and-egg: status was 'failed' from prior run, isAnalyzing
   // false, polling never starts, user sees frozen 90% from the old
   // failed task even though a fresh task is mid-flight).
-  const isActivelySubmitting = analyzeState.status === 'submitted' || analyzeState.status === 'submitting'
+  const isActivelySubmitting =
+    analyzeState.status === 'submitted' || analyzeState.status === 'submitting'
   const pollInterval = isAnalyzing || isActivelySubmitting ? 3000 : 8000
   useEffect(() => {
-    const interval = setInterval(() => { void analyzeSnapshot.refetch() }, pollInterval)
+    const interval = setInterval(() => {
+      void analyzeSnapshot.refetch()
+    }, pollInterval)
     return () => clearInterval(interval)
   }, [pollInterval, analyzeSnapshot])
 
   const previousAnalyzeStatus = useRef(analyzeStatus)
   useEffect(() => {
-    if (previousAnalyzeStatus.current !== 'completed' && analyzeStatus === 'completed' && currentEpisodeId) {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.storyboards.all(currentEpisodeId) })
+    if (
+      previousAnalyzeStatus.current !== 'completed' &&
+      analyzeStatus === 'completed' &&
+      currentEpisodeId
+    ) {
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.storyboards.all(currentEpisodeId),
+      })
       // 2026-05-29 — R2V auto-chain: after analyze regenerates panels, auto-run
       // grouping so the user doesn't have to manually click 自動切組 then
       // 重生敘事. Server-side autoGroup reads the already-persisted DB panels.
       // Only for r2v-narrative projects; t2i-storyboard keeps the manual flow.
       // Guarded against re-fire by the previousAnalyzeStatus !== 'completed' check.
-      if (modeBehavior.autoChainAfterAnalyze && canEdit && !autoGroup.isPending) {
-        void autoGroup.mutateAsync({ episodeId: currentEpisodeId }).catch(() => {
-          // surfaced via autoGroup.error; manual 自動切組 button remains available
-        })
+      if (
+        modeBehavior.autoChainAfterAnalyze &&
+        canEdit &&
+        !autoGroup.isPending
+      ) {
+        void autoGroup
+          .mutateAsync({ episodeId: currentEpisodeId })
+          .catch(() => {
+            // surfaced via autoGroup.error; manual 自動切組 button remains available
+          })
       }
     }
     // Once the server confirms the new task has actually surfaced in the
@@ -386,19 +587,59 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
     // polling can wind down. Without this, polling keeps firing every 3s
     // forever after one analyze click.
     if (
-      (analyzeStatus === 'queued' || analyzeStatus === 'processing' ||
-        analyzeStatus === 'completed' || analyzeStatus === 'failed') &&
+      (analyzeStatus === 'queued' ||
+        analyzeStatus === 'processing' ||
+        analyzeStatus === 'completed' ||
+        analyzeStatus === 'failed') &&
       analyzeState.status === 'submitted'
     ) {
       setAnalyzeState({ status: 'idle' })
     }
     previousAnalyzeStatus.current = analyzeStatus
-  }, [analyzeStatus, currentEpisodeId, queryClient, analyzeState.status, modeBehavior.autoChainAfterAnalyze, canEdit, autoGroup])
+  }, [
+    analyzeStatus,
+    currentEpisodeId,
+    queryClient,
+    analyzeState.status,
+    modeBehavior.autoChainAfterAnalyze,
+    canEdit,
+    autoGroup,
+  ])
 
   const allPanels = useMemo<PanelLike[]>(() => {
     const sb = storyboardsData?.storyboards ?? []
     return sb.flatMap((s) => s.panels ?? [])
   }, [storyboardsData])
+
+  const episodeAppearanceQueryLoading =
+    episodeBindingsQuery.isPending || episodeBindingsQuery.isFetching
+  const episodeAppearanceBindingState = useMemo(
+    () => deriveStoryboardEpisodeAppearanceBindingState({
+      episodeId: currentEpisodeId,
+      bindings: episodeBindingsQuery.data,
+      isPending: episodeAppearanceQueryLoading || projectAssetsQuery.isPending,
+      isFetching: projectAssetsQuery.isFetching,
+      error: episodeBindingsQuery.error || projectAssetsQuery.error,
+    }),
+    [
+      currentEpisodeId,
+      episodeBindingsQuery.data,
+      episodeBindingsQuery.error,
+      episodeAppearanceQueryLoading,
+      projectAssetsQuery.error,
+      projectAssetsQuery.isFetching,
+      projectAssetsQuery.isPending,
+    ],
+  )
+  const storyboardAppearance = useMemo(
+    () => buildStoryboardEpisodeAppearanceViewModel({
+      episodeId: currentEpisodeId,
+      bindingState: episodeAppearanceBindingState,
+      characters: characterRoster,
+      panels: allPanels,
+    }),
+    [allPanels, characterRoster, currentEpisodeId, episodeAppearanceBindingState],
+  )
 
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
@@ -409,6 +650,14 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
 
   const selected = allPanels.find((p) => p.id === selectedId) ?? null
   const selectedIndex = allPanels.findIndex((p) => p.id === selectedId)
+  const selectedStoryboardPanels = selected?.storyboardId
+    ? allPanels.filter((panel) => panel.storyboardId === selected.storyboardId)
+    : []
+  const selectedStoryboardIndex = selected
+    ? selectedStoryboardPanels.findIndex((panel) => panel.id === selected.id)
+    : -1
+  const shotEditBusy =
+    insertManualPanel.isPending || moveManualPanel.isPending || deleteManualPanel.isPending
 
   // Compute which media to render in the Selected Shot preview.
   // Priority: explicit override (if the chosen asset exists) → auto
@@ -446,22 +695,40 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
   useEffect(() => {
     setDescDraft(selected?.description ?? selected?.prompt ?? '')
     setDialogueDraft(selected?.srtSegment ?? '')
-  }, [selected?.id, selected?.description, selected?.prompt, selected?.srtSegment])
-  const descChanged = descDraft !== (selected?.description ?? selected?.prompt ?? '')
+  }, [
+    selected?.id,
+    selected?.description,
+    selected?.prompt,
+    selected?.srtSegment,
+  ])
+  const descChanged =
+    descDraft !== (selected?.description ?? selected?.prompt ?? '')
   const dialogueChanged = dialogueDraft !== (selected?.srtSegment ?? '')
 
   function handleSaveDescription() {
     if (!selected) return
     updatePanelText.mutate(
       { panelId: selected.id, description: descDraft },
-      { onError: (err) => alert(err instanceof Error ? err.message : t('errors.saveDescriptionFailed')) },
+      {
+        onError: (err) =>
+          alert(
+            err instanceof Error
+              ? err.message
+              : t('errors.saveDescriptionFailed'),
+          ),
+      },
     )
   }
   function handleSaveDialogue() {
     if (!selected) return
     updatePanelText.mutate(
       { panelId: selected.id, srtSegment: dialogueDraft },
-      { onError: (err) => alert(err instanceof Error ? err.message : t('errors.saveDialogueFailed')) },
+      {
+        onError: (err) =>
+          alert(
+            err instanceof Error ? err.message : t('errors.saveDialogueFailed'),
+          ),
+      },
     )
   }
   // Track per-panel image / video gen in-flight so the user sees a clear
@@ -487,7 +754,11 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
   const serverInflightPanelImageIds = useMemo(() => {
     const set = new Set<string>()
     for (const t of activePanelImageTasks.data ?? []) {
-      if (t.targetType === 'NovelPromotionPanel' && typeof t.targetId === 'string' && t.type === 'image_panel') {
+      if (
+        t.targetType === 'NovelPromotionPanel' &&
+        typeof t.targetId === 'string' &&
+        t.type === 'image_panel'
+      ) {
         set.add(t.targetId)
       }
     }
@@ -496,7 +767,11 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
   const serverInflightPanelVideoIds = useMemo(() => {
     const set = new Set<string>()
     for (const t of activePanelImageTasks.data ?? []) {
-      if (t.targetType === 'NovelPromotionPanel' && typeof t.targetId === 'string' && t.type === 'video_panel') {
+      if (
+        t.targetType === 'NovelPromotionPanel' &&
+        typeof t.targetId === 'string' &&
+        t.type === 'video_panel'
+      ) {
         set.add(t.targetId)
       }
     }
@@ -518,12 +793,15 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
     limit: 50,
   })
   const failedPanelImageIds = useMemo(() => {
-    const map = new Map<string, { errorCode: string | null; errorMessage: string | null }>()
+    const map = new Map<
+      string,
+      { errorCode: string | null; errorMessage: string | null }
+    >()
     for (const t of failedPanelTasks.data ?? []) {
       if (
-        t.targetType === 'NovelPromotionPanel'
-        && typeof t.targetId === 'string'
-        && t.type === 'image_panel'
+        t.targetType === 'NovelPromotionPanel' &&
+        typeof t.targetId === 'string' &&
+        t.type === 'image_panel'
       ) {
         // Latest failure wins per-panel (the API sorts by createdAt
         // desc by default). The Map key is the panel id, value is
@@ -539,12 +817,15 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
     return map
   }, [failedPanelTasks.data])
   const failedPanelVideoIds = useMemo(() => {
-    const map = new Map<string, { errorCode: string | null; errorMessage: string | null }>()
+    const map = new Map<
+      string,
+      { errorCode: string | null; errorMessage: string | null }
+    >()
     for (const t of failedPanelTasks.data ?? []) {
       if (
-        t.targetType === 'NovelPromotionPanel'
-        && typeof t.targetId === 'string'
-        && t.type === 'video_panel'
+        t.targetType === 'NovelPromotionPanel' &&
+        typeof t.targetId === 'string' &&
+        t.type === 'video_panel'
       ) {
         if (!map.has(t.targetId)) {
           map.set(t.targetId, {
@@ -556,6 +837,10 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
     }
     return map
   }, [failedPanelTasks.data])
+  const terminalPanelVideoIds = useMemo(
+    () => collectTerminalPanelVideoIds(failedPanelTasks.data ?? []),
+    [failedPanelTasks.data],
+  )
   // Poll while any in-flight, including video tracked locally — that way
   // we catch tasks no matter where they were submitted from.
   useEffect(() => {
@@ -563,8 +848,11 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
       serverInflightPanelImageIds.size === 0 &&
       serverInflightPanelVideoIds.size === 0 &&
       videoInFlight.size === 0
-    ) return
-    const interval = setInterval(() => { void activePanelImageTasks.refetch() }, 3000)
+    )
+      return
+    const interval = setInterval(() => {
+      void activePanelImageTasks.refetch()
+    }, 3000)
     return () => clearInterval(interval)
   }, [
     serverInflightPanelImageIds.size,
@@ -579,10 +867,13 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
   useEffect(() => {
     if (
       (previousServerImageInflight.current > serverInflightPanelImageIds.size ||
-        previousServerVideoInflight.current > serverInflightPanelVideoIds.size) &&
+        previousServerVideoInflight.current >
+          serverInflightPanelVideoIds.size) &&
       currentEpisodeId
     ) {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.storyboards.all(currentEpisodeId) })
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.storyboards.all(currentEpisodeId),
+      })
     }
     previousServerImageInflight.current = serverInflightPanelImageIds.size
     previousServerVideoInflight.current = serverInflightPanelVideoIds.size
@@ -598,7 +889,9 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
   useEffect(() => {
     if (videoInFlight.size === 0) return
     const interval = setInterval(() => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.storyboards.all(currentEpisodeId || '') })
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.storyboards.all(currentEpisodeId || ''),
+      })
     }, 5000)
     return () => clearInterval(interval)
   }, [videoInFlight.size, queryClient, currentEpisodeId])
@@ -618,6 +911,24 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
     if (changed) setVideoInFlight(next)
   }, [allPanels, videoInFlight])
 
+  // Failed and cancelled tasks never produce a videoUrl, so completion-only
+  // cleanup would leave the optimistic overlay stuck forever. Release a local
+  // flag once the durable task list says terminal and no active server task
+  // remains for that panel (a newer retry stays visible).
+  useEffect(() => {
+    if (videoInFlight.size === 0 || terminalPanelVideoIds.size === 0) return
+    const next = releaseTerminalPanelInFlightIds(
+      videoInFlight,
+      serverInflightPanelVideoIds,
+      terminalPanelVideoIds,
+    )
+    if (next.size !== videoInFlight.size) setVideoInFlight(next)
+  }, [
+    terminalPanelVideoIds,
+    serverInflightPanelVideoIds,
+    videoInFlight,
+  ])
+
   // Same drop-on-completion sync for image regen — release the local
   // imageInFlight slot once the worker has actually written the new
   // imageUrl onto the panel. Without this, the local overlay would
@@ -627,7 +938,11 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
     const next = new Set(imageInFlight)
     let changed = false
     for (const p of allPanels) {
-      if (imageInFlight.has(p.id) && p.imageUrl && !serverInflightPanelImageIds.has(p.id)) {
+      if (
+        imageInFlight.has(p.id) &&
+        p.imageUrl &&
+        !serverInflightPanelImageIds.has(p.id)
+      ) {
         next.delete(p.id)
         changed = true
       }
@@ -640,6 +955,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
   // fal Seedance 2.0 without touching project.videoModel. The default
   // path (no override → use project setting) is unchanged.
   function handleGenerateVideo(modelOverride?: string) {
+    if (!storyboardAppearance.canGenerate) return
     if (!selected) return
     const videoModel = modelOverride ?? project?.novelPromotionData?.videoModel
     if (!videoModel) {
@@ -662,14 +978,21 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
             return next
           })
         },
-        onError: (err) => alert(err instanceof Error ? err.message : t('errors.submitVideoFailed')),
+        onError: (err) =>
+          alert(
+            err instanceof Error ? err.message : t('errors.submitVideoFailed'),
+          ),
       },
     )
   }
   const isCurrentPanelVideoInFlight =
-    !!selected && (videoInFlight.has(selected.id) || serverInflightPanelVideoIds.has(selected.id))
+    !!selected &&
+    (videoInFlight.has(selected.id) ||
+      serverInflightPanelVideoIds.has(selected.id))
   const isCurrentPanelImageInFlight =
-    !!selected && (imageInFlight.has(selected.id) || serverInflightPanelImageIds.has(selected.id))
+    !!selected &&
+    (imageInFlight.has(selected.id) ||
+      serverInflightPanelImageIds.has(selected.id))
 
   // Distinct group ids in the order panels appear, for stable colour cycling.
   const orderedGroupIds = useMemo(() => {
@@ -694,7 +1017,8 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
     const map: Record<string, string | null> = {}
     for (const sb of storyboardsData?.storyboards ?? []) {
       const id = (sb as { id?: string }).id
-      const url = (sb as { referenceVideoUrl?: string | null }).referenceVideoUrl ?? null
+      const url =
+        (sb as { referenceVideoUrl?: string | null }).referenceVideoUrl ?? null
       if (typeof id === 'string') map[id] = url
     }
     return map
@@ -705,11 +1029,16 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
   // either isn't grouped (mechanical chunk) or no multi-shot has been
   // submitted for this group yet — the rail stays hidden in that case.
   const selectedGroupId = selected?.multiShotGroupId ?? null
-  const selectedGroupTaskId = selectedGroupId ? (taskByGroup[selectedGroupId] ?? null) : null
-  const selectedGroupOrdinal = selectedGroupId ? orderedGroupIds.indexOf(selectedGroupId) : -1
-  const selectedGroupLabel = selectedGroupOrdinal >= 0
-    ? `GROUP ${String(selectedGroupOrdinal + 1).padStart(2, '0')}`
+  const selectedGroupTaskId = selectedGroupId
+    ? (taskByGroup[selectedGroupId] ?? null)
     : null
+  const selectedGroupOrdinal = selectedGroupId
+    ? orderedGroupIds.indexOf(selectedGroupId)
+    : -1
+  const selectedGroupLabel =
+    selectedGroupOrdinal >= 0
+      ? `GROUP ${String(selectedGroupOrdinal + 1).padStart(2, '0')}`
+      : null
 
   // Recover server-side multi-shot tasks that were submitted before
   // localStorage tracking was wired (or from another browser / device).
@@ -734,7 +1063,8 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
 
     let cancelled = false
     void (async () => {
-      const recovered: Record<string, { taskId: string; createdAt: string }> = {}
+      const recovered: Record<string, { taskId: string; createdAt: string }> =
+        {}
       let totalTasksScanned = 0
       let httpErrors = 0
       for (const sbId of storyboardIds) {
@@ -749,17 +1079,25 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
             httpErrors += 1
             continue
           }
-          const json = (await res.json()) as { tasks?: Array<Record<string, unknown>> }
+          const json = (await res.json()) as {
+            tasks?: Array<Record<string, unknown>>
+          }
           const tasks = Array.isArray(json.tasks) ? json.tasks : []
           totalTasksScanned += tasks.length
           for (const t of tasks) {
             const taskId = typeof t.id === 'string' ? t.id : null
             const createdAt = typeof t.createdAt === 'string' ? t.createdAt : ''
-            const payload = (t.payload && typeof t.payload === 'object' && !Array.isArray(t.payload))
-              ? (t.payload as Record<string, unknown>)
-              : null
-            const panelIds = Array.isArray(payload?.panelIds) ? (payload!.panelIds as unknown[]) : []
-            const firstPanelId = typeof panelIds[0] === 'string' ? (panelIds[0] as string) : null
+            const payload =
+              t.payload &&
+              typeof t.payload === 'object' &&
+              !Array.isArray(t.payload)
+                ? (t.payload as Record<string, unknown>)
+                : null
+            const panelIds = Array.isArray(payload?.panelIds)
+              ? (payload!.panelIds as unknown[])
+              : []
+            const firstPanelId =
+              typeof panelIds[0] === 'string' ? (panelIds[0] as string) : null
             if (!taskId || !firstPanelId) continue
             const groupId = panelToGroup.get(firstPanelId)
             if (!groupId) continue
@@ -771,14 +1109,18 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
         } catch (err) {
           // Visible breadcrumb so cross-browser issues are debuggable
           // from the browser console without a server hit.
-           
-          console.warn('[multi-shot-recovery] fetch failed for storyboard', sbId, err)
+
+          console.warn(
+            '[multi-shot-recovery] fetch failed for storyboard',
+            sbId,
+            err,
+          )
         }
       }
       if (cancelled) return
       const recoveredMap: Record<string, string> = {}
       for (const [g, v] of Object.entries(recovered)) recoveredMap[g] = v.taskId
-       
+
       console.info(
         '[multi-shot-recovery]',
         `storyboards=${storyboardIds.length}`,
@@ -800,35 +1142,44 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
 
   async function handleAnalyzeStoryboard() {
     if (!currentEpisodeId) {
-      setAnalyzeState({ status: 'error', message: t('errors.needEpisodeFirst') })
+      setAnalyzeState({
+        status: 'error',
+        message: t('errors.needEpisodeFirst'),
+      })
       return
     }
     setAnalyzeState({ status: 'submitting' })
     try {
-      const res = await fetch(`/api/novel-promotion/${projectId}/script-to-storyboard-stream`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          episodeId: currentEpisodeId,
-          displayMode: 'detail',
-          async: true,
-          // 2026-05-13 — opt out of the post-analysis IMAGE_PANEL cascade
-          // that script-to-storyboard handler runs by default (added
-          // 2026-05-04 for mobile review UX). On V2 desktop the user wants
-          // explicit control: image gen only fires when they click the
-          // per-panel "生成圖片" or the toolbar batch button. Mobile flow
-          // (which still benefits from auto-cascade for on-the-go review)
-          // is unaffected — it has its own analysis trigger path.
-          cascadeImageGen: false,
-        }),
-      })
+      const res = await fetch(
+        `/api/novel-promotion/${projectId}/script-to-storyboard-stream`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            episodeId: currentEpisodeId,
+            displayMode: 'detail',
+            async: true,
+            // 2026-05-13 — opt out of the post-analysis IMAGE_PANEL cascade
+            // that script-to-storyboard handler runs by default (added
+            // 2026-05-04 for mobile review UX). On V2 desktop the user wants
+            // explicit control: image gen only fires when they click the
+            // per-panel "生成圖片" or the toolbar batch button. Mobile flow
+            // (which still benefits from auto-cascade for on-the-go review)
+            // is unaffected — it has its own analysis trigger path.
+            cascadeImageGen: false,
+          }),
+        },
+      )
       if (!res.ok) {
         // 2026-05-21 — Pre-fix this dumped the raw JSON response body
         // straight into analyzeState.message → user saw a wall of
         // {"success":false,"requestId":...,"error":{...}}. Route through
         // resolveErrorDisplay so the CONFLICT / EPISODE_NO_CLIPS /
         // TASK_STILL_PROCESSING codes get their targeted friendly text.
-        let errBody: { error?: { code?: string; message?: string }; message?: string } = {}
+        let errBody: {
+          error?: { code?: string; message?: string }
+          message?: string
+        } = {}
         try {
           errBody = await res.json()
         } catch {
@@ -838,15 +1189,22 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
           code: errBody?.error?.code ?? null,
           message: errBody?.error?.message ?? errBody?.message ?? null,
         })
-        throw new Error(display?.message ?? t('errors.submitFailedHttp', { status: res.status }))
+        throw new Error(
+          display?.message ??
+            t('errors.submitFailedHttp', { status: res.status }),
+        )
       }
       setAnalyzeState({ status: 'submitted' })
-      await queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all(projectId), exact: false })
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.tasks.all(projectId),
+        exact: false,
+      })
       void analyzeSnapshot.refetch()
     } catch (err) {
       setAnalyzeState({
         status: 'error',
-        message: err instanceof Error ? err.message : t('errors.submitFailedGeneric'),
+        message:
+          err instanceof Error ? err.message : t('errors.submitFailedGeneric'),
       })
     }
   }
@@ -860,93 +1218,145 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
     }
   }
 
-  /**
-   * Submit the manual panel modal — B 組 free-prompt workflow.
-   *
-   * Steps:
-   *   1. Find a storyboard group for the current episode. If none
-   *      exists yet (which is the common case for B 組 — they skip
-   *      the auto-flow entirely), create one via
-   *      useCreateProjectStoryboardGroup so the panel has somewhere
-   *      to land.
-   *   2. POST the panel with description + characters JSON + location.
-   *      The worker side panel-image-task-handler already knows how
-   *      to read these fields (parsePanelCharacterReferences etc.) —
-   *      no special "manual" branch needed.
-   *   3. Auto-trigger image gen on the new panel so the user sees a
-   *      result immediately, no need to click 重新生成 after create.
-   *   4. Close modal regardless of gen success — the panel exists in
-   *      the grid even if gen errors out, and users can always retry
-   *      via the per-card button.
-   */
-  async function handleManualPanelSubmit(draft: ManualPanelDraft) {
-    if (!currentEpisodeId) {
-      alert(t('errors.needPanelEpisode'))
+  function handleManualPanelOpen(position: 'append' | 'before' | 'after' = 'append') {
+    if (!canEdit || !currentEpisodeId) return
+    if (position !== 'append' && !selected) return
+    if (
+      !manualStoryboardRecoveryMatchesEpisode(
+        manualPanelRecoveryEpisodeIdRef.current,
+        currentEpisodeId,
+      )
+    ) {
+      setManualPanelError(t('manualPanel.switchBackToRecoveryEpisode'))
+      setManualPanelOpen(true)
       return
     }
+    // An outcome-unknown retry must keep the original operation identity.
+    // Reopening from a different toolbar button must not silently rebind the
+    // retained key to another position or currently selected panel.
+    if (manualPanelIdempotencyKeyRef.current) {
+      setManualPanelOpen(true)
+      return
+    }
+    setManualPanelPosition(position)
+    manualPanelAnchorIdRef.current = position === 'append' ? null : selected?.id ?? null
+    setManualPanelError(null)
+    setManualPanelOpen(true)
+  }
+
+  /** Create one real panel atomically, without starting AI or media work. */
+  async function handleManualPanelSubmit(draft: ManualPanelDraft) {
+    if (!canEdit || !currentEpisodeId) return
+    if (
+      !manualStoryboardRecoveryMatchesEpisode(
+        manualPanelRecoveryEpisodeIdRef.current,
+        currentEpisodeId,
+      )
+    ) {
+      setManualPanelError(t('manualPanel.switchBackToRecoveryEpisode'))
+      return
+    }
+    const manualPanelAnchorId = manualPanelAnchorIdRef.current
+    if (manualPanelPosition !== 'append' && !manualPanelAnchorId) return
+
+    setManualPanelError(null)
+    setManualPanelDraft(draft)
     setManualPanelSubmitting(true)
+
     try {
-      // Pick or create the destination storyboard group.
-      const existingGroups = storyboardsData?.storyboards ?? []
-      let storyboardId: string | null = existingGroups[existingGroups.length - 1]?.id ?? null
-      if (!storyboardId) {
-        const created = (await createStoryboardGroup.mutateAsync({
+      const idempotencyKey =
+        manualPanelIdempotencyKeyRef.current ?? crypto.randomUUID()
+      manualPanelIdempotencyKeyRef.current = idempotencyKey
+      manualPanelRecoveryEpisodeIdRef.current = currentEpisodeId
+      let created: { panel?: { id?: string } } | null
+      if (manualPanelPosition === 'append') {
+        created = (await createStoryboardGroup.mutateAsync({
           episodeId: currentEpisodeId,
-          insertIndex: 0,
-        })) as { storyboard?: { id?: string }; id?: string } | null
-        storyboardId =
-          (created && (created.storyboard?.id ?? created.id ?? null)) || null
-        if (!storyboardId) {
-          throw new Error(t('errors.cannotCreateGroup'))
-        }
-      }
-
-      // 2026-05-13 — assign a fresh multiShotGroupId so the new panel
-      // shows up immediately as its own group in the multi-shot view.
-      // Without this the panel lives in the storyboard but is invisible
-      // in the groups layout (which renders by multiShotGroupId only).
-      // User can later use 自動切組 to merge / reshuffle.
-      const manualGroupId = `manual-${
-        typeof crypto !== 'undefined' && 'randomUUID' in crypto
-          ? crypto.randomUUID()
-          : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
-      }`
-
-      const created = (await createPanel.mutateAsync({
-        storyboardId,
-        description: draft.description,
-        characters: draft.characterNames.length > 0
-          ? JSON.stringify(draft.characterNames)
-          : null,
-        location: draft.locationName,
-        duration: draft.durationSeconds,
-        multiShotGroupId: manualGroupId,
-        multiShotGroupOrder: 0,
-      })) as { panel?: { id?: string }; id?: string } | null
-      const newPanelId =
-        (created && (created.panel?.id ?? created.id ?? null)) || null
-
-      if (newPanelId) {
-        // Best-effort kick-off; if gen fails (rate limit, sensitive
-        // content) the panel still lives in the grid for retry.
-        regenPanel.mutate({ panelId: newPanelId }, {
-          onError: () => {
-            // surfaced via per-card error overlay; nothing more to do here
-          },
+          insertIndex: storyboardsData?.storyboards?.length ?? 0,
+          idempotencyKey,
+          initialPanel: draft,
+        })) as { panel?: { id?: string } } | null
+      } else {
+        if (!manualPanelAnchorId) return
+        created = await insertManualPanel.mutateAsync({
+          idempotencyKey,
+          anchorPanelId: manualPanelAnchorId,
+          position: manualPanelPosition,
+          panel: draft,
         })
       }
+      const newPanelId = (created && created.panel?.id) || null
+      if (!newPanelId) {
+        throw new Error(t('manualPanel.outcomeUnknown'))
+      }
 
-      // Force the storyboards query to refetch so the timeline / multi-
-      // shot view picks up the new panel + group immediately.
+      setSelectedId(newPanelId)
+      manualPanelIdempotencyKeyRef.current = null
+      manualPanelRecoveryEpisodeIdRef.current = null
+      manualPanelAnchorIdRef.current = null
+      setManualPanelOutcomeUnknown(false)
+      setManualPanelPosition('append')
+      setManualPanelDraft(EMPTY_MANUAL_PANEL_DRAFT)
+      setManualPanelError(null)
+      setManualPanelOpen(false)
       void queryClient.invalidateQueries({
         queryKey: queryKeys.storyboards.all(currentEpisodeId),
       })
-
-      setManualPanelOpen(false)
     } catch (err) {
-      alert(t('errors.createFailed', { reason: (err as Error)?.message ?? t('errors.unknown') }))
+      const reason = err instanceof Error ? err.message : t('errors.unknown')
+      const outcomeUnknown = isManualStoryboardOutcomeUnknown(err)
+      setManualPanelOutcomeUnknown(outcomeUnknown)
+      if (!outcomeUnknown) {
+        manualPanelIdempotencyKeyRef.current = null
+        manualPanelRecoveryEpisodeIdRef.current = null
+      }
+      setManualPanelError(
+        t(
+          outcomeUnknown
+            ? 'manualPanel.createOutcomeUnknown'
+            : 'manualPanel.createError',
+          { reason },
+        ),
+      )
     } finally {
       setManualPanelSubmitting(false)
+    }
+  }
+
+  async function handleMoveSelectedPanel(direction: 'earlier' | 'later') {
+    if (!canEdit || !currentEpisodeId || !selected || shotEditBusy) return
+    if (
+      (direction === 'earlier' && selectedStoryboardIndex <= 0)
+      || (
+        direction === 'later'
+        && selectedStoryboardIndex >= selectedStoryboardPanels.length - 1
+      )
+    ) return
+
+    setShotEditError(null)
+    try {
+      await moveManualPanel.mutateAsync({ panelId: selected.id, direction })
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : t('errors.unknown')
+      setShotEditError(t('shotEdit.error', { reason }))
+    }
+  }
+
+  async function handleDeleteSelectedPanel() {
+    if (!canEdit || !currentEpisodeId || !selected || shotEditBusy) return
+    if (!window.confirm(t('shotEdit.confirmDelete', { number: selectedIndex + 1 }))) return
+
+    const fallbackSelection =
+      selectedStoryboardPanels[selectedStoryboardIndex + 1]
+      ?? selectedStoryboardPanels[selectedStoryboardIndex - 1]
+      ?? null
+    setShotEditError(null)
+    try {
+      await deleteManualPanel.mutateAsync({ panelId: selected.id })
+      setSelectedId(fallbackSelection?.id ?? null)
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : t('errors.unknown')
+      setShotEditError(t('shotEdit.error', { reason }))
     }
   }
 
@@ -964,7 +1374,10 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
    * 成圖 individually.
    */
   async function handleBatchGenerateImages() {
-    const targets = allPanels.filter((p) => !p.imageUrl && !imageInFlight.has(p.id))
+    if (!storyboardAppearance.canGenerate) return
+    const targets = allPanels.filter(
+      (p) => !p.imageUrl && !imageInFlight.has(p.id),
+    )
     if (targets.length === 0) return
     setBatchImageState({ submitted: 0, total: targets.length })
     let i = 0
@@ -992,50 +1405,150 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
     setTimeout(() => setBatchImageState(null), 5000)
   }
 
-  /**
-   * Batch-generate video for every panel that has an imageUrl but no
-   * videoUrl yet. Same submit-serial-with-gap pattern as
-   * handleBatchGenerateImages. Non-eligible panels (missing imageUrl
-   * for i2v video models) are silently skipped — the multi-shot
-   * B-path button is the right tool for projects that don't generate
-   * static images.
-   */
-  async function handleBatchGenerateVideos() {
-    const videoModel = project?.novelPromotionData?.videoModel
-    if (!videoModel) {
-      alert(t('errors.noVideoModelPicked'))
+  function batchVideoErrorMessage(error: unknown): string {
+    return error instanceof Error && error.message.trim()
+      ? error.message
+      : t('errors.submitFailedGeneric')
+  }
+
+  async function requestBatchVideoQuote() {
+    setBatchVideoOpen(true)
+    if (batchVideoQuoteInFlightRef.current) return
+    if (!canEdit) return
+    if (!batchVideoOnline) {
+      dispatchBatchVideoRun({
+        type: 'quote_failed',
+        message: t('batchVideoRun.offline'),
+      })
       return
     }
-    const targets = allPanels.filter(
-      (p) => Boolean(p.imageUrl) && !p.videoUrl && !videoInFlight.has(p.id),
-    )
-    if (targets.length === 0) return
-    setBatchVideoState({ submitted: 0, total: targets.length })
-    let i = 0
-    for (const p of targets) {
-      try {
-        await generateVideo.mutateAsync({
-          panelId: p.id,
-          storyboardId: p.storyboardId ?? '',
-          panelIndex: p.panelIndex ?? 0,
-          videoModel,
-        })
-        setVideoInFlight((prev) => {
-          const next = new Set(prev)
-          next.add(p.id)
-          return next
-        })
-      } catch {
-        // surfaced per-card; continue the loop
-      }
-      i += 1
-      setBatchVideoState({ submitted: i, total: targets.length })
-      await new Promise((resolve) => setTimeout(resolve, 150))
+    if (!storyboardAppearance.canGenerate) {
+      dispatchBatchVideoRun({
+        type: 'quote_failed',
+        message: t('appearanceGate.blockedAction'),
+      })
+      return
     }
-    setTimeout(() => setBatchVideoState(null), 5000)
+    if (!currentEpisodeId) {
+      dispatchBatchVideoRun({
+        type: 'quote_failed',
+        message: t('errors.needEpisodeFirst'),
+      })
+      return
+    }
+    if (!projectVideoModel) {
+      dispatchBatchVideoRun({
+        type: 'quote_failed',
+        message: t('errors.noVideoModelPicked'),
+      })
+      return
+    }
+
+    batchVideoQuoteInFlightRef.current = true
+    dispatchBatchVideoRun({ type: 'quote_started' })
+    try {
+      const quote = await estimateBatchVideos.mutateAsync({
+        videoModel: projectVideoModel,
+        generationOptions: { resolution: projectVideoResolution },
+      })
+      dispatchBatchVideoRun({ type: 'quote_received', quote })
+    } catch (error) {
+      dispatchBatchVideoRun({
+        type: 'quote_failed',
+        message: batchVideoErrorMessage(error),
+      })
+    } finally {
+      batchVideoQuoteInFlightRef.current = false
+    }
+  }
+
+  /**
+   * Opens a server-priced batch run. The estimate creates no jobs. A
+   * separate confirmation submits the quoted fingerprint once, then the
+   * run sheet follows the settled per-panel response and durable task rows.
+   */
+  function handleBatchGenerateVideos() {
+    if (
+      batchVideoRunState.phase === 'quoted' ||
+      batchVideoRunState.phase === 'tracking' ||
+      batchVideoRunState.phase === 'outcome_unknown' ||
+      batchVideoRunState.phase === 'quoting' ||
+      batchVideoRunState.phase === 'submitting'
+    ) {
+      setBatchVideoOpen(true)
+      return
+    }
+    void requestBatchVideoQuote()
+  }
+
+  async function handleConfirmBatchVideo() {
+    const quote = batchVideoRunState.quote
+    if (
+      batchVideoSubmitInFlightRef.current ||
+      !quote ||
+      !canEdit ||
+      !batchVideoOnline ||
+      batchVideoEpisodeContext.episodeMismatch ||
+      batchVideoRunState.phase !== 'quoted'
+    ) {
+      return
+    }
+
+    batchVideoSubmitInFlightRef.current = true
+    dispatchBatchVideoRun({ type: 'submit_started' })
+    try {
+      const submission = await submitBatchVideos.mutateAsync({
+        batchRunId: quote.batchRunId,
+        videoModel: quote.videoModel,
+        generationOptions: { resolution: projectVideoResolution },
+        quoteFingerprint: quote.quoteFingerprint,
+      })
+      dispatchBatchVideoRun({ type: 'submit_received', submission })
+      await Promise.all([
+        batchVideoJobsQuery.refetch(),
+        activePanelImageTasks.refetch(),
+      ])
+    } catch (error) {
+      if (
+        classifyStoryboardBatchVideoSubmitError(error) === 'outcome_unknown'
+      ) {
+        dispatchBatchVideoRun({
+          type: 'submit_outcome_unknown',
+          message: batchVideoErrorMessage(error),
+        })
+        void batchVideoJobsQuery.refetch()
+      } else {
+        const status =
+          error && typeof error === 'object' && 'status' in error
+            ? (error as { status?: unknown }).status
+            : null
+        dispatchBatchVideoRun({
+          type: 'quote_failed',
+          message:
+            status === 409
+              ? t('batchVideoRun.quoteStale')
+              : batchVideoErrorMessage(error),
+        })
+      }
+    } finally {
+      batchVideoSubmitInFlightRef.current = false
+    }
+  }
+
+  function handleCloseBatchVideo() {
+    if (batchVideoRunState.phase === 'submitting') return
+    setBatchVideoOpen(false)
+    if (
+      batchVideoRunState.phase === 'quoted' ||
+      batchVideoRunState.phase === 'error' ||
+      (batchVideoRunState.phase === 'tracking' && batchVideoSummary.active === 0)
+    ) {
+      dispatchBatchVideoRun({ type: 'reset' })
+    }
   }
 
   async function handleSubmitMultiShot() {
+    if (!storyboardAppearance.canGenerate) return
     const videoModel = project?.novelPromotionData?.videoModel
     if (!videoModel) {
       setMultiShotState({
@@ -1098,14 +1611,29 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
       for (const [groupId, panels] of grouped.entries()) {
         const sorted = panels
           .slice()
-          .sort((a, b) => (a.multiShotGroupOrder ?? 0) - (b.multiShotGroupOrder ?? 0))
+          .sort(
+            (a, b) =>
+              (a.multiShotGroupOrder ?? 0) - (b.multiShotGroupOrder ?? 0),
+          )
         if (sorted.length < 1) continue
-        const ids = (sorted.length > 6 ? sorted.slice(0, 6) : sorted).map((p) => p.id)
-        tmp.push({ groupId, panelIds: ids })
+        const preparedPanels = prepareMultiShotPanels(sorted, videoFamily)
+        if (!preparedPanels.ok) {
+          setMultiShotState({
+            status: 'error',
+            message: t('errors.tooManyPanels', {
+              max: preparedPanels.maxPanels,
+            }),
+          })
+          return
+        }
+        tmp.push({ groupId, panelIds: preparedPanels.panelIds })
       }
       groups = tmp
     } else {
-      groups = chunk(eligible.map((p) => p.id), KLING_GROUP_SIZE).map((panelIds) => ({
+      groups = chunk(
+        eligible.map((p) => p.id),
+        resolveMultiShotPanelLimit(videoFamily),
+      ).map((panelIds) => ({
         groupId: null,
         panelIds,
       }))
@@ -1123,19 +1651,22 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
     const submittedTaskIds: Record<string, string> = {}
     for (const group of groups) {
       try {
-        const res = await fetch(`/api/novel-promotion/${projectId}/generate-multi-shot-video`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            panelIds: group.panelIds,
-            videoModel,
-            aspectRatio: projectVideoRatio,
-            resolution: projectVideoResolution,
-            sound: soundEnabled,
-            meta: { locale: 'zh-TW' },
-            async: true,
-          }),
-        })
+        const res = await fetch(
+          `/api/novel-promotion/${projectId}/generate-multi-shot-video`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              panelIds: group.panelIds,
+              videoModel,
+              aspectRatio: projectVideoRatio,
+              resolution: projectVideoResolution,
+              sound: soundEnabled,
+              meta: { locale: 'zh-TW' },
+              async: true,
+            }),
+          },
+        )
         if (!res.ok) {
           failures += 1
         } else if (group.groupId) {
@@ -1143,7 +1674,11 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
           // bindings as soon as the worker completes.
           try {
             const body = (await res.json()) as { taskId?: unknown }
-            if (body && typeof body.taskId === 'string' && body.taskId.length > 0) {
+            if (
+              body &&
+              typeof body.taskId === 'string' &&
+              body.taskId.length > 0
+            ) {
               submittedTaskIds[group.groupId] = body.taskId
             }
           } catch {
@@ -1163,23 +1698,168 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
     setMultiShotState({ status: 'done', sent, failures })
   }
 
+  const autoGroupError = autoGroup.error as (Error & {
+    payload?: { error?: { code?: string; message?: string } }
+  }) | null
+  const autoGroupErrorDisplay = autoGroupError
+    ? resolveErrorDisplay({
+        code: autoGroupError.payload?.error?.code ?? null,
+        message: autoGroupError.payload?.error?.message ?? autoGroupError.message,
+      })
+    : null
+  const autoGroupStatusLabel = (() => {
+    if (autoGroup.isError) {
+      return t('errors.splitFailedWithReason', {
+        reason: autoGroupErrorDisplay?.message ?? autoGroupError?.message ?? t('errors.unknown'),
+      })
+    }
+    switch (autoGroup.status) {
+      case 'submitting':
+        return t('status.autoGroupSubmitting')
+      case 'reconciling':
+        return t('status.autoGroupReconciling')
+      case 'queued':
+        return t('status.autoGroupQueued')
+      case 'running':
+        return t('status.autoGroupRunning', { progress: autoGroup.progress })
+      case 'completed':
+        return t('status.autoGroupCompleted')
+      case 'cancelled':
+        return t('status.autoGroupCancelled')
+      default:
+        return null
+    }
+  })()
+
+  const storyboardHeaderNode = (
+    <div className="border-b border-border-soft px-[var(--workspace-gutter)] py-5 sm:py-6">
+      <PageHeader
+        tone="dark"
+        eyebrow={t('page.kicker')}
+        title={t('page.title')}
+        description={t('page.subtitle')}
+        context={
+          (currentEpisode as { name?: string } | null)?.name ? (
+            <span>{(currentEpisode as { name?: string }).name}</span>
+          ) : undefined
+        }
+        actions={
+          <>
+            <StatusPill
+              label={t('workspace.panelCount', { count: allPanels.length })}
+              tone={allPanels.length > 0 ? 'active' : 'neutral'}
+            />
+            <StatusPill label={projectVideoRatio} tone="info" />
+          </>
+        }
+      />
+      <StoryboardEpisodeAppearanceNotice
+        gate={storyboardAppearance.gate}
+        onRetry={() => {
+          void episodeBindingsQuery.refetch()
+          void projectAssetsQuery.refetch()
+        }}
+      />
+      <AutoGroupTaskBanner
+        label={autoGroupStatusLabel}
+        status={autoGroup.status}
+        isError={autoGroup.isError}
+        isPending={autoGroup.isPending}
+        progress={autoGroup.progress}
+        canEdit={canEdit}
+        canCancel={autoGroup.canCancel}
+        isCancelling={autoGroup.isCancelling}
+        cancelLabel={t('buttons.cancel')}
+        cancellingLabel={t('status.autoGroupCancelling')}
+        onCancel={() => {
+          if (!canEdit || !autoGroup.canCancel) return
+          void autoGroup.cancelCurrent().catch(() => {
+            // The hook exposes cancellation failures through autoGroup.error.
+          })
+        }}
+      />
+    </div>
+  )
+
+  const manualPanelModalNode = (
+    <>
+      {manualPanelOpen && canEdit ? (
+        <V2ManualPanelModal
+          characters={characterRoster.map((character) => ({
+            id: character.id,
+            name: character.name ?? t('untitled.character'),
+          }))}
+          locations={locationRoster.map((location) => ({
+            id: location.id,
+            name: location.name ?? t('untitled.scene'),
+          }))}
+          onSubmit={handleManualPanelSubmit}
+          onClose={() => setManualPanelOpen(false)}
+          isSubmitting={manualPanelSubmitting}
+          submitError={manualPanelError}
+          initialDraft={manualPanelDraft}
+          onDraftChange={setManualPanelDraft}
+          draftLocked={manualPanelOutcomeUnknown}
+          contextHint={
+            (storyboardsData?.storyboards?.length ?? 0) === 0
+              ? t('manualPanel.firstGroupHint')
+              : undefined
+          }
+        />
+      ) : null}
+    </>
+  )
+
+  if (projectQuery.isError || storyboardsQuery.isError) {
+    const details = [projectQuery.error, storyboardsQuery.error]
+      .filter((error): error is Error => error instanceof Error)
+      .map((error) => error.message)
+      .join('\n')
+
+    return (
+      <MediaWorkspaceSurface>
+        {storyboardHeaderNode}
+        <StoryboardLoadErrorState
+          locale={locale}
+          title={t('states.loadErrorTitle')}
+          description={t('states.loadErrorDescription')}
+          details={details || undefined}
+          retryLabel={t('states.retry')}
+          onRetry={() => {
+            void projectQuery.refetch()
+            if (currentEpisodeId) void storyboardsQuery.refetch()
+          }}
+        />
+      </MediaWorkspaceSurface>
+    )
+  }
+
   if (projectQuery.isLoading || storyboardsQuery.isLoading) {
     return (
-      <div className="kuiper-workspace-page">
-        <div className="h-6 w-48 animate-pulse rounded-chip bg-overlay" aria-label={t('loading')} />
-      </div>
+      <MediaWorkspaceSurface>
+        {storyboardHeaderNode}
+        <div className="kuiper-workspace-page">
+          <div
+            className="h-6 w-48 animate-pulse rounded-chip bg-overlay"
+            aria-label={t('loading')}
+          />
+        </div>
+      </MediaWorkspaceSurface>
     )
   }
 
   if (!currentEpisodeId) {
     return (
-      <div className="kuiper-workspace-page">
-        <div className="kuiper-inspector p-12 text-center">
-          <p className="text-base text-text-secondary">
-            {t('page.noEpisodeHint')}
-          </p>
+      <MediaWorkspaceSurface>
+        {storyboardHeaderNode}
+        <div className="kuiper-workspace-page">
+          <div className="kuiper-inspector p-12 text-center">
+            <p className="text-base text-text-secondary">
+              {t('page.noEpisodeHint')}
+            </p>
+          </div>
         </div>
-      </div>
+      </MediaWorkspaceSurface>
     )
   }
 
@@ -1191,45 +1871,75 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
         ? t('buttons.reanalyze')
         : t('generateSplash.titleGeneric')
     return (
-      <div className="kuiper-workspace-page">
-        <div className="kuiper-inspector p-8 text-center">
-          <div className="mx-auto max-w-xl space-y-4">
-            <div className="font-heading text-xl font-semibold text-text-primary">
-              {currentEpisode ? t('generateSplash.titleForEpisode', { episode: currentEpisode.name }) : t('generateSplash.titleGeneric')}
-            </div>
-            <p className="font-serif-cn text-sm leading-relaxed text-text-secondary">
-              {t('generateSplash.subtitle')}
-            </p>
-            <button
-              type="button"
-              onClick={handleAnalyzeStoryboard}
-              disabled={submitDisabled}
-              className="kuiper-primary-button inline-flex min-h-11 items-center gap-2 rounded-input px-6 py-2.5 font-medium disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <AppIcon name="sparklesAlt" className="h-4 w-4" />
-              {ctaLabel}
-            </button>
-            {analyzeState.status === 'error' ? (
-              <p className="rounded-sm border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-300">
-                {t('generateSplash.submitErrorPrefix', { message: analyzeState.message })}
+      <MediaWorkspaceSurface>
+        {storyboardHeaderNode}
+        <div className="kuiper-workspace-page">
+          <div className="kuiper-inspector p-8 text-center">
+            <div className="mx-auto max-w-xl space-y-4">
+              <div className="font-heading text-xl font-semibold text-text-primary">
+                {currentEpisode
+                  ? t('generateSplash.titleForEpisode', {
+                      episode: currentEpisode.name,
+                    })
+                  : t('generateSplash.titleGeneric')}
+              </div>
+              <p className="font-serif-cn text-sm leading-relaxed text-text-secondary">
+                {t('generateSplash.subtitle')}
               </p>
-            ) : null}
-            {analyzeStatus === 'failed' && (analyzeErrorDisplay || analyzeError) ? (
-              <p
-                className="rounded-sm border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-300"
-                title={analyzeError ?? undefined}
+              <button
+                type="button"
+                onClick={handleAnalyzeStoryboard}
+                disabled={submitDisabled}
+                className="kuiper-primary-button inline-flex min-h-11 items-center gap-2 rounded-input px-6 py-2.5 font-medium disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {t('generateSplash.lastAnalyzeErrorPrefix', { message: analyzeErrorDisplay?.message ?? t('errors.lastAnalyzeFailedNoMsg') })}
-              </p>
-            ) : null}
-            {!currentEpisodeId ? (
-              <p className="font-mono text-[14px] tracking-wider text-text-tertiary">
-                {t('generateSplash.noEpisodes')}
-              </p>
-            ) : null}
+                <AppIcon name="sparklesAlt" className="h-4 w-4" />
+                {ctaLabel}
+              </button>
+              <div className="flex flex-col items-center gap-2 sm:flex-row sm:justify-center">
+                <button
+                  type="button"
+                  onClick={() => handleManualPanelOpen()}
+                  disabled={!canEdit || !currentEpisodeId || manualPanelSubmitting}
+                  title={viewerTip ?? t('manualPanel.openTitle')}
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-input border border-primary-500/40 bg-primary-500/5 px-6 py-2.5 font-medium text-primary-300 transition-colors hover:border-primary-400 hover:bg-primary-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <AppIcon name="plus" className="h-4 w-4" />
+                  {t('manualPanel.emptyAction')}
+                </button>
+                <span className="text-xs text-text-tertiary">
+                  {t('manualPanel.nonAiNotice')}
+                </span>
+              </div>
+              {analyzeState.status === 'error' ? (
+                <p className="rounded-sm border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-300">
+                  {t('generateSplash.submitErrorPrefix', {
+                    message: analyzeState.message,
+                  })}
+                </p>
+              ) : null}
+              {analyzeStatus === 'failed' &&
+              (analyzeErrorDisplay || analyzeError) ? (
+                <p
+                  className="rounded-sm border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-300"
+                  title={analyzeError ?? undefined}
+                >
+                  {t('generateSplash.lastAnalyzeErrorPrefix', {
+                    message:
+                      analyzeErrorDisplay?.message ??
+                      t('errors.lastAnalyzeFailedNoMsg'),
+                  })}
+                </p>
+              ) : null}
+              {!currentEpisodeId ? (
+                <p className="font-mono text-[14px] tracking-wider text-text-tertiary">
+                  {t('generateSplash.noEpisodes')}
+                </p>
+              ) : null}
+            </div>
           </div>
         </div>
-      </div>
+        {manualPanelModalNode}
+      </MediaWorkspaceSurface>
     )
   }
 
@@ -1237,43 +1947,82 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
   // their toolbar so the user can flip between Gallery / Timeline /
   // Groups without leaving the page.
   const layoutToggleNode = (
-    <div className="kuiper-segmented-control items-center overflow-x-auto">
-      <button
-        type="button"
-        onClick={() => setLayoutMode('gallery')}
-        title={t('layouts.galleryTitle')}
-        className={`min-h-9 rounded-input px-3 py-1.5 text-sm transition-colors ${
-          layoutMode === 'gallery'
-            ? 'bg-primary-500/15 text-primary-300'
-            : 'text-text-secondary hover:bg-overlay hover:text-text-primary'
-        }`}
-      >
-        {t('layouts.gallery')}
-      </button>
-      <button
-        type="button"
-        onClick={() => setLayoutMode('timeline')}
-        title={t('layouts.timelineTitle')}
-        className={`min-h-9 rounded-input px-3 py-1.5 text-sm transition-colors ${
-          layoutMode === 'timeline'
-            ? 'bg-primary-500/15 text-primary-300'
-            : 'text-text-secondary hover:bg-overlay hover:text-text-primary'
-        }`}
-      >
-        {t('layouts.timeline')}
-      </button>
-      <button
-        type="button"
-        onClick={() => setLayoutMode('groups')}
-        title={t('layouts.multiShotTitle')}
-        className={`min-h-9 rounded-input px-3 py-1.5 text-sm transition-colors ${
-          layoutMode === 'groups'
-            ? 'bg-primary-500/15 text-primary-300'
-            : 'text-text-secondary hover:bg-overlay hover:text-text-primary'
-        }`}
-      >
-        {t('layouts.multiShot')}
-      </button>
+    <div className="flex max-w-full flex-col gap-2">
+      <div className="flex max-w-full flex-col-reverse items-stretch gap-2 sm:flex-row sm:items-center">
+        <button
+          type="button"
+          onClick={() => handleManualPanelOpen()}
+          disabled={!canEdit || !currentEpisodeId || manualPanelSubmitting}
+          title={viewerTip ?? t('manualPanel.openTitle')}
+          className="inline-flex min-h-11 shrink-0 items-center justify-center gap-1.5 rounded-input border border-primary-500/40 bg-primary-500/5 px-3 py-1.5 text-sm font-semibold text-primary-300 transition-colors hover:border-primary-400 hover:bg-primary-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <AppIcon name="plus" className="h-3.5 w-3.5" />
+          {t('manualPanel.open')}
+        </button>
+        <div className="kuiper-segmented-control items-center overflow-x-auto">
+        <button
+          type="button"
+          onClick={() => setLayoutMode('gallery')}
+          title={t('layouts.galleryTitle')}
+          className={`min-h-11 rounded-input px-3 py-1.5 text-sm transition-colors ${
+            layoutMode === 'gallery'
+              ? 'bg-primary-500/15 text-primary-300'
+              : 'text-text-secondary hover:bg-overlay hover:text-text-primary'
+          }`}
+        >
+          {t('layouts.gallery')}
+        </button>
+        <button
+          type="button"
+          onClick={() => setLayoutMode('timeline')}
+          title={t('layouts.timelineTitle')}
+          className={`min-h-11 rounded-input px-3 py-1.5 text-sm transition-colors ${
+            layoutMode === 'timeline'
+              ? 'bg-primary-500/15 text-primary-300'
+              : 'text-text-secondary hover:bg-overlay hover:text-text-primary'
+          }`}
+        >
+          {t('layouts.timeline')}
+        </button>
+        <button
+          type="button"
+          onClick={() => setLayoutMode('groups')}
+          title={t('layouts.multiShotTitle')}
+          className={`min-h-11 rounded-input px-3 py-1.5 text-sm transition-colors ${
+            layoutMode === 'groups'
+              ? 'bg-primary-500/15 text-primary-300'
+              : 'text-text-secondary hover:bg-overlay hover:text-text-primary'
+          }`}
+        >
+          {t('layouts.multiShot')}
+        </button>
+        <Link
+          href={buildHref(`/${locale}/v2/workspace/${projectId}/shot-builder`)}
+          className="inline-flex min-h-11 items-center gap-1.5 rounded-input px-3 py-1.5 text-sm font-semibold text-text-secondary transition-colors hover:bg-overlay hover:text-text-primary"
+        >
+          <AppIcon name="clapperboard" className="h-3.5 w-3.5 text-primary-300" />
+          {t('workspace.openShotBuilder')}
+        </Link>
+        </div>
+      </div>
+      <StoryboardShotEditControls
+        canEdit={canEdit}
+        hasSelection={Boolean(selected)}
+        selectedNumber={selectedIndex >= 0 ? selectedIndex + 1 : null}
+        canMoveEarlier={selectedStoryboardIndex > 0}
+        canMoveLater={
+          selectedStoryboardIndex >= 0
+          && selectedStoryboardIndex < selectedStoryboardPanels.length - 1
+        }
+        isBusy={shotEditBusy || manualPanelSubmitting}
+        error={shotEditError}
+        viewerTip={viewerTip}
+        onInsertBefore={() => handleManualPanelOpen('before')}
+        onInsertAfter={() => handleManualPanelOpen('after')}
+        onMoveEarlier={() => void handleMoveSelectedPanel('earlier')}
+        onMoveLater={() => void handleMoveSelectedPanel('later')}
+        onDelete={() => void handleDeleteSelectedPanel()}
+      />
     </div>
   )
 
@@ -1304,20 +2053,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
   // groups) can mount the same overlay tree.
   const globalOverlaysNode = (
     <>
-      {manualPanelOpen ? (
-        <V2ManualPanelModal
-          characters={characterRoster.map((c) => ({ id: c.id, name: c.name ?? t('untitled.character') }))}
-          locations={locationRoster.map((l) => ({ id: l.id, name: l.name ?? t('untitled.scene') }))}
-          onSubmit={handleManualPanelSubmit}
-          onClose={() => setManualPanelOpen(false)}
-          isSubmitting={manualPanelSubmitting}
-          contextHint={
-            (storyboardsData?.storyboards?.length ?? 0) === 0
-              ? t('header.noGroupsHint')
-              : undefined
-          }
-        />
-      ) : null}
+      {manualPanelModalNode}
 
       {currentEpisodeId ? (
         <StaleStoryboardCleanupModal
@@ -1332,6 +2068,26 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
           }}
         />
       ) : null}
+
+      <StoryboardBatchVideoRunSheet
+        open={batchVideoOpen}
+        state={batchVideoRunState}
+        jobs={batchVideoJobs}
+        locale={locale}
+        canEdit={canEdit}
+        online={batchVideoOnline}
+        jobsLoadState={batchVideoJobsLoadState}
+        episodeMismatch={batchVideoEpisodeContext.episodeMismatch}
+        onClose={handleCloseBatchVideo}
+        onConfirm={() => void handleConfirmBatchVideo()}
+        onRequestQuote={() => void requestBatchVideoQuote()}
+        onRefreshJobs={() => void batchVideoJobsQuery.refetch()}
+        onCancelJob={async (taskId) => {
+          const result = await cancelBatchVideoJob.mutateAsync(taskId)
+          await batchVideoJobsQuery.refetch()
+          return result
+        }}
+      />
     </>
   )
 
@@ -1342,44 +2098,53 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
   // unchanged.
   if (layoutMode === 'groups') {
     return (
-      <V2StoryboardGroupsView
-        projectId={projectId}
-        currentEpisodeId={currentEpisodeId}
-        episodeNumber={(currentEpisode as { episodeNumber?: number } | null)?.episodeNumber ?? null}
-        projectVideoModel={projectVideoModel}
-        projectVideoRatio={projectVideoRatio}
-        projectVideoResolution={projectVideoResolution}
-        projectVisualStyleId={project?.novelPromotionData?.visualStyleId ?? null}
-        targetDurationSec={project?.novelPromotionData?.targetDuration ?? null}
-        canMultiShot={canMultiShot}
-        videoFamily={videoFamily}
-        canEdit={canEdit}
-        viewerTip={viewerTip}
-        globalOverlaysNode={globalOverlaysNode}
-        layoutToggleNode={layoutToggleNode}
-        videoModelPickerNode={videoModelPickerNode}
-        manualPanelSubmitting={manualPanelSubmitting}
-        onManualPanelOpen={() => setManualPanelOpen(true)}
-        analyzeBusy={analyzeBusy}
-        analyzeBusyLabel={analyzeBusyLabel}
-        onAnalyzeStoryboard={handleAnalyzeStoryboard}
-        onStaleCleanupOpen={() => setStaleCleanupOpen(true)}
-        autoGroup={autoGroup}
-        multiShotState={multiShotState}
-        onSubmitMultiShot={handleSubmitMultiShot}
-        allPanels={allPanels}
-        orderedGroupIds={orderedGroupIds}
-        groupedPanelCount={groupedPanelCount}
-        hasGroups={hasGroups}
-        taskByGroup={taskByGroup}
-        setTaskByGroup={setTaskByGroup}
-        referenceVideoByStoryboardId={referenceVideoByStoryboardId}
-        updatePanelText={updatePanelText}
-        characterRoster={characterRoster}
-        locationRoster={locationRoster}
-        episodeBindings={episodeBindings}
-        soundEnabled={soundEnabled}
-      />
+      <MediaWorkspaceSurface>
+        {storyboardHeaderNode}
+        <V2StoryboardGroupsView
+          projectId={projectId}
+          currentEpisodeId={currentEpisodeId}
+          episodeNumber={
+            (currentEpisode as { episodeNumber?: number } | null)
+              ?.episodeNumber ?? null
+          }
+          projectVideoModel={projectVideoModel}
+          projectVideoRatio={projectVideoRatio}
+          projectVideoResolution={projectVideoResolution}
+          projectVisualStyleId={
+            project?.novelPromotionData?.visualStyleId ?? null
+          }
+          targetDurationSec={
+            project?.novelPromotionData?.targetDuration ?? null
+          }
+          canMultiShot={canMultiShot}
+          videoFamily={videoFamily}
+          canEdit={canEdit}
+          viewerTip={viewerTip}
+          globalOverlaysNode={globalOverlaysNode}
+          layoutToggleNode={layoutToggleNode}
+          videoModelPickerNode={videoModelPickerNode}
+          analyzeBusy={analyzeBusy}
+          analyzeBusyLabel={analyzeBusyLabel}
+          onAnalyzeStoryboard={handleAnalyzeStoryboard}
+          onStaleCleanupOpen={() => setStaleCleanupOpen(true)}
+          autoGroup={autoGroup}
+          multiShotState={multiShotState}
+          onSubmitMultiShot={handleSubmitMultiShot}
+          allPanels={allPanels}
+          orderedGroupIds={orderedGroupIds}
+          groupedPanelCount={groupedPanelCount}
+          hasGroups={hasGroups}
+          taskByGroup={taskByGroup}
+          setTaskByGroup={setTaskByGroup}
+          referenceVideoByStoryboardId={referenceVideoByStoryboardId}
+          updatePanelText={updatePanelText}
+          characterRoster={storyboardAppearance.characterRoster}
+          locationRoster={locationRoster}
+          appearanceBindingState={episodeAppearanceBindingState}
+          appearanceGenerationBlocked={!storyboardAppearance.canGenerate}
+          soundEnabled={soundEnabled}
+        />
+      </MediaWorkspaceSurface>
     )
   }
 
@@ -1390,57 +2155,61 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
   // unchanged.
   if (layoutMode === 'gallery') {
     return (
-      <V2StoryboardGalleryView
-        projectId={projectId}
-        currentEpisodeId={currentEpisodeId}
-        projectVideoRatio={projectVideoRatio}
-        aspectClass={aspectClass}
-        canMultiShot={canMultiShot}
-        videoFamily={videoFamily}
-        canEdit={canEdit}
-        globalOverlaysNode={globalOverlaysNode}
-        layoutToggleNode={layoutToggleNode}
-        videoModelPickerNode={videoModelPickerNode}
-        analyzeBusy={analyzeBusy}
-        analyzeBusyLabel={analyzeBusyLabel}
-        analyzeBannerLabel={analyzeBannerLabel}
-        analyzePhase={analyzePhase}
-        analyzeProgress={analyzeProgress}
-        onAnalyzeStoryboard={handleAnalyzeStoryboard}
-        onStaleCleanupOpen={() => setStaleCleanupOpen(true)}
-        autoGroup={autoGroup}
-        onAutoGroup={handleAutoGroup}
-        multiShotState={multiShotState}
-        onSubmitMultiShot={handleSubmitMultiShot}
-        allPanels={allPanels}
-        hasGroups={hasGroups}
-        orderedGroupIds={orderedGroupIds}
-        groupedPanelCount={groupedPanelCount}
-        selected={selected}
-        setSelectedId={setSelectedId}
-        selectedGroupTaskId={selectedGroupTaskId}
-        selectedGroupLabel={selectedGroupLabel}
-        imageInFlight={imageInFlight}
-        setImageInFlight={setImageInFlight}
-        videoInFlight={videoInFlight}
-        serverInflightPanelImageIds={serverInflightPanelImageIds}
-        serverInflightPanelVideoIds={serverInflightPanelVideoIds}
-        isCurrentPanelImageInFlight={isCurrentPanelImageInFlight}
-        isCurrentPanelVideoInFlight={isCurrentPanelVideoInFlight}
-        regenPanel={regenPanel}
-        generateVideo={generateVideo}
-        updatePanelText={updatePanelText}
-        activePanelImageTasks={activePanelImageTasks}
-        onGenerateVideo={handleGenerateVideo}
-        descDraft={descDraft}
-        setDescDraft={setDescDraft}
-        descChanged={descChanged}
-        onSaveDescription={handleSaveDescription}
-        dialogueDraft={dialogueDraft}
-        setDialogueDraft={setDialogueDraft}
-        dialogueChanged={dialogueChanged}
-        onSaveDialogue={handleSaveDialogue}
-      />
+      <MediaWorkspaceSurface>
+        {storyboardHeaderNode}
+        <V2StoryboardGalleryView
+          projectId={projectId}
+          currentEpisodeId={currentEpisodeId}
+          projectVideoRatio={projectVideoRatio}
+          aspectClass={aspectClass}
+          canMultiShot={canMultiShot}
+          videoFamily={videoFamily}
+          canEdit={canEdit}
+          appearanceGenerationBlocked={!storyboardAppearance.canGenerate}
+          globalOverlaysNode={globalOverlaysNode}
+          layoutToggleNode={layoutToggleNode}
+          videoModelPickerNode={videoModelPickerNode}
+          analyzeBusy={analyzeBusy}
+          analyzeBusyLabel={analyzeBusyLabel}
+          analyzeBannerLabel={analyzeBannerLabel}
+          analyzePhase={analyzePhase}
+          analyzeProgress={analyzeProgress}
+          onAnalyzeStoryboard={handleAnalyzeStoryboard}
+          onStaleCleanupOpen={() => setStaleCleanupOpen(true)}
+          autoGroup={autoGroup}
+          onAutoGroup={handleAutoGroup}
+          multiShotState={multiShotState}
+          onSubmitMultiShot={handleSubmitMultiShot}
+          allPanels={allPanels}
+          hasGroups={hasGroups}
+          orderedGroupIds={orderedGroupIds}
+          groupedPanelCount={groupedPanelCount}
+          selected={selected}
+          setSelectedId={setSelectedId}
+          selectedGroupTaskId={selectedGroupTaskId}
+          selectedGroupLabel={selectedGroupLabel}
+          imageInFlight={imageInFlight}
+          setImageInFlight={setImageInFlight}
+          videoInFlight={videoInFlight}
+          serverInflightPanelImageIds={serverInflightPanelImageIds}
+          serverInflightPanelVideoIds={serverInflightPanelVideoIds}
+          isCurrentPanelImageInFlight={isCurrentPanelImageInFlight}
+          isCurrentPanelVideoInFlight={isCurrentPanelVideoInFlight}
+          regenPanel={regenPanel}
+          generateVideo={generateVideo}
+          updatePanelText={updatePanelText}
+          activePanelImageTasks={activePanelImageTasks}
+          onGenerateVideo={handleGenerateVideo}
+          descDraft={descDraft}
+          setDescDraft={setDescDraft}
+          descChanged={descChanged}
+          onSaveDescription={handleSaveDescription}
+          dialogueDraft={dialogueDraft}
+          setDialogueDraft={setDialogueDraft}
+          dialogueChanged={dialogueChanged}
+          onSaveDialogue={handleSaveDialogue}
+        />
+      </MediaWorkspaceSurface>
     )
   }
 
@@ -1451,75 +2220,79 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
   // parent (per reviewer Q1 qualify) and flow down. Pure relocation;
   // behavior unchanged.
   return (
-    <V2StoryboardTimelineView
-      projectId={projectId}
-      project={project}
-      currentEpisodeId={currentEpisodeId}
-      currentEpisode={currentEpisode as { episodeNumber?: number } | null}
-      projectVideoRatio={projectVideoRatio}
-      isPortraitRatio={isPortraitRatio}
-      thumbHeightClass={thumbHeightClass}
-      canMultiShot={canMultiShot}
-      videoFamily={videoFamily}
-      canEdit={canEdit}
-      globalOverlaysNode={globalOverlaysNode}
-      layoutToggleNode={layoutToggleNode}
-      videoModelPickerNode={videoModelPickerNode}
-      allPanels={allPanels}
-      orderedGroupIds={orderedGroupIds}
-      hasGroups={hasGroups}
-      groupedPanelCount={groupedPanelCount}
-      selected={selected}
-      selectedId={selectedId}
-      selectedIndex={selectedIndex}
-      setSelectedId={setSelectedId}
-      selectedGroupTaskId={selectedGroupTaskId}
-      selectedGroupLabel={selectedGroupLabel}
-      selectedMediaDisplayMode={selectedMediaDisplayMode}
-      setMediaDisplayOverride={setMediaDisplayOverride}
-      analyzeBusy={analyzeBusy}
-      analyzeBusyLabel={analyzeBusyLabel}
-      analyzeBannerLabel={analyzeBannerLabel}
-      analyzePhase={analyzePhase}
-      analyzeProgress={analyzeProgress}
-      analyzeState={analyzeState}
-      onAnalyzeStoryboard={handleAnalyzeStoryboard}
-      onStaleCleanupOpen={() => setStaleCleanupOpen(true)}
-      autoGroup={autoGroup}
-      onAutoGroup={handleAutoGroup}
-      multiShotState={multiShotState}
-      onSubmitMultiShot={handleSubmitMultiShot}
-      batchImageState={batchImageState}
-      batchVideoState={batchVideoState}
-      onBatchGenerateImages={handleBatchGenerateImages}
-      onBatchGenerateVideos={handleBatchGenerateVideos}
-      imageInFlight={imageInFlight}
-      setImageInFlight={setImageInFlight}
-      videoInFlight={videoInFlight}
-      serverInflightPanelImageIds={serverInflightPanelImageIds}
-      serverInflightPanelVideoIds={serverInflightPanelVideoIds}
-      failedPanelImageIds={failedPanelImageIds}
-      failedPanelVideoIds={failedPanelVideoIds}
-      isCurrentPanelImageInFlight={isCurrentPanelImageInFlight}
-      isCurrentPanelVideoInFlight={isCurrentPanelVideoInFlight}
-      regenPanel={regenPanel}
-      generateVideo={generateVideo}
-      updatePanelText={updatePanelText}
-      updatePanel={updatePanel}
-      activePanelImageTasks={activePanelImageTasks}
-      onGenerateVideo={handleGenerateVideo}
-      descDraft={descDraft}
-      setDescDraft={setDescDraft}
-      descChanged={descChanged}
-      onSaveDescription={handleSaveDescription}
-      dialogueDraft={dialogueDraft}
-      setDialogueDraft={setDialogueDraft}
-      dialogueChanged={dialogueChanged}
-      onSaveDialogue={handleSaveDialogue}
-      characterRoster={characterRoster}
-      episodeBindings={episodeBindings}
-      zoomImageUrl={zoomImageUrl}
-      setZoomImageUrl={setZoomImageUrl}
-    />
+    <MediaWorkspaceSurface>
+      {storyboardHeaderNode}
+      <V2StoryboardTimelineView
+        projectId={projectId}
+        project={project}
+        currentEpisodeId={currentEpisodeId}
+        currentEpisode={currentEpisode as { episodeNumber?: number } | null}
+        projectVideoRatio={projectVideoRatio}
+        isPortraitRatio={isPortraitRatio}
+        thumbHeightClass={thumbHeightClass}
+        canMultiShot={canMultiShot}
+        videoFamily={videoFamily}
+        canEdit={canEdit}
+        globalOverlaysNode={globalOverlaysNode}
+        layoutToggleNode={layoutToggleNode}
+        videoModelPickerNode={videoModelPickerNode}
+        allPanels={allPanels}
+        orderedGroupIds={orderedGroupIds}
+        hasGroups={hasGroups}
+        groupedPanelCount={groupedPanelCount}
+        selected={selected}
+        selectedId={selectedId}
+        selectedIndex={selectedIndex}
+        setSelectedId={setSelectedId}
+        selectedGroupTaskId={selectedGroupTaskId}
+        selectedGroupLabel={selectedGroupLabel}
+        selectedMediaDisplayMode={selectedMediaDisplayMode}
+        setMediaDisplayOverride={setMediaDisplayOverride}
+        analyzeBusy={analyzeBusy}
+        analyzeBusyLabel={analyzeBusyLabel}
+        analyzeBannerLabel={analyzeBannerLabel}
+        analyzePhase={analyzePhase}
+        analyzeProgress={analyzeProgress}
+        analyzeState={analyzeState}
+        onAnalyzeStoryboard={handleAnalyzeStoryboard}
+        onStaleCleanupOpen={() => setStaleCleanupOpen(true)}
+        autoGroup={autoGroup}
+        onAutoGroup={handleAutoGroup}
+        multiShotState={multiShotState}
+        onSubmitMultiShot={handleSubmitMultiShot}
+        batchImageState={batchImageState}
+        batchVideoMode={batchVideoToolbarMode}
+        onBatchGenerateImages={handleBatchGenerateImages}
+        onBatchGenerateVideos={handleBatchGenerateVideos}
+        imageInFlight={imageInFlight}
+        setImageInFlight={setImageInFlight}
+        videoInFlight={videoInFlight}
+        serverInflightPanelImageIds={serverInflightPanelImageIds}
+        serverInflightPanelVideoIds={serverInflightPanelVideoIds}
+        failedPanelImageIds={failedPanelImageIds}
+        failedPanelVideoIds={failedPanelVideoIds}
+        isCurrentPanelImageInFlight={isCurrentPanelImageInFlight}
+        isCurrentPanelVideoInFlight={isCurrentPanelVideoInFlight}
+        regenPanel={regenPanel}
+        generateVideo={generateVideo}
+        updatePanelText={updatePanelText}
+        updatePanel={updatePanel}
+        activePanelImageTasks={activePanelImageTasks}
+        onGenerateVideo={handleGenerateVideo}
+        descDraft={descDraft}
+        setDescDraft={setDescDraft}
+        descChanged={descChanged}
+        onSaveDescription={handleSaveDescription}
+        dialogueDraft={dialogueDraft}
+        setDialogueDraft={setDialogueDraft}
+        dialogueChanged={dialogueChanged}
+        onSaveDialogue={handleSaveDialogue}
+        characterRoster={storyboardAppearance.characterRoster}
+        appearanceBindingState={episodeAppearanceBindingState}
+        appearanceGenerationBlocked={!storyboardAppearance.canGenerate}
+        zoomImageUrl={zoomImageUrl}
+        setZoomImageUrl={setZoomImageUrl}
+      />
+    </MediaWorkspaceSurface>
   )
 }

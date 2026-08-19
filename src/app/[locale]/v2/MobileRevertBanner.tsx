@@ -54,14 +54,14 @@ export function MobileRevertBanner() {
   if (!shouldShow) return null
 
   return (
-    <div className="sticky top-0 z-[60] flex items-center gap-2 border-b border-amber-900/30 bg-stone-950/95 px-3 py-2 backdrop-blur-sm">
-      <div className="flex-1 font-mono text-[11px] leading-tight tracking-wider text-stone-400">
+    <div className="sticky top-0 z-[60] flex items-center gap-3 border-b border-[var(--production-border)] bg-[color-mix(in_srgb,var(--studio-chrome)_96%,transparent)] px-3 py-2 backdrop-blur-sm">
+      <div className="flex-1 font-mono text-[11px] leading-tight tracking-wider text-[var(--production-ink-muted)]">
         手機螢幕偵測 · 桌面版可能不易使用
       </div>
       <button
         type="button"
         onClick={handleSwitchToMobile}
-        className="rounded-sm border border-amber-500/40 bg-amber-500/10 px-3 py-1 font-serif-cn text-xs text-amber-300 transition-colors hover:bg-amber-500/20"
+        className="min-h-11 shrink-0 rounded-[10px] bg-[var(--production-blue)] px-4 py-2 font-serif-cn text-xs font-semibold text-white transition-colors hover:bg-[var(--production-blue-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--production-focus)]"
       >
         回到手機版
       </button>

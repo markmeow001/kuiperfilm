@@ -8,7 +8,7 @@
  *
  * This is the FIRST component of the v2 component library. It validates
  * the tokens-v2.css system end-to-end:
- *   - color: primary-500 base + primary-400 hover + primary-600 pressed
+ *   - color: production blue action + cyan keyboard focus
  *   - radius: r-input (8px)
  *   - motion: ease-out + d-hover (120ms) for color, d-state (200ms) for
  *     pressed state ring
@@ -44,31 +44,30 @@ function variantClass(variant: Variant): string {
     case 'primary':
       return [
         // base
-        'bg-primary-500 text-neutral-950',
+        'bg-[var(--production-blue)] text-white',
         // hover — 120ms color shift to 400
-        'hover:bg-primary-400',
+        'hover:bg-[var(--production-blue-hover)]',
         // active — pressed darkens to 600
-        'active:bg-primary-600',
-        // focus ring uses accent-500 violet so primary cues stay gold-only
-        'focus-visible:ring-2 focus-visible:ring-accent-500/60 focus-visible:ring-offset-2 focus-visible:ring-offset-canvas',
+        'active:bg-[color-mix(in_srgb,var(--production-blue)_84%,black)]',
+        'focus-visible:ring-2 focus-visible:ring-[rgba(85,175,192,0.55)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--darkroom-canvas)]',
       ].join(' ')
     case 'secondary':
       // raised surface + soft border. Matches §3.5 elevation: lift via
       // surface, not shadow.
       return [
-        'bg-raised text-text-primary border border-border-soft',
-        'hover:bg-overlay hover:border-border-strong',
-        'active:bg-raised active:border-border-strong',
-        'focus-visible:ring-2 focus-visible:ring-accent-500/60 focus-visible:ring-offset-2 focus-visible:ring-offset-canvas',
+        'border border-[var(--darkroom-border)] bg-[var(--darkroom-surface)] text-[var(--darkroom-text)]',
+        'hover:bg-[var(--darkroom-raised)] hover:border-[var(--process-cyan)]/45',
+        'active:bg-[var(--darkroom-surface)] active:border-[var(--darkroom-border)]',
+        'focus-visible:ring-2 focus-visible:ring-[rgba(85,175,192,0.55)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--darkroom-canvas)]',
       ].join(' ')
     case 'ghost':
       // transparent. Hover lifts into overlay surface. For toolbars,
       // chip rails, inline actions.
       return [
-        'bg-transparent text-text-secondary',
-        'hover:bg-overlay hover:text-text-primary',
-        'active:bg-overlay',
-        'focus-visible:ring-2 focus-visible:ring-accent-500/60 focus-visible:ring-offset-2 focus-visible:ring-offset-canvas',
+        'bg-transparent text-[var(--darkroom-muted)]',
+        'hover:bg-[var(--darkroom-raised)] hover:text-[var(--darkroom-text)]',
+        'active:bg-[var(--darkroom-raised)]',
+        'focus-visible:ring-2 focus-visible:ring-[rgba(85,175,192,0.55)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--darkroom-canvas)]',
       ].join(' ')
     case 'danger':
       // semantic error variant for destructive confirm flows.
@@ -76,7 +75,7 @@ function variantClass(variant: Variant): string {
         'bg-error text-neutral-50',
         'hover:bg-error/90',
         'active:bg-error/80',
-        'focus-visible:ring-2 focus-visible:ring-error/60 focus-visible:ring-offset-2 focus-visible:ring-offset-canvas',
+        'focus-visible:ring-2 focus-visible:ring-error/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--darkroom-canvas)]',
       ].join(' ')
   }
 }

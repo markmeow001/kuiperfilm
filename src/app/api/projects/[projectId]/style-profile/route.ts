@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { isErrorResponse, requireProjectAuthLight } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
+import { isVoiceLineTaskOutputStorageKey } from '@/lib/voice/voice-line-output-key'
 
 const STYLE_PROMPT_MAX_CHARS = 8000
 const REFERENCE_IMAGES_MAX_COUNT = 16
@@ -42,6 +43,7 @@ type StyleProfileBody = z.infer<typeof styleProfileBodySchema>
 
 interface MediaObjectIdRow {
   id: string
+  storageKey: string
 }
 
 /**
@@ -61,7 +63,7 @@ async function assertReferenceImagesOwned(
       id: { in: mediaIds },
       uploadedByUserId: userId,
     },
-    select: { id: true },
+    select: { id: true, storageKey: true },
   })) as unknown as MediaObjectIdRow[]
 
   if (rows.length !== mediaIds.length) {
@@ -70,6 +72,12 @@ async function assertReferenceImagesOwned(
       requestedCount: mediaIds.length,
       accessibleCount: rows.length,
       userId,
+    })
+  }
+
+  if (rows.some((row) => isVoiceLineTaskOutputStorageKey(row.storageKey))) {
+    throw new ApiError('INVALID_PARAMS', {
+      code: 'VOICE_LINE_TASK_OUTPUT_REFERENCE_FORBIDDEN',
     })
   }
 }

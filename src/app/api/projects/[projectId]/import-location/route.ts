@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireUserAuth, isErrorResponse } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
+import { assertNoVoiceLineTaskOutputReferences } from '@/lib/media/recursive-write-policy'
+import { assertMediaObjectIdsDoNotReferenceVoiceLineTaskOutputs } from '@/lib/media/write-policy'
 
 interface ImportLocationBody {
   globalLocationId?: unknown
@@ -56,6 +58,10 @@ export const POST = apiHandler(async (
 
   type GLocationImage = (typeof globalLocation.images)[number]
   const imagesToClone: GLocationImage[] = includeImages ? globalLocation.images : []
+  await assertNoVoiceLineTaskOutputReferences(imagesToClone)
+  await assertMediaObjectIdsDoNotReferenceVoiceLineTaskOutputs(
+    imagesToClone.flatMap((image) => [image.imageMediaId]),
+  )
 
   const created = await prisma.$transaction(async (tx) => {
     const location = await tx.novelPromotionLocation.create({

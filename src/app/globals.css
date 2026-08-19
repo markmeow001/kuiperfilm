@@ -32,11 +32,13 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-  /* UI/UX Pro Max typography */
-  --font-heading: var(--font-heading);
-  --font-body: var(--font-body);
+  --font-sans: var(--font-kuiper-sans);
+  --font-serif: var(--font-kuiper-sans);
+  --font-mono: var(--font-kuiper-sans);
+  --font-heading: var(--font-kuiper-sans);
+  --font-body: var(--font-kuiper-sans);
+  --font-code: var(--font-geist-mono);
+  --font-data: var(--font-geist-mono);
 
   /* Global readability uplift. Tailwind's default scale was too small for
    * a CJK-heavy production UI, especially on 1440p/4K displays. Keeping the
@@ -67,11 +69,20 @@
   --color-raised: var(--surface-raised);
   --color-overlay: var(--surface-overlay);
   --color-inset: var(--surface-inset);
+  /* Compatibility aliases used by migrated media workspaces. Keep both
+   * names resolving to the same semantic tokens so Tailwind emits the
+   * utilities instead of silently dropping their background/border. */
+  --color-surface-raised: var(--surface-raised);
+  --color-surface-overlay: var(--surface-overlay);
+  --color-surface-inset: var(--surface-inset);
   --color-text-primary: var(--text-primary);
   --color-text-secondary: var(--text-secondary);
   --color-text-tertiary: var(--text-tertiary);
   --color-border-soft: var(--border-soft);
   --color-border-strong: var(--border-strong);
+  --color-border-primary: var(--border-primary);
+  --color-primary-100: var(--primary-100);
+  --color-primary-200: var(--primary-200);
   --color-primary-300: var(--primary-300);
   --color-primary-400: var(--primary-400);
   --color-primary-500: var(--primary-500);
@@ -86,6 +97,14 @@
   --color-warning: var(--warning);
   --color-error: var(--error);
   --color-info: var(--info);
+  --color-studio-chrome: var(--studio-chrome);
+  --color-darkroom-canvas: var(--darkroom-canvas);
+  --color-darkroom-surface: var(--darkroom-surface);
+  --color-darkroom-raised: var(--darkroom-raised);
+  --color-darkroom-border: var(--darkroom-border);
+  --color-darkroom-text: var(--darkroom-text);
+  --color-darkroom-muted: var(--darkroom-muted);
+  --color-process-cyan: var(--process-cyan);
 
   --radius-chip:  var(--r-chip);
   --radius-input: var(--r-input);
@@ -112,10 +131,53 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  font-family: var(--font-kuiper-sans), 'Noto Sans TC', 'PingFang TC', 'Heiti TC', 'Microsoft JhengHei', sans-serif;
   font-size: 17px;
   line-height: var(--lh-body);
   text-rendering: optimizeLegibility;
+}
+
+code,
+kbd,
+pre,
+samp {
+  font-family: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+/* Tailwind's generated font utilities can retain the font values captured
+ * when a route stylesheet was compiled. These unlayered aliases deliberately
+ * win over those utilities so every legacy UI role resolves to the same
+ * Traditional Chinese face. Code/data remain explicit opt-ins below. */
+.font-sans,
+.font-serif,
+.font-mono,
+.font-heading,
+.font-body,
+.font-serif-cn,
+.font-display,
+.font-fraunces,
+.kuiper-studio-kicker,
+.kuiper-studio-heading,
+.kuiper-dashboard-kicker,
+.kuiper-dashboard-heading {
+  font-family: var(--font-kuiper-sans), 'Noto Sans TC', 'PingFang TC', 'Heiti TC', 'Microsoft JhengHei', sans-serif;
+}
+
+/* Retire the editorial italic roles along with their old serif faces. The
+ * Kuiper wordmark below is the sole branded italic exception. */
+.font-serif-cn,
+.font-display,
+.font-fraunces,
+.kuiper-studio-kicker,
+.kuiper-studio-heading,
+.kuiper-dashboard-kicker,
+.kuiper-dashboard-heading {
+  font-style: normal;
+}
+
+.font-code,
+.font-data {
+  font-family: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
 /* Legacy arbitrary-pixel compatibility layer.
@@ -167,13 +229,31 @@ body {
     var(--surface-canvas);
 }
 
+/* The cyan darkroom belongs to the V2 production workspace only. Keep the
+ * legacy playground and visual-development stages on their original palette. */
+.kuiper-workspace.kuiper-stage {
+  background:
+    radial-gradient(circle at 58% -18%, rgba(85, 175, 192, 0.08), transparent 34rem),
+    var(--darkroom-canvas);
+}
+
 /* Workspace foundation — shared by script / subjects / storyboard / voice.
  * Keep dense production chrome around the edge while giving the authored
  * content enough room to breathe. These primitives replace page-local
  * amber/stone shells one surface at a time. */
 .kuiper-workspace {
   --workspace-gutter: clamp(16px, 2.4vw, 40px);
-  background: var(--surface-canvas);
+  --surface-canvas: var(--darkroom-canvas);
+  --surface-raised: var(--darkroom-surface);
+  --surface-overlay: var(--darkroom-raised);
+  --surface-inset: color-mix(in srgb, var(--darkroom-canvas) 86%, black);
+  --text-primary: var(--darkroom-text);
+  --text-secondary: var(--darkroom-muted);
+  --text-tertiary: color-mix(in srgb, var(--darkroom-muted) 72%, transparent);
+  --border-soft: var(--darkroom-border);
+  --border-strong: rgba(184, 207, 218, 0.24);
+  --border-primary: color-mix(in srgb, var(--process-cyan) 58%, transparent);
+  background: var(--darkroom-canvas);
 }
 
 .kuiper-workspace-page {
@@ -203,7 +283,7 @@ body {
 
 .kuiper-editor-surface:focus {
   border-color: var(--border-primary);
-  box-shadow: 0 0 0 3px rgba(255, 46, 175, 0.08);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-500) 12%, transparent);
 }
 
 .kuiper-inspector {
@@ -263,7 +343,7 @@ body {
 
 .kuiper-studio-kicker {
   color: var(--primary-400);
-  font-family: var(--font-geist-mono), monospace;
+  font-family: var(--font-kuiper-sans), 'Noto Sans TC', sans-serif;
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.16em;
@@ -272,7 +352,7 @@ body {
 
 .kuiper-studio-heading {
   color: var(--text-primary);
-  font-family: var(--font-heading), var(--font-geist-sans), sans-serif;
+  font-family: var(--font-kuiper-sans), 'Noto Sans TC', sans-serif;
   font-weight: 600;
   letter-spacing: -0.02em;
 }
@@ -323,7 +403,7 @@ body {
 
 .kuiper-input:focus {
   border-color: var(--border-primary);
-  box-shadow: 0 0 0 3px rgba(255, 46, 175, 0.08);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-500) 12%, transparent);
   outline: none;
 }
 
@@ -415,29 +495,286 @@ body {
   transform: translateY(-1px);
 }
 
-/* Phase V (2026-05-28) — Global font-family utility classes.
+/* Kuiper global shell.
  *
- * These were originally defined inside a scoped <style> block in
- * src/app/[locale]/preview/page.tsx and never reached production. As a
- * result, ~378 call sites of `font-serif-cn` etc. applied the class
- * but resolved to UA defaults — visible side-effect: <pre> rendered
- * CJK glyphs in monospace while <textarea> used system-ui, drifting
- * cursor positions in the narrative editor by enough that the caret
- * landed inside glyphs.
- *
- * Stack ordering — prefer locally-installed CJK serif fonts so we
- * don't force a webfont download on every page; webfont loading is
- * still done explicitly on the preview marketing page where the
- * design intent is to use Google Fonts copies of Noto Serif SC etc.
+ * The charcoal chrome behaves like the edge of a grading monitor: it stays
+ * visually stable while the work surface changes underneath it. Navigation
+ * state always combines a cyan edge, a surface lift, and readable text so it
+ * never depends on colour alone.
  */
-.font-serif-cn {
-  font-family: 'Noto Serif SC', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', serif;
+.kuiper-shell-rail {
+  border-color: var(--darkroom-border);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 9rem),
+    var(--studio-chrome);
+  color: var(--darkroom-muted);
+  box-shadow: 10px 0 36px rgba(3, 8, 12, 0.12);
 }
-.font-display {
-  font-family: 'Cormorant Garamond', 'Noto Serif SC', 'PingFang SC', serif;
+
+.kuiper-shell-divider {
+  border-color: var(--darkroom-border);
 }
-.font-fraunces {
-  font-family: 'Fraunces', 'Noto Serif SC', 'PingFang SC', serif;
+
+.kuiper-shell-nav-item {
+  position: relative;
+  color: var(--darkroom-muted);
+  transition:
+    color var(--d-hover) var(--ease-out),
+    background-color var(--d-hover) var(--ease-out);
+}
+
+.kuiper-shell-nav-item:hover {
+  background: rgba(255, 255, 255, 0.045);
+  color: var(--darkroom-text);
+}
+
+.kuiper-shell-nav-item[data-active='true'] {
+  background: var(--process-cyan-soft);
+  color: var(--darkroom-text);
+}
+
+.kuiper-shell-nav-item[data-active='true']::before {
+  position: absolute;
+  inset-block: 9px;
+  left: 0;
+  width: 3px;
+  border-radius: 0 999px 999px 0;
+  background: var(--process-cyan);
+  content: '';
+}
+
+.kuiper-shell-topbar {
+  border-color: var(--darkroom-border);
+  background: color-mix(in srgb, var(--studio-chrome) 94%, transparent);
+  color: var(--darkroom-text);
+}
+
+/* Kuiper unified production control plane.
+ *
+ * Dashboard, planning and media routes share one night-blue studio palette.
+ * Hierarchy comes from canvas / working surface / raised controls instead of
+ * switching between light paper and a dark editor.
+ */
+.kuiper-dashboard {
+  --surface-canvas: var(--production-paper);
+  --surface-raised: var(--production-surface);
+  --surface-overlay: var(--production-muted);
+  --surface-inset: color-mix(in srgb, var(--production-paper) 78%, black);
+  --text-primary: var(--production-ink);
+  --text-secondary: var(--production-ink-muted);
+  --text-tertiary: color-mix(in srgb, var(--production-ink-muted) 70%, transparent);
+  --border-soft: var(--production-border);
+  --border-strong: var(--production-border-dark);
+  min-height: 100vh;
+  background:
+    linear-gradient(rgba(85, 175, 192, 0.022) 1px, transparent 1px),
+    radial-gradient(circle at 82% -8%, rgba(62, 115, 185, 0.1), transparent 34rem),
+    var(--production-paper);
+  background-size: 100% 32px, auto, auto;
+  color: var(--production-ink);
+}
+
+.kuiper-dashboard-topbar {
+  border-color: var(--darkroom-border);
+  background: color-mix(in srgb, var(--studio-chrome) 95%, transparent);
+  color: var(--darkroom-text);
+  box-shadow: 0 10px 32px rgba(3, 8, 12, 0.12);
+}
+
+.kuiper-shell-control {
+  min-height: 44px;
+  border: 1px solid var(--darkroom-border);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.045);
+  color: var(--darkroom-muted);
+  transition:
+    border-color var(--d-hover) var(--ease-out),
+    background-color var(--d-hover) var(--ease-out),
+    color var(--d-hover) var(--ease-out);
+}
+
+.kuiper-shell-control:hover {
+  border-color: color-mix(in srgb, var(--process-cyan) 55%, transparent);
+  background: rgba(255, 255, 255, 0.075);
+  color: var(--darkroom-text);
+}
+
+.kuiper-dashboard-main {
+  isolation: isolate;
+}
+
+.kuiper-dashboard :focus-visible {
+  outline-color: var(--production-focus);
+}
+
+.kuiper-dashboard-card {
+  border: 1px solid var(--production-border);
+  border-radius: 14px;
+  background: var(--production-surface);
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.22);
+  transition:
+    border-color 180ms var(--ease-out),
+    box-shadow 180ms var(--ease-out),
+    transform 180ms var(--ease-out);
+}
+
+.kuiper-dashboard-card:hover {
+  border-color: var(--production-border-dark);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.24);
+  transform: translateY(-1px);
+}
+
+.kuiper-dashboard-primary {
+  min-height: 40px;
+  border: 1px solid var(--production-blue);
+  border-radius: 10px;
+  background: var(--production-blue);
+  color: #fff;
+  font-weight: 650;
+  transition:
+    background-color 160ms var(--ease-out),
+    border-color 160ms var(--ease-out),
+    transform 160ms var(--ease-out);
+}
+
+.kuiper-dashboard-primary:hover:not(:disabled) {
+  border-color: var(--production-blue-hover);
+  background: var(--production-blue-hover);
+  transform: translateY(-1px);
+}
+
+.kuiper-dashboard-primary:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.kuiper-dashboard-secondary {
+  min-height: 40px;
+  border: 1px solid var(--production-border);
+  border-radius: 10px;
+  background: var(--production-surface);
+  color: var(--production-ink);
+  transition:
+    border-color 160ms var(--ease-out),
+    background-color 160ms var(--ease-out);
+}
+
+.kuiper-dashboard-secondary:hover:not(:disabled) {
+  border-color: var(--production-border-dark);
+  background: var(--production-muted);
+}
+
+.kuiper-dashboard-input {
+  min-height: 44px;
+  border: 1px solid var(--production-border);
+  border-radius: 10px;
+  background: var(--production-surface);
+  color: var(--production-ink);
+  transition:
+    border-color 160ms var(--ease-out),
+    box-shadow 160ms var(--ease-out);
+}
+
+.kuiper-dashboard-input:focus-within,
+.kuiper-dashboard-input:focus {
+  border-color: var(--production-focus);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--production-focus) 18%, transparent);
+  outline: none;
+}
+
+.kuiper-dashboard-kicker {
+  color: var(--process-cyan-strong);
+  font-family: var(--font-kuiper-sans), 'Noto Sans TC', sans-serif;
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+/* Transitional form bridge for the existing new-project controls. The
+ * interaction logic stays untouched while the long form is split into a
+ * three-step wizard; these scoped rules remove the old amber/stone skin.
+ * Delete this bridge once every nested picker uses the shared form fields. */
+.kuiper-new-project [class*='bg-stone-9'] {
+  background-color: var(--production-surface);
+}
+
+.kuiper-new-project [class*='border-stone-'] {
+  border-color: var(--production-border);
+}
+
+.kuiper-new-project [class*='text-stone-'] {
+  color: var(--production-ink-muted);
+}
+
+.kuiper-new-project [class*='text-amber-'] {
+  color: var(--process-cyan-strong);
+}
+
+.kuiper-new-project [class*='border-amber-'] {
+  border-color: color-mix(in srgb, var(--production-blue) 42%, var(--production-border));
+}
+
+.kuiper-new-project [class*='bg-amber-'] {
+  background-color: var(--production-blue-soft);
+}
+
+.kuiper-new-project input:not([type='radio']):not([type='file']),
+.kuiper-new-project textarea,
+.kuiper-new-project select {
+  min-height: 44px;
+  border-radius: 10px;
+  background: var(--production-surface);
+  color: var(--production-ink);
+}
+
+.kuiper-new-project input:not([type='radio']):not([type='file']):focus,
+.kuiper-new-project textarea:focus,
+.kuiper-new-project select:focus {
+  border-color: var(--production-focus);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--production-focus) 18%, transparent);
+}
+
+.kuiper-dashboard-heading {
+  color: var(--production-ink);
+  font-family: var(--font-kuiper-sans), 'Noto Sans TC', sans-serif;
+  font-weight: 680;
+  letter-spacing: -0.025em;
+}
+
+/* Editor shell accent. Blue identifies tools and progress while keeping
+ * the media-first dark stage untouched. */
+.kuiper-workspace {
+  --primary-300: var(--process-cyan-strong);
+  --primary-400: var(--process-cyan);
+  --primary-500: var(--process-cyan);
+  --primary-600: var(--process-cyan-deep);
+  --primary-700: #245E6A;
+  --primary-900: #14343C;
+  --border-primary: color-mix(in srgb, var(--process-cyan) 58%, transparent);
+}
+
+@media (max-width: 767px) {
+  .kuiper-dashboard-primary,
+  .kuiper-dashboard-secondary {
+    min-height: 44px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kuiper-shell-rail *,
+  .kuiper-shell-topbar *,
+  .kuiper-dashboard * {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* One UI face across the product. The only visual exception is the English
+ * Kuiper wordmark; technical code/data can opt in to font-code/font-data. */
+.font-kuiper-wordmark {
+  font-family: var(--font-kuiper-brand), 'Cormorant Garamond', serif;
 }
 
 /* 可复用组件类 */

@@ -3,6 +3,7 @@ import { requireUserAuth, isErrorResponse } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
 import { TASK_TYPE } from '@/lib/task/types'
 import { maybeSubmitLLMTask } from '@/lib/llm-observe/route-task'
+import { sanitizeImageInputsForTaskPayload } from '@/lib/media/outbound-image'
 
 function parseReferenceImages(body: Record<string, unknown>): string[] {
   const list = Array.isArray(body.referenceImageUrls)
@@ -22,9 +23,14 @@ export const POST = apiHandler(async (request: NextRequest) => {
   const { session } = authResult
 
   const body = (await request.json().catch(() => ({}))) as Record<string, unknown>
-  const referenceImages = parseReferenceImages(body)
-  if (referenceImages.length === 0) {
+  const referenceImageAudit = await sanitizeImageInputsForTaskPayload(parseReferenceImages(body))
+  if (referenceImageAudit.normalized.length === 0) {
     throw new ApiError('INVALID_PARAMS')
+  }
+  const taskBody = {
+    ...body,
+    referenceImageUrl: referenceImageAudit.normalized[0],
+    referenceImageUrls: referenceImageAudit.normalized,
   }
 
   const isBackgroundJob = body.isBackgroundJob === true || body.isBackgroundJob === 1 || body.isBackgroundJob === '1'
@@ -42,7 +48,7 @@ export const POST = apiHandler(async (request: NextRequest) => {
     targetType: appearanceId ? 'GlobalCharacterAppearance' : 'GlobalCharacter',
     targetId: appearanceId || characterId || session.user.id,
     routePath: '/api/asset-hub/reference-to-character',
-    body,
+    body: taskBody,
     dedupeKey: `asset_hub_reference_to_character:${appearanceId || characterId || session.user.id}`})
   if (asyncTaskResponse) return asyncTaskResponse
 

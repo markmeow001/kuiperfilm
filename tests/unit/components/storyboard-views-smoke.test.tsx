@@ -112,6 +112,7 @@ describe('storyboard sibling views — mount smoke (backlog E, slice 1)', () => 
           failedPanelVideoIds: new Map(),
           setZoomImageUrl: noop,
           canEdit: true,
+          appearanceGenerationBlocked: false,
         } as unknown as React.ComponentProps<typeof V2StoryboardTimelineShot>)}
       />,
     )
@@ -126,9 +127,10 @@ describe('storyboard sibling views — mount smoke (backlog E, slice 1)', () => 
           selected: panel,
           selectedGroupTaskId: null,
           selectedGroupLabel: null,
+          currentEpisodeId: null,
           currentEpisode: null,
           characterRoster: [],
-          episodeBindings: [],
+          appearanceBindingState: { status: 'ready', bindingMap: new Map() },
         } as unknown as React.ComponentProps<typeof V2StoryboardTimelineInspector>)}
       />,
     )
@@ -184,6 +186,7 @@ describe('storyboard sibling views — mount smoke (backlog E, slice 1)', () => 
             failedPanelVideoIds: new Map(),
             setZoomImageUrl: noop,
             canEdit: true,
+            appearanceGenerationBlocked: false,
           } as unknown as React.ComponentProps<typeof V2StoryboardTimelineShot>)}
         />,
       ),
@@ -197,9 +200,10 @@ describe('storyboard sibling views — mount smoke (backlog E, slice 1)', () => 
             selected: null,
             selectedGroupTaskId: null,
             selectedGroupLabel: null,
+            currentEpisodeId: null,
             currentEpisode: null,
             characterRoster: [],
-            episodeBindings: [],
+            appearanceBindingState: { status: 'ready', bindingMap: new Map() },
           } as unknown as React.ComponentProps<typeof V2StoryboardTimelineInspector>)}
         />,
       ),

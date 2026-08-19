@@ -9,7 +9,7 @@
  * surface in V2 pages. State design intent:
  *   - idle:      bg-raised + border-soft, calm
  *   - hover:     border-strong, no other change (subtle invitation)
- *   - focus:     accent-500 ring + border (high contrast for keyboard nav)
+ *   - focus:     process-cyan ring + border (high contrast for keyboard nav)
  *   - error:     error border + ring, helper text recolored
  *   - disabled:  opacity-50, cursor not-allowed
  *
@@ -85,14 +85,14 @@ export const Input = forwardRef<HTMLInputElement, InputV2Props>(function Input(
   // on hover (subtle invitation), then snaps to accent on focus.
   const containerClasses = [
     'inline-flex items-center gap-1.5',
-    'rounded-input border bg-raised',
+    'rounded-input border bg-[var(--darkroom-surface)]',
     'transition-colors duration-[120ms] ease-out',
     h,
     px,
     fullWidth ? 'flex w-full' : '',
     hasError
       ? 'border-error/60 focus-within:border-error focus-within:ring-2 focus-within:ring-error/40'
-      : 'border-border-soft hover:border-border-strong focus-within:border-accent-500/60 focus-within:ring-2 focus-within:ring-accent-500/40',
+      : 'border-[var(--darkroom-border)] hover:border-[var(--production-border-dark)] focus-within:border-[var(--process-cyan)] focus-within:ring-2 focus-within:ring-[rgba(85,175,192,0.24)]',
     disabled ? 'opacity-50 cursor-not-allowed' : '',
     className ?? '',
   ]

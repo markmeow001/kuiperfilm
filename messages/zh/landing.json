@@ -1,8 +1,31 @@
 {
-  "title": "KuiperAI",
+  "title": "Kuiper 影界",
   "subtitle": "AI影视Studio",
-  "enterWorkspace": "进入工作区",
-  "getStarted": "立即体验",
+  "eyebrow": "AI 影像製作系統",
+  "heroTitle": "把創作意圖，變成可追蹤的製作流程",
+  "heroBody": "劇本、角色、場景、鏡頭、生成版本與交付保持連動。每一次選擇都有來源，也能回到上一個決定。",
+  "enterWorkspace": "進入工作區",
+  "getStarted": "建立第一個專案",
+  "signIn": "登入工作室",
+  "invitationOnly": "邀請制工作室",
+  "continueProject": "繼續最近專案",
+  "pipelineTitle": "Production lineage",
+  "pipelineDescription": "從專案到交付，每一個素材都知道自己從哪裡來、被哪個鏡頭採用。",
+  "projectLabel": "專案",
+  "episodeLabel": "集數",
+  "sceneLabel": "場景",
+  "shotLabel": "鏡頭",
+  "takeLabel": "版本",
+  "deliveryLabel": "交付",
+  "capabilityScript": "劇本與拆解",
+  "capabilityScriptBody": "把集數、場景、角色與道具放在同一條製作脈絡裡。上游變更時，下游鏡頭會清楚標示。",
+  "capabilityVisual": "視覺製作",
+  "capabilityVisualBody": "分鏡、候選版本與生成任務集中管理。比較、定版與費用狀態不再散落。",
+  "capabilityFinish": "剪輯與交付",
+  "capabilityFinishBody": "將選定素材帶進剪輯與交付，保留來源、核准狀態與可下載成果。",
+  "statusLabel": "目前狀態",
+  "statusValue": "Private beta · Invite only",
+  "footerLine": "FROM SCRIPT TO DELIVERY",
   "learnMore": "了解更多",
   "features": {
     "title": "释放无限创造力",
@@ -21,6 +44,6 @@
     }
   },
   "footer": {
-    "copyright": "2026 KuiperAI. All rights reserved."
+    "copyright": "2026 Kuiper 影界. All rights reserved."
   }
 }

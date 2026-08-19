@@ -59,8 +59,16 @@ export function useGenerateProjectLocationImage(projectId: string) {
 
 export function useUploadProjectLocationImage(projectId: string) {
     const queryClient = useQueryClient()
-    const invalidateProjectAssets = () =>
-        invalidateQueryTemplates(queryClient, [queryKeys.projectAssets.all(projectId)])
+    const invalidateProjectAssets = async () => {
+        await queryClient.invalidateQueries({
+            queryKey: queryKeys.projectAssets.all(projectId),
+            exact: true,
+        })
+        await queryClient.invalidateQueries({
+            queryKey: queryKeys.projectAssets.locations(projectId),
+            exact: true,
+        })
+    }
 
     return useMutation({
         mutationFn: async (params: {

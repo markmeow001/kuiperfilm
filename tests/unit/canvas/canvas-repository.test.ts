@@ -8,9 +8,25 @@ const prismaMock = vi.hoisted(() => ({
     update: vi.fn(),
     deleteMany: vi.fn(),
   },
+  mediaObject: {
+    findUnique: vi.fn(),
+    upsert: vi.fn(),
+    update: vi.fn(),
+  },
 }))
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }))
+vi.mock('@/lib/cos', () => ({
+  extractCOSKey: (value: string | null | undefined) => {
+    if (!value) return null
+    const normalized = value.trim()
+    if (/^https?:\/\//i.test(normalized)) {
+      return decodeURIComponent(new URL(normalized).pathname).replace(/^\/+/, '')
+    }
+    return normalized.replace(/^\/+/, '')
+  },
+  getSignedUrl: (key: string) => `/signed/${encodeURIComponent(key)}`,
+}))
 
 import { deleteCanvasResourceForUser, getLatestCanvasForUser, listCanvasResourcesForUser, upsertCanvasForUser } from '@/lib/canvas/canvas-repository'
 
@@ -20,6 +36,7 @@ const baseInput = {
   edges: [],
   viewport: { x: 0, y: 0, zoom: 1 },
 }
+const TASK_OUTPUT = `voice/project-a/episode-a/line-a/${'a'.repeat(32)}-${'b'.repeat(64)}.wav`
 
 function row(over: Record<string, unknown> = {}) {
   return {
@@ -90,6 +107,48 @@ describe('upsertCanvasForUser', () => {
     await expect(upsertCanvasForUser('u1', { ...baseInput, id: 'someone-elses' })).rejects.toThrow('CANVAS_NOT_FOUND')
     expect(prismaMock.canvas.update).not.toHaveBeenCalled()
     expect(prismaMock.canvas.create).not.toHaveBeenCalled()
+  })
+
+  it('[node data contains a deeply nested reserved VoiceLine output] -> [rejects before any canvas or media write]', async () => {
+    const input = {
+      ...baseInput,
+      nodes: [{
+        ...baseInput.nodes[0],
+        data: { stage: { result: { audioUrl: TASK_OUTPUT } } },
+      }],
+    }
+
+    await expect(upsertCanvasForUser('u1', input)).rejects.toMatchObject({
+      code: 'INVALID_PARAMS',
+      details: { code: 'VOICE_LINE_TASK_OUTPUT_REFERENCE_FORBIDDEN' },
+    })
+    expect(prismaMock.canvas.findFirst).not.toHaveBeenCalled()
+    expect(prismaMock.canvas.create).not.toHaveBeenCalled()
+    expect(prismaMock.canvas.update).not.toHaveBeenCalled()
+    expect(prismaMock.mediaObject.upsert).not.toHaveBeenCalled()
+    expect(prismaMock.mediaObject.update).not.toHaveBeenCalled()
+  })
+
+  it('[node data contains null, ordinary values, and a missing /m alias] -> [creates the canvas unchanged]', async () => {
+    const input = {
+      ...baseInput,
+      nodes: [{
+        ...baseInput.nodes[0],
+        data: { audioUrl: null, title: 'ordinary', unavailable: '/m/missing-audio' },
+      }],
+    }
+    prismaMock.mediaObject.findUnique.mockResolvedValue(null)
+    prismaMock.canvas.create.mockResolvedValue(row({ nodes: JSON.stringify(input.nodes) }))
+
+    const result = await upsertCanvasForUser('u1', input)
+
+    expect(prismaMock.canvas.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        userId: 'u1',
+        nodes: JSON.stringify(input.nodes),
+      }),
+    })
+    expect(result.nodes).toEqual(input.nodes)
   })
 })
 

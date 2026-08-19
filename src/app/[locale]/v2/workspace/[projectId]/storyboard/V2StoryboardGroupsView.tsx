@@ -24,7 +24,6 @@
  */
 
 import type { Dispatch, ReactNode, SetStateAction } from 'react'
-import type { UseMutationResult } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
 import { AppIcon } from '@/components/ui/icons'
 import {
@@ -38,10 +37,10 @@ import type {
   PanelLike,
   MultiShotState,
   VideoFamily,
-  EpisodeBinding,
 } from './storyboard-client-helpers'
-import type { AutoGroupResult } from '@/lib/query/mutations/auto-group-multi-shot-mutation'
+import type { AutoGroupMutation } from '@/lib/query/mutations/auto-group-multi-shot-mutation'
 import type { GroupRegenOverrides } from './GroupCard'
+import type { ActiveCharacterAppearanceBindingState } from '../subjects/active-character-appearance'
 
 // Phase 1 step 3 (2026-06-21) — type-import convention applied.
 // Siblings NEVER re-declare types; they import from the owner module.
@@ -71,6 +70,7 @@ export interface V2StoryboardGroupsViewProps {
   // ── Permission / hint ──
   canEdit: boolean
   viewerTip: string | undefined
+  appearanceGenerationBlocked: boolean
 
   // ── Shared overlay (modals + cleanup dialog rendered in parent) ──
   globalOverlaysNode: ReactNode
@@ -80,13 +80,11 @@ export interface V2StoryboardGroupsViewProps {
   videoModelPickerNode: ReactNode
 
   // ── Toolbar state + handlers ──
-  manualPanelSubmitting: boolean
-  onManualPanelOpen: () => void
   analyzeBusy: boolean
   analyzeBusyLabel: string
   onAnalyzeStoryboard: () => void
   onStaleCleanupOpen: () => void
-  autoGroup: UseMutationResult<AutoGroupResult, Error, { episodeId: string }>
+  autoGroup: AutoGroupMutation
   multiShotState: MultiShotState
   onSubmitMultiShot: () => void
 
@@ -105,7 +103,7 @@ export interface V2StoryboardGroupsViewProps {
   updatePanelText: UpdatePanelTextMutation
   characterRoster: CharacterRosterEntry[]
   locationRoster: LocationRosterEntry[]
-  episodeBindings: EpisodeBinding[]
+  appearanceBindingState: ActiveCharacterAppearanceBindingState
 
   // ── Multi-shot submit toggle ──
   soundEnabled: boolean
@@ -126,11 +124,10 @@ export function V2StoryboardGroupsView(props: V2StoryboardGroupsViewProps) {
     videoFamily,
     canEdit,
     viewerTip,
+    appearanceGenerationBlocked,
     globalOverlaysNode,
     layoutToggleNode,
     videoModelPickerNode,
-    manualPanelSubmitting,
-    onManualPanelOpen,
     analyzeBusy,
     analyzeBusyLabel,
     onAnalyzeStoryboard,
@@ -148,9 +145,11 @@ export function V2StoryboardGroupsView(props: V2StoryboardGroupsViewProps) {
     updatePanelText,
     characterRoster,
     locationRoster,
-    episodeBindings,
+    appearanceBindingState,
     soundEnabled,
   } = props
+
+  const canUseEpisodeAppearances = canEdit && !appearanceGenerationBlocked
 
   // 2026-05-18 — toolbar reorganized into 3 rows so 16+ elements aren't
   // crammed into one line. Old layout was visually exhausting + the
@@ -185,16 +184,6 @@ export function V2StoryboardGroupsView(props: V2StoryboardGroupsViewProps) {
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
-            disabled={!currentEpisodeId || manualPanelSubmitting}
-            onClick={onManualPanelOpen}
-            title={t('buttons.manualAddTitle')}
-            className="flex items-center gap-1.5 rounded-sm border border-border-strong bg-raised/50 px-3 py-1.5 font-mono text-[13px] tracking-wider text-text-secondary transition-all hover:border-primary-500/40 hover:bg-primary-500/10 hover:text-primary-300 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <AppIcon name="plus" className="h-3 w-3" />
-            {t('buttons.manualAdd')}
-          </button>
-          <button
-            type="button"
             disabled={analyzeBusy || !currentEpisodeId || !canEdit}
             onClick={onAnalyzeStoryboard}
             title={t('buttons.regenerateStoryboardTitle')}
@@ -218,7 +207,7 @@ export function V2StoryboardGroupsView(props: V2StoryboardGroupsViewProps) {
           </button>
         </div>
 
-        {/* RIGHT cluster — workflow ops; 自動切組 violet (prep), 多鏡頭合成 amber filled (primary CTA) */}
+        {/* RIGHT cluster — workflow ops; 自動切組 blue/cyan (prep), 多鏡頭合成 amber filled (primary CTA) */}
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
@@ -236,14 +225,14 @@ export function V2StoryboardGroupsView(props: V2StoryboardGroupsViewProps) {
                   ? t('buttons.splitting')
                   : t('multiShot.tipSplitDetail')
             }
-            className="flex items-center gap-1.5 rounded-sm border border-violet-500/40 bg-violet-500/10 px-3 py-1.5 font-mono text-[13px] tracking-wider text-violet-300 transition-all hover:bg-violet-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex items-center gap-1.5 rounded-sm border border-[var(--production-blue)]/45 bg-[var(--production-blue-soft)] px-3 py-1.5 font-mono text-[13px] tracking-wider text-[var(--process-cyan-strong)] transition-all hover:border-[var(--production-blue)] hover:bg-[var(--production-blue-soft)] disabled:cursor-not-allowed disabled:opacity-50"
           >
             <AppIcon name="sparklesAlt" className="h-3 w-3" />
             {autoGroup.isPending ? t('buttons.splitting') : analyzeBusy ? t('buttons.splitWhileAnalyzing') : t('buttons.autoSplit')}
           </button>
           <button
             type="button"
-            disabled={multiShotState.status === 'submitting' || !canMultiShot}
+            disabled={multiShotState.status === 'submitting' || !canMultiShot || appearanceGenerationBlocked}
             onClick={onSubmitMultiShot}
             title={
               !canMultiShot
@@ -267,7 +256,7 @@ export function V2StoryboardGroupsView(props: V2StoryboardGroupsViewProps) {
   )
 
   return (
-    <>
+    <div className="contents [&_a]:min-h-11 [&_a]:min-w-11 [&_button]:min-h-11 [&_button]:min-w-11">
       {globalOverlaysNode}
       <V2GroupsLayout
         projectId={projectId}
@@ -278,17 +267,20 @@ export function V2StoryboardGroupsView(props: V2StoryboardGroupsViewProps) {
         updatePanelText={updatePanelText}
         characterRoster={characterRoster}
         locationRoster={locationRoster}
-        episodeBindings={episodeBindings}
+        appearanceBindingState={appearanceBindingState}
         episodeNumber={episodeNumber}
         canMultiShot={canMultiShot}
         videoFamily={videoFamily}
         projectVisualStyleId={projectVisualStyleId}
-        canEdit={canEdit}
+        canEdit={canUseEpisodeAppearances}
         viewerTip={viewerTip}
         targetDurationSec={targetDurationSec}
         episodeId={currentEpisodeId}
         referenceVideoByStoryboardId={referenceVideoByStoryboardId}
         onRegenerateGroup={async (groupId, panelIds, overrides: GroupRegenOverrides) => {
+          if (appearanceGenerationBlocked) {
+            return { taskId: null, error: t('appearanceGate.blockedAction') }
+          }
           if (!projectVideoModel) {
             return { taskId: null, error: t('errors.modelNotMultiShotShort') }
           }
@@ -382,6 +374,6 @@ export function V2StoryboardGroupsView(props: V2StoryboardGroupsViewProps) {
           }
         }}
       />
-    </>
+    </div>
   )
 }

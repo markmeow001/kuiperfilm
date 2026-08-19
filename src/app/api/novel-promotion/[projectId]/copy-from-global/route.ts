@@ -5,6 +5,13 @@ import { requireProjectAuthLight, isErrorResponse } from '@/lib/api-auth'
 import { decodeImageUrlsFromDb, encodeImageUrls } from '@/lib/contracts/image-urls-contract'
 import { updateCharacterAppearanceLabels, updateLocationImageLabels } from '@/lib/image-label'
 import { apiHandler, ApiError } from '@/lib/api-errors'
+import { assertNoVoiceLineTaskOutputReferences } from '@/lib/media/recursive-write-policy'
+import { assertMediaObjectIdsDoNotReferenceVoiceLineTaskOutputs } from '@/lib/media/write-policy'
+import {
+    resolveCharacterVoiceWrite,
+    VoiceSourceWritePolicyError,
+    type CharacterVoiceClearData,
+} from '@/lib/voice/character-voice-write-policy'
 
 interface GlobalCharacterAppearanceSource {
     appearanceIndex: number
@@ -13,6 +20,7 @@ interface GlobalCharacterAppearanceSource {
     descriptions: string | null
     imageUrl: string | null
     imageUrls: string | null
+    imageMediaId?: string | null
     selectedIndex: number | null
 }
 
@@ -21,6 +29,7 @@ interface GlobalCharacterSource {
     voiceId: string | null
     voiceType: string | null
     customVoiceUrl: string | null
+    customVoiceMediaId: string | null
     appearances: GlobalCharacterAppearanceSource[]
 }
 
@@ -28,6 +37,7 @@ interface GlobalLocationImageSource {
     imageIndex: number
     description: string | null
     imageUrl: string | null
+    imageMediaId?: string | null
     isSelected: boolean
 }
 
@@ -42,6 +52,7 @@ interface GlobalVoiceSource {
     voiceId: string | null
     voiceType: string | null
     customVoiceUrl: string | null
+    customVoiceMediaId: string | null
 }
 
 interface CopyFromGlobalDb {
@@ -53,6 +64,24 @@ interface CopyFromGlobalDb {
     }
     globalVoice: {
         findFirst(args: Record<string, unknown>): Promise<GlobalVoiceSource | null>
+    }
+}
+
+function requireClearOnlyVoiceWrite(source: {
+    voiceId: string | null
+    voiceType: string | null
+    customVoiceUrl: string | null
+    customVoiceMediaId: string | null
+}): CharacterVoiceClearData {
+    try {
+        const decision = resolveCharacterVoiceWrite(source)
+        if (decision.kind !== 'clear') throw new VoiceSourceWritePolicyError()
+        return decision.data
+    } catch (error) {
+        if (error instanceof VoiceSourceWritePolicyError) {
+            throw new ApiError('INVALID_PARAMS', { reason: error.code })
+        }
+        throw error
     }
 }
 
@@ -82,11 +111,11 @@ export const POST = apiHandler(async (
     }
 
     if (type === 'character') {
-        return await copyCharacterFromGlobal(db, session.user.id, targetId, globalAssetId)
+        return await copyCharacterFromGlobal(db, projectId, session.user.id, targetId, globalAssetId)
     } else if (type === 'location') {
         return await copyLocationFromGlobal(db, session.user.id, targetId, globalAssetId)
     } else if (type === 'voice') {
-        return await copyVoiceFromGlobal(db, session.user.id, targetId, globalAssetId)
+        return await copyVoiceFromGlobal(projectId, session.user.id, targetId, globalAssetId)
     } else {
         throw new ApiError('INVALID_PARAMS')
     }
@@ -95,8 +124,25 @@ export const POST = apiHandler(async (
 /**
  * 复制全局角色的形象到项目角色
  */
-async function copyCharacterFromGlobal(db: CopyFromGlobalDb, userId: string, targetId: string, globalCharacterId: string) {
+async function copyCharacterFromGlobal(
+    db: CopyFromGlobalDb,
+    projectId: string,
+    userId: string,
+    targetId: string,
+    globalCharacterId: string,
+) {
     _ulogInfo(`[Copy from Global] 复制角色: global=${globalCharacterId} -> project=${targetId}`)
+
+    // Resolve the nested target before reading/copying any global asset. A
+    // foreign character must never cause appearance or voice writes.
+    const projectCharacter = await prisma.novelPromotionCharacter.findFirst({
+        where: { id: targetId, novelPromotionProject: { projectId } },
+        include: { appearances: true }
+    })
+
+    if (!projectCharacter) {
+        throw new ApiError('NOT_FOUND')
+    }
 
     // 1. 获取全局角色及其形象
     const globalCharacter = await db.globalCharacter.findFirst({
@@ -108,23 +154,15 @@ async function copyCharacterFromGlobal(db: CopyFromGlobalDb, userId: string, tar
         throw new ApiError('NOT_FOUND')
     }
 
-    // 2. 获取项目角色
-    const projectCharacter = await prisma.novelPromotionCharacter.findUnique({
-        where: { id: targetId },
-        include: { appearances: true }
-    })
+    await assertNoVoiceLineTaskOutputReferences(globalCharacter.appearances)
+    await assertMediaObjectIdsDoNotReferenceVoiceLineTaskOutputs(
+        globalCharacter.appearances.flatMap((appearance) => [appearance.imageMediaId]),
+    )
 
-    if (!projectCharacter) {
-        throw new ApiError('NOT_FOUND')
-    }
-
-    // 3. 删除项目角色的旧形象
-    if (projectCharacter.appearances.length > 0) {
-        await prisma.characterAppearance.deleteMany({
-            where: { characterId: targetId }
-        })
-        _ulogInfo(`[Copy from Global] 删除了 ${projectCharacter.appearances.length} 个旧形象`)
-    }
+    // Copying an asset may not smuggle a legacy custom voice binding into a
+    // durable project character. With no consent schema, only a triple-null
+    // clear is representable safely.
+    const voiceClear = requireClearOnlyVoiceWrite(globalCharacter)
 
     // 4. 🔥 更新黑边标签：使用项目角色名替换资产中心的角色名
     _ulogInfo(`[Copy from Global] 更新黑边标签: ${globalCharacter.name} -> ${projectCharacter.name}`)
@@ -137,52 +175,72 @@ async function copyCharacterFromGlobal(db: CopyFromGlobalDb, userId: string, tar
         projectCharacter.name
     )
 
-    // 5. 复制全局形象到项目（使用更新后的图片URL）
-    const copiedAppearances = []
-    for (let i = 0; i < globalCharacter.appearances.length; i++) {
-        const app = globalCharacter.appearances[i]
-        const labelUpdate = updatedLabels[i]
-        const originalImageUrls = decodeImageUrlsFromDb(app.imageUrls, 'globalCharacterAppearance.imageUrls')
-
-        const newAppearance = await prisma.characterAppearance.create({
-            data: {
-                characterId: targetId,
-                appearanceIndex: app.appearanceIndex,
-                changeReason: app.changeReason,
-                description: app.description,
-                descriptions: app.descriptions,
-                // 🔥 使用更新了标签的新图片URL
-                imageUrl: labelUpdate?.imageUrl || app.imageUrl,
-                imageUrls: labelUpdate?.imageUrls || encodeImageUrls(originalImageUrls),
-                previousImageUrls: encodeImageUrls([]),
-                selectedIndex: app.selectedIndex
-            }
+    // 5-6. Recheck ownership and perform every database write atomically.
+    const updatedCharacter = await prisma.$transaction(async (tx) => {
+        const currentCharacter = await tx.novelPromotionCharacter.findFirst({
+            where: { id: targetId, novelPromotionProject: { projectId } },
+            include: { appearances: true },
         })
-        copiedAppearances.push(newAppearance)
-    }
-    _ulogInfo(`[Copy from Global] 复制了 ${copiedAppearances.length} 个形象（已更新标签）`)
+        if (!currentCharacter) throw new ApiError('NOT_FOUND')
 
-    // 6. 更新项目角色：记录来源ID，并标记档案已确认
-    const updatedCharacter = await prisma.novelPromotionCharacter.update({
-        where: { id: targetId },
-        data: {
-            sourceGlobalCharacterId: globalCharacterId,
-            // 使用已有形象相当于确认了角色档案
-            profileConfirmed: true,
-            // 可选：复制语音设置
-            voiceId: globalCharacter.voiceId,
-            voiceType: globalCharacter.voiceType,
-            customVoiceUrl: globalCharacter.customVoiceUrl
-        },
-        include: { appearances: true }
+        if (currentCharacter.appearances.length > 0) {
+            await tx.characterAppearance.deleteMany({
+                where: {
+                    characterId: targetId,
+                    character: { novelPromotionProject: { projectId } },
+                },
+            })
+            _ulogInfo(`[Copy from Global] 删除了 ${currentCharacter.appearances.length} 个旧形象`)
+        }
+
+        for (let i = 0; i < globalCharacter.appearances.length; i++) {
+            const app = globalCharacter.appearances[i]
+            const labelUpdate = updatedLabels[i]
+            const originalImageUrls = decodeImageUrlsFromDb(
+                app.imageUrls,
+                'globalCharacterAppearance.imageUrls',
+            )
+            await tx.characterAppearance.create({
+                data: {
+                    characterId: targetId,
+                    appearanceIndex: app.appearanceIndex,
+                    changeReason: app.changeReason,
+                    description: app.description,
+                    descriptions: app.descriptions,
+                    imageUrl: labelUpdate?.imageUrl || app.imageUrl,
+                    imageUrls: labelUpdate?.imageUrls || encodeImageUrls(originalImageUrls),
+                    previousImageUrls: encodeImageUrls([]),
+                    selectedIndex: app.selectedIndex,
+                },
+            })
+        }
+
+        const write = await tx.novelPromotionCharacter.updateMany({
+            where: { id: targetId, novelPromotionProject: { projectId } },
+            data: {
+                sourceGlobalCharacterId: globalCharacterId,
+                profileConfirmed: true,
+                ...voiceClear,
+            },
+        })
+        if (write.count !== 1) throw new ApiError('NOT_FOUND')
+
+        const updated = await tx.novelPromotionCharacter.findFirst({
+            where: { id: targetId, novelPromotionProject: { projectId } },
+            include: { appearances: true },
+        })
+        if (!updated) throw new ApiError('NOT_FOUND')
+        return updated
     })
+
+    _ulogInfo(`[Copy from Global] 复制了 ${globalCharacter.appearances.length} 个形象（已更新标签）`)
 
     _ulogInfo(`[Copy from Global] 角色复制完成: ${projectCharacter.name}`)
 
     return NextResponse.json({
         success: true,
         character: updatedCharacter,
-        copiedAppearancesCount: copiedAppearances.length
+        copiedAppearancesCount: globalCharacter.appearances.length
     })
 }
 
@@ -201,6 +259,11 @@ async function copyLocationFromGlobal(db: CopyFromGlobalDb, userId: string, targ
     if (!globalLocation) {
         throw new ApiError('NOT_FOUND')
     }
+
+    await assertNoVoiceLineTaskOutputReferences(globalLocation.images)
+    await assertMediaObjectIdsDoNotReferenceVoiceLineTaskOutputs(
+        globalLocation.images.flatMap((image) => [image.imageMediaId]),
+    )
 
     // 2. 获取项目场景
     const projectLocation = await prisma.novelPromotionLocation.findUnique({
@@ -280,42 +343,53 @@ async function copyLocationFromGlobal(db: CopyFromGlobalDb, userId: string, targ
 /**
  * 复制全局音色到项目角色
  */
-async function copyVoiceFromGlobal(db: CopyFromGlobalDb, userId: string, targetCharacterId: string, globalVoiceId: string) {
+async function copyVoiceFromGlobal(
+    projectId: string,
+    userId: string,
+    targetCharacterId: string,
+    globalVoiceId: string,
+) {
     _ulogInfo(`[Copy from Global] 复制音色: global=${globalVoiceId} -> project character=${targetCharacterId}`)
 
-    // 1. 获取全局音色
-    const globalVoice = await db.globalVoice.findFirst({
-        where: { id: globalVoiceId, userId }
+    const copied = await prisma.$transaction(async (tx) => {
+        const projectCharacter = await tx.novelPromotionCharacter.findFirst({
+            where: {
+                id: targetCharacterId,
+                novelPromotionProject: { projectId },
+            },
+        })
+        if (!projectCharacter) throw new ApiError('NOT_FOUND')
+
+        const globalVoice = await tx.globalVoice.findFirst({
+            where: { id: globalVoiceId, userId },
+        })
+        if (!globalVoice) throw new ApiError('NOT_FOUND')
+
+        const voiceClear = requireClearOnlyVoiceWrite(globalVoice)
+        const write = await tx.novelPromotionCharacter.updateMany({
+            where: {
+                id: targetCharacterId,
+                novelPromotionProject: { projectId },
+            },
+            data: voiceClear,
+        })
+        if (write.count !== 1) throw new ApiError('NOT_FOUND')
+
+        const updatedCharacter = await tx.novelPromotionCharacter.findFirst({
+            where: {
+                id: targetCharacterId,
+                novelPromotionProject: { projectId },
+            },
+        })
+        if (!updatedCharacter) throw new ApiError('NOT_FOUND')
+        return { projectCharacter, globalVoice, updatedCharacter }
     })
 
-    if (!globalVoice) {
-        throw new ApiError('NOT_FOUND')
-    }
-
-    // 2. 获取项目角色
-    const projectCharacter = await prisma.novelPromotionCharacter.findUnique({
-        where: { id: targetCharacterId }
-    })
-
-    if (!projectCharacter) {
-        throw new ApiError('NOT_FOUND')
-    }
-
-    // 3. 更新项目角色的音色设置
-    const updatedCharacter = await prisma.novelPromotionCharacter.update({
-        where: { id: targetCharacterId },
-        data: {
-            voiceId: globalVoice.voiceId,
-            voiceType: globalVoice.voiceType,  // 'qwen-designed' | 'custom'
-            customVoiceUrl: globalVoice.customVoiceUrl
-        }
-    })
-
-    _ulogInfo(`[Copy from Global] 音色复制完成: ${projectCharacter.name} <- ${globalVoice.name}`)
+    _ulogInfo(`[Copy from Global] 音色复制完成: ${copied.projectCharacter.name} <- ${copied.globalVoice.name}`)
 
     return NextResponse.json({
         success: true,
-        character: updatedCharacter,
-        voiceName: globalVoice.name
+        character: copied.updatedCharacter,
+        voiceName: copied.globalVoice.name
     })
 }

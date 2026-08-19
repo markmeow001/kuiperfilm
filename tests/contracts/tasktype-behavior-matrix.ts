@@ -90,6 +90,7 @@ function resolveApiContractByTaskType(taskType: TaskType): string {
     || taskType === 'asset_hub_image'
     || taskType === 'asset_hub_modify'
     || taskType === 'regenerate_storyboard_text'
+    || taskType === 'auto_group_multi_shot'
   ) {
     return 'tests/integration/api/contract/direct-submit-routes.test.ts'
   }

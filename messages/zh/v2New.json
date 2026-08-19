@@ -3,6 +3,16 @@
   "step": "STEP 00 — NEW",
   "title": "新建专案",
   "subtitle": "Begin a new short-drama project",
+  "wizard": {
+    "basic": "专案资料",
+    "basicHint": "命名并选择协作范围",
+    "production": "制作设定",
+    "productionHint": "决定生成路径与开场节奏",
+    "script": "剧本汇入",
+    "scriptHint": "上传剧本，或先建立空白专案",
+    "back": "上一步",
+    "next": "继续"
+  },
   "form": {
     "nameLabel": "专案名称 · NAME *",
     "namePlaceholder": "例：雨夜的火车站、总裁的小秘书、武林独白…",

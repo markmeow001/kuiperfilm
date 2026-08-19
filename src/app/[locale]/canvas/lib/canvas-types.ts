@@ -192,6 +192,13 @@ export interface CanvasNodeData extends Record<string, unknown> {
   audioTaskId?: string | null
   audioTrackRole?: 'voice' | 'music'
   ttsTaskId?: string | null
+  /**
+   * Canvas TTS submission identity retained only while the POST outcome is
+   * unknown. Persisting both values lets a reload retry the exact logical
+   * request without accidentally reusing its UUID for changed provider input.
+   */
+  ttsClientRequestId?: string | null
+  ttsIdempotencyFingerprint?: string | null
   /** Text node: in-flight CANVAS_TEXT (writing assistant) task id. */
   textTaskId?: string | null
   groupKind?: 'storyboard'
@@ -287,6 +294,8 @@ export const DEFAULT_NODE_DATA = {
   audioTaskId: null as string | null,
   audioTrackRole: 'voice' as 'voice' | 'music',
   ttsTaskId: null as string | null,
+  ttsClientRequestId: null as string | null,
+  ttsIdempotencyFingerprint: null as string | null,
   transition: 'cut' as 'cut' | 'crossfade',
   crossfadeSec: 0.5,
   voiceVolume: 1,

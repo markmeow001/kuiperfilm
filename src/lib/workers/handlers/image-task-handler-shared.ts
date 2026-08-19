@@ -15,7 +15,7 @@ import type { StyleProfile } from '@/lib/style-profile/loader'
 
 export type AnyObj = Record<string, unknown>
 
-interface CharacterAppearanceLike {
+export interface CharacterAppearanceLike {
   // Phase 11.4 / multi-appearance: id required so the episode-binding
   // override (EpisodeCharacter.appearanceId) can resolve to a concrete
   // appearance row.
@@ -29,7 +29,7 @@ interface CharacterAppearanceLike {
   selectedIndex: number | null
 }
 
-interface CharacterLike {
+export interface CharacterLike {
   // Phase 11.4 / multi-appearance: id required so we can key the
   // episode-binding lookup by characterId.
   id: string
@@ -61,7 +61,7 @@ interface PropLike {
   summary?: string | null
 }
 
-interface NovelProjectData {
+export interface NovelProjectData {
   videoRatio?: string | null
   characters?: CharacterLike[]
   locations?: LocationLike[]
@@ -517,30 +517,11 @@ async function maybeExtractIdentityCrop(originalUrl: string): Promise<string[]> 
 export async function collectPanelReferenceImages(
   projectData: NovelProjectData,
   panel: PanelLike,
-  // Phase 11.4 / multi-appearance: when an episodeId is supplied, look
-  // up EpisodeCharacter.appearanceId for each character ref and use
-  // that appearance instead of appearances[0]. Lets users say
-  // "ep1-10 use appearance A, ep11+ use appearance B" without
-  // changing the panel character refs themselves.
-  episodeId?: string | null,
 ) {
   const refs: string[] = []
 
   const sketch = toSignedUrlIfCos(panel.sketchImageUrl, 3600)
   if (sketch) refs.push(sketch)
-
-  // Pre-load EpisodeCharacter bindings for this episode once. Keyed by
-  // characterId so the per-character loop below can do a flat lookup.
-  const episodeBindings: Map<string, string> = new Map()
-  if (episodeId) {
-    const rows = await prisma.episodeCharacter.findMany({
-      where: { episodeId, appearanceId: { not: null } },
-      select: { characterId: true, appearanceId: true },
-    })
-    for (const row of rows) {
-      if (row.appearanceId) episodeBindings.set(row.characterId, row.appearanceId)
-    }
-  }
 
   const panelCharacters = parsePanelCharacterReferences(panel.characters)
 
@@ -590,34 +571,10 @@ export async function collectPanelReferenceImages(
     const character = findCharacterByName(projectData.characters || [], item.name)
     if (!character) continue
 
-    const appearances = character.appearances || []
-    let appearance = appearances[0]
-    // 2026-05-13 — resolution priority (post user clarification):
-    //   1. panel.characters[i].appearance — LLM read the script and picked
-    //      a specific look for THIS shot (flashback / current-day / costume
-    //      change). Per-shot intent wins.
-    //   2. EpisodeCharacter.appearanceId — episode-level fallback for shots
-    //      where LLM didn't write an explicit hint. Treated as a default,
-    //      NOT a forced override.
-    //   3. appearances[0] — global default when neither LLM nor episode
-    //      binding has picked anything.
-    //
-    // Earlier ordering (episode > panel hint) was wrong: the user reported
-    // 2026-05-13 "script says 王玄 but episode binding to 王玄Y wins, every
-    // shot renders as 王玄Y even when the LLM correctly tagged 初始形象
-    // for present-day shots".
-    const boundAppearanceId = episodeBindings.get(character.id)
-    if (item.appearance) {
-      const matched = appearances.find((a) => (a.changeReason || '').toLowerCase() === item.appearance!.toLowerCase())
-      if (matched) appearance = matched
-      else if (boundAppearanceId) {
-        const bound = appearances.find((a) => a.id === boundAppearanceId)
-        if (bound) appearance = bound
-      }
-    } else if (boundAppearanceId) {
-      const bound = appearances.find((a) => a.id === boundAppearanceId)
-      if (bound) appearance = bound
-    }
+    // The caller must pass the canonical episode roster. Referenced
+    // characters have exactly one appearance, so legacy panel hints cannot
+    // override the authoritative EpisodeCharacter binding here.
+    const appearance = character.appearances?.[0]
 
     if (!appearance) continue
 

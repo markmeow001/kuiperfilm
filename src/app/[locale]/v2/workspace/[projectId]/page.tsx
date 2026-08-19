@@ -1,6 +1,9 @@
 import { redirect } from 'next/navigation'
-import { getAuthSession } from '@/lib/api-auth'
-import { prisma } from '@/lib/prisma'
+import { SystemStateScreen } from '@/components/system/SystemStateScreen'
+import {
+  requireProjectPageReadAccess,
+  type PageSearchParams,
+} from '@/lib/auth/page-access'
 import { V2WorkspaceShell } from './V2WorkspaceShell'
 import { V2HomeClient } from './V2HomeClient'
 
@@ -11,47 +14,59 @@ function isStep(value: unknown): value is StepValue {
   return typeof value === 'string' && (STEP_VALUES as readonly string[]).includes(value)
 }
 
+const HOME_CONTROL_QUERY_KEYS = new Set(['startAt', 'stay'])
+
+function withForwardedSearchParams(
+  pathname: string,
+  searchParams: PageSearchParams,
+): string {
+  const query = new URLSearchParams()
+
+  for (const [key, rawValue] of Object.entries(searchParams)) {
+    if (HOME_CONTROL_QUERY_KEYS.has(key)) continue
+
+    if (typeof rawValue === 'string') {
+      query.append(key, rawValue)
+      continue
+    }
+
+    for (const value of rawValue ?? []) {
+      query.append(key, value)
+    }
+  }
+
+  const queryString = query.toString()
+  return queryString ? `${pathname}?${queryString}` : pathname
+}
+
 interface PageProps {
   params: Promise<{ locale: string; projectId: string }>
-  searchParams?: Promise<{ startAt?: string; stay?: string }>
+  searchParams?: Promise<PageSearchParams>
 }
 
 export default async function V2WorkspaceHomePage({ params, searchParams }: PageProps) {
   const { locale, projectId } = await params
-  const { startAt, stay } = (await searchParams) ?? {}
+  const resolvedSearchParams = (await searchParams) ?? {}
+  const access = await requireProjectPageReadAccess({
+    locale,
+    pathname: `/${locale}/v2/workspace/${projectId}`,
+    projectId,
+    searchParams: resolvedSearchParams,
+  })
+
+  if (access.kind === 'forbidden') {
+    return <SystemStateScreen state="forbidden" locale={locale} />
+  }
+
+  const { startAt } = resolvedSearchParams
 
   // Deep-link override: `?startAt=<step>` wins and is persisted by the
   // step page itself via useStickyStep, no upsert needed here.
   if (isStep(startAt) && startAt !== 'home') {
-    redirect(`/${locale}/v2/workspace/${projectId}/${startAt}`)
-  }
-
-  // 2026-05-13 escape hatch — `?stay=1` means "I really want the home
-  // page, do NOT bounce me to last-step". Lets the project-name link
-  // in V2EpisodeTabBar (and any other "回首頁" entry point) actually
-  // reach home, which is where users set artStyle / videoRatio. Without
-  // this, sticky-step would silently redirect home → last-step on
-  // every visit and the user could never reach project settings.
-  const stayOnHome = stay === '1' || stay === 'true'
-
-  // Sticky-step lookup — per-user, per-project cursor.
-  if (!stayOnHome) {
-    const session = await getAuthSession()
-    if (session?.user?.id) {
-      const state = await prisma.userProjectState.findUnique({
-        where: {
-          userId_projectId: {
-            userId: session.user.id,
-            projectId,
-          },
-        },
-        select: { lastStep: true },
-      })
-
-      if (state && isStep(state.lastStep) && state.lastStep !== 'home') {
-        redirect(`/${locale}/v2/workspace/${projectId}/${state.lastStep}`)
-      }
-    }
+    redirect(withForwardedSearchParams(
+      `/${locale}/v2/workspace/${projectId}/${startAt}`,
+      resolvedSearchParams,
+    ))
   }
 
   return (

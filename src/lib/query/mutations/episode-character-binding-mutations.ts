@@ -97,15 +97,15 @@ export function useEpisodePropBindings(
 
 /**
  * Phase 11.4 — create a new CharacterAppearance row for an existing
- * character. Adds a 「造型 N+1」 the user can then bind per-episode via
- * useUpdateEpisodeCharacterBinding above.
+ * character. Passing episodeId atomically binds the new appearance to that
+ * episode; omitting it creates a catalog-only appearance.
  *
  * After creation the user typically follows up with:
  *   1) /character/appearance PATCH to fill the visual_description prompt
  *   2) regenerate-single-image to actually generate the new outfit's
  *      reference sheet
- *   3) episode-character-binding PATCH to assign the new appearance to
- *      the correct episode range.
+ *   3) use the bulk binding mutation only when extending the appearance to
+ *      an additional episode range.
  */
 export function useCreateCharacterAppearance(projectId: string) {
   const queryClient = useQueryClient()
@@ -114,6 +114,7 @@ export function useCreateCharacterAppearance(projectId: string) {
       characterId: string
       changeReason: string
       description: string
+      episodeId?: string
     }) => {
       return await requestJsonWithError(
         `/api/novel-promotion/${projectId}/character/appearance`,
@@ -125,8 +126,25 @@ export function useCreateCharacterAppearance(projectId: string) {
         'Failed to create new appearance',
       )
     },
-    onSuccess: () => {
-      invalidateQueryTemplates(queryClient, [queryKeys.projectAssets.all(projectId)])
+    onSuccess: async (_data, params) => {
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.projectAssets.all(projectId),
+        exact: true,
+      })
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.projectAssets.characters(projectId),
+        exact: true,
+      })
+      if (params.episodeId) {
+        await queryClient.invalidateQueries({
+          queryKey: [
+            ...queryKeys.tasks.all(projectId),
+            'episode-bindings',
+            params.episodeId,
+          ],
+          exact: true,
+        })
+      }
     },
   })
 }

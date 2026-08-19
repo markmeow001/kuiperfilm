@@ -85,7 +85,7 @@ describe('subject create policy', () => {
 
   it('[自行上傳場景並填說明] -> [上傳原圖且不啟動 AI 生圖]', () => {
     expect(resolveLocationCreateSubmission('upload', ' 白牆客廳，午後自然光 ')).toEqual({
-      apiDescription: '',
+      apiDescription: '白牆客廳，午後自然光',
       summaryNote: '白牆客廳，午後自然光',
       shouldUpload: true,
     })

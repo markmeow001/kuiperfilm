@@ -25,7 +25,7 @@ import {
 
 const prismaMock = vi.hoisted(() => ({
   userPreference: {
-    findUnique: vi.fn(async () => null),
+    findUnique: vi.fn<(args?: unknown) => Promise<Record<string, unknown> | null>>(async () => null),
   },
   user: {
     findFirst: vi.fn(async () => null),
@@ -99,5 +99,47 @@ describe('GET /api/user/api-config admin gate', () => {
     // it must NOT be 403.
     expect(res.status).not.toBe(403)
     expect(res.status).not.toBe(401)
+  })
+
+  it('shows Atlas Seed Audio character pricing instead of an unavailable placeholder', async () => {
+    mockRole('admin')
+    prismaMock.userPreference.findUnique.mockResolvedValue({
+      customModels: JSON.stringify([
+        {
+          modelId: 'bytedance/seed-audio-1.0',
+          modelKey: 'atlascloud::bytedance/seed-audio-1.0',
+          name: 'Seed Audio 1.0 (AtlasCloud)',
+          type: 'audio',
+          provider: 'atlascloud',
+          enabled: true,
+        },
+      ]),
+      customProviders: null,
+      analysisModel: null,
+      characterModel: null,
+      locationModel: null,
+      storyboardModel: null,
+      editModel: null,
+      videoModel: null,
+      lipSyncModel: null,
+      capabilityDefaults: null,
+    })
+
+    const { GET } = await import('@/app/api/user/api-config/route')
+    const res = await callRoute(GET, {
+      path: '/api/user/api-config',
+      method: 'GET',
+      context: { params: Promise.resolve({}) },
+    })
+
+    expect(res.status).toBe(200)
+    const body = await res.json() as {
+      models: Array<{ modelKey: string; priceLabel?: string }>
+      pricingDisplay: Record<string, { label: string }>
+    }
+    const model = body.models.find((entry) => entry.modelKey === 'atlascloud::bytedance/seed-audio-1.0')
+    expect(model?.priceLabel).toBe('$0.015 / 1K chars')
+    expect(body.pricingDisplay['audio::atlascloud::bytedance/seed-audio-1.0']?.label)
+      .toBe('$0.015 / 1K chars')
   })
 })

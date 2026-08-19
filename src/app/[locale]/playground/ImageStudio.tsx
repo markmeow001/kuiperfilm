@@ -23,6 +23,14 @@ interface PromptTemplate {
 export function ImageStudio({ ctrl }: ImageStudioProps) {
   const t = useTranslations('playground.image')
   const fileRef = useRef<HTMLInputElement | null>(null)
+  const aspectLabels: Record<string, string> = {
+    '9:16': t('ratio916'),
+    '16:9': t('ratio169'),
+    '1:1': t('ratio11'),
+    '4:3': t('ratio43'),
+    '3:4': t('ratio34'),
+    '4:5': t('ratio45'),
+  }
   const {
     prompt, setPrompt, promptRef, refImages,
     modelKey, setModelKey, activeModels, aspectRatio, setAspectRatio,
@@ -75,8 +83,8 @@ export function ImageStudio({ ctrl }: ImageStudioProps) {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <main className="kuiper-canvas-grid min-h-0 flex-1 overflow-y-auto">
+    <div className="flex h-full min-h-0 overflow-hidden flex-1 flex-col">
+      <section className="kuiper-canvas-grid min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto flex min-h-full w-full max-w-[1480px] flex-col px-4 py-6 sm:px-6 lg:px-8">
           {imageRuns.length === 0 && !showPlaceholder ? (
             <section className="m-auto w-full max-w-5xl py-12 text-center">
@@ -133,13 +141,18 @@ export function ImageStudio({ ctrl }: ImageStudioProps) {
                 ) : null}
 
                 {imageRuns.map((run) => (
-                  <ImageTile key={run.id} run={run} onOpen={() => setLightboxRun(run)} />
+                  <ImageTile
+                    key={run.id}
+                    run={run}
+                    resultAlt={t('resultAlt')}
+                    onOpen={() => setLightboxRun(run)}
+                  />
                 ))}
               </div>
             </>
           )}
         </div>
-      </main>
+      </section>
 
       <footer className="relative z-20 border-t border-white/[0.07] bg-[#050506]/92 px-3 py-3 backdrop-blur-xl sm:px-5">
         <div className="mx-auto w-full max-w-5xl rounded-[24px] border border-white/[0.1] bg-raised p-3 shadow-elev-3">
@@ -161,9 +174,9 @@ export function ImageStudio({ ctrl }: ImageStudioProps) {
                     onClick={() => removeRefImage(index)}
                     aria-label={t('removeReference')}
                     title={t('removeReference')}
-                    className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-md bg-black/75 text-white opacity-0 transition-opacity hover:bg-error group-hover:opacity-100"
+                    className="absolute right-0 top-0 flex h-11 w-11 items-center justify-center rounded-md bg-black/75 text-white opacity-0 transition-opacity hover:bg-error group-hover:opacity-100 focus-visible:opacity-100"
                   >
-                    <AppIcon name="close" className="h-3 w-3" />
+                    <AppIcon name="close" className="h-4 w-4" />
                   </button>
                 </div>
               ))}
@@ -180,7 +193,7 @@ export function ImageStudio({ ctrl }: ImageStudioProps) {
               disabled={isBusy || atMaxRefs}
               aria-label={t('addReference')}
               title={t('addReference')}
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/[0.09] bg-white/[0.04] text-text-secondary transition-colors hover:border-accent-500/50 hover:text-accent-400 disabled:cursor-not-allowed disabled:opacity-40"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/[0.09] bg-white/[0.04] text-text-secondary transition-colors hover:border-primary-500/50 hover:text-primary-300 disabled:cursor-not-allowed disabled:opacity-40"
             >
               <AppIcon name="plus" className="h-4 w-4" />
             </button>
@@ -225,13 +238,13 @@ export function ImageStudio({ ctrl }: ImageStudioProps) {
 
           <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-white/[0.07] pt-2">
             <label className="flex items-center gap-1.5">
-              <AppIcon name="sparklesAlt" className="h-3.5 w-3.5 text-accent-400" />
+              <AppIcon name="sparklesAlt" className="h-3.5 w-3.5 text-primary-400" />
               <span className="sr-only">{t('model')}</span>
               <select
                 value={modelKey}
                 onChange={(event) => setModelKey(event.target.value)}
                 disabled={isBusy || activeModels.length === 0}
-                className="max-w-[220px] truncate rounded-lg border border-white/[0.08] bg-white/[0.04] px-2 py-1.5 font-mono text-[10px] text-text-secondary outline-none focus:border-primary-500/40 disabled:opacity-50"
+                className="min-h-11 max-w-[220px] truncate rounded-lg border border-white/[0.08] bg-white/[0.04] px-2 py-1.5 font-mono text-[10px] text-text-secondary outline-none focus:border-primary-500/40 disabled:opacity-50"
               >
                 {activeModels.length === 0 ? <option value="">{t('noModel')}</option> : null}
                 {activeModels.map((model) => (
@@ -246,10 +259,12 @@ export function ImageStudio({ ctrl }: ImageStudioProps) {
                 value={aspectRatio}
                 onChange={(event) => setAspectRatio(event.target.value)}
                 disabled={isBusy}
-                className="rounded-lg border border-white/[0.08] bg-white/[0.04] px-2 py-1.5 font-mono text-[10px] text-text-secondary outline-none focus:border-primary-500/40"
+                className="min-h-11 rounded-lg border border-white/[0.08] bg-white/[0.04] px-2 py-1.5 font-mono text-[10px] text-text-secondary outline-none focus:border-primary-500/40"
               >
                 {ASPECT_RATIO_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>{option.label}</option>
+                  <option key={option.value} value={option.value}>
+                    {aspectLabels[option.value] ?? option.value}
+                  </option>
                 ))}
               </select>
             </label>
@@ -258,7 +273,7 @@ export function ImageStudio({ ctrl }: ImageStudioProps) {
               type="button"
               onClick={resetForm}
               disabled={isBusy}
-              className="rounded-lg px-2 py-1.5 font-mono text-[9px] text-text-tertiary transition-colors hover:bg-white/[0.05] hover:text-text-primary disabled:opacity-40"
+              className="min-h-11 min-w-11 rounded-lg px-2 py-1.5 font-mono text-[9px] text-text-tertiary transition-colors hover:bg-white/[0.05] hover:text-text-primary disabled:opacity-40"
             >
               {t('reset')}
             </button>
@@ -278,7 +293,15 @@ export function ImageStudio({ ctrl }: ImageStudioProps) {
   )
 }
 
-function ImageTile({ run, onOpen }: { run: PlaygroundRun; onOpen: () => void }) {
+function ImageTile({
+  run,
+  resultAlt,
+  onOpen,
+}: {
+  run: PlaygroundRun
+  resultAlt: string
+  onOpen: () => void
+}) {
   const url = run.resultUrls?.[0]
   return (
     <button
@@ -291,7 +314,7 @@ function ImageTile({ run, onOpen }: { run: PlaygroundRun; onOpen: () => void }) 
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={url}
-          alt="result"
+          alt={resultAlt}
           loading="lazy"
           className="w-full object-cover transition-opacity group-hover:opacity-90"
         />

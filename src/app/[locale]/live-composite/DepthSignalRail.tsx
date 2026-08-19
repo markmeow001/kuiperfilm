@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { AppIcon } from '@/components/ui/icons'
+import styles from './LiveCompositeShell.module.css'
 
 /** 深度影片是 MediaRecorder WebM；此鈕走伺服器 ffmpeg 轉檔給本機播放器。 */
 function DepthMp4DownloadButton({ file }: { file: File }) {
@@ -49,7 +50,7 @@ function DepthMp4DownloadButton({ file }: { file: File }) {
         type="button"
         onClick={() => { void downloadMp4() }}
         disabled={busy}
-        className="inline-flex items-center gap-1.5 text-xs text-stone-400 underline decoration-stone-700 underline-offset-4 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+        className={styles.signalAction}
       >
         <AppIcon name="download" className="h-3.5 w-3.5" />
         {busy ? '轉檔中…' : '下載 MP4'}
@@ -84,7 +85,7 @@ function SignalStage({ number, eyebrow, title, description, url, tone, downloadN
   const toneClass = tone === 'depth'
     ? 'border-cyan-300/30 text-cyan-200'
     : tone === 'result'
-      ? 'border-violet-300/30 text-violet-200'
+      ? 'border-cyan-300/45 text-cyan-100'
       : 'border-white/15 text-stone-300'
 
   return (
@@ -96,7 +97,7 @@ function SignalStage({ number, eyebrow, title, description, url, tone, downloadN
           <h3 className="truncate text-sm font-medium text-stone-200">{title}</h3>
         </div>
       </div>
-      <div className={`relative aspect-video overflow-hidden rounded-lg border bg-[#0d1218] ${toneClass.split(' ')[0]}`}>
+      <div className={`relative aspect-video overflow-hidden rounded-lg border bg-[var(--darkroom-inset)] ${toneClass.split(' ')[0]}`}>
         {url ? (
           <video src={url} controls playsInline preload="metadata" className="h-full w-full bg-black object-contain" aria-label={`${title}預覽`} />
         ) : (
@@ -112,7 +113,7 @@ function SignalStage({ number, eyebrow, title, description, url, tone, downloadN
       </div>
       {url && downloadName ? (
         <div className="mt-2 flex flex-wrap items-center gap-3">
-          <a href={url} download={downloadName} className="inline-flex items-center gap-1.5 text-xs text-stone-400 underline decoration-stone-700 underline-offset-4 hover:text-white">
+          <a href={url} download={downloadName} className={styles.signalAction}>
             <AppIcon name="download" className="h-3.5 w-3.5" />
             下載{title}
           </a>
@@ -134,21 +135,21 @@ export function DepthSignalRail({
   depthFile = null,
 }: DepthSignalRailProps) {
   return (
-    <section className="border-t border-white/10 bg-[#080b0f] px-4 py-4" aria-labelledby="depth-signal-heading">
+    <section className={styles.signalRail} aria-labelledby="depth-signal-heading">
       <div className="mb-4 flex items-center justify-between gap-4">
         <div>
-          <div className="text-xs font-medium uppercase tracking-[0.16em] text-cyan-300">Signal path</div>
+          <div className="text-xs font-medium tracking-[0.16em] text-cyan-300">訊號流程</div>
           <h2 id="depth-signal-heading" className="mt-1 text-sm font-semibold text-stone-100">原始表演 → 深度引導 → AI 重建</h2>
         </div>
         <p className="max-w-md text-right text-xs leading-5 text-stone-500">比對走位、輪廓與鏡頭節奏；深度畫面不是最後輸出。</p>
       </div>
 
-      <div className="flex items-start gap-3 overflow-x-auto pb-1">
-        <SignalStage number="01" eyebrow="Motion" title="原始表演" description="上傳原片後顯示。" url={sourceUrl} tone="source" />
+      <div className={styles.signalScroller}>
+        <SignalStage number="01" eyebrow="動態" title="原始表演" description="上傳原片後顯示。" url={sourceUrl} tone="source" />
         <AppIcon name="arrowRight" className="mt-[4.75rem] h-4 w-4 shrink-0 text-stone-700" aria-hidden="true" />
         <SignalStage
           number="02"
-          eyebrow="Geometry"
+          eyebrow="幾何"
           title="深度影片"
           description="本機產生後顯示黑白空間引導。"
           url={depthUrl}
@@ -157,7 +158,7 @@ export function DepthSignalRail({
           extraAction={depthUrl && depthFile ? <DepthMp4DownloadButton file={depthFile} /> : null}
         />
         <AppIcon name="arrowRight" className="mt-[4.75rem] h-4 w-4 shrink-0 text-stone-700" aria-hidden="true" />
-        <SignalStage number="03" eyebrow="Synthesis" title="AI 重建" description="確認費用並完成生成後顯示。" url={resultUrl} tone="result" downloadName={resultUrl ? resultDownloadName : undefined} />
+        <SignalStage number="03" eyebrow="合成" title="AI 重建" description="確認費用並完成生成後顯示。" url={resultUrl} tone="result" downloadName={resultUrl ? resultDownloadName : undefined} />
       </div>
     </section>
   )

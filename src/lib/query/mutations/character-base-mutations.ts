@@ -68,8 +68,16 @@ export function useGenerateProjectCharacterImage(projectId: string) {
 
 export function useUploadProjectCharacterImage(projectId: string) {
     const queryClient = useQueryClient()
-    const invalidateProjectAssets = () =>
-        invalidateQueryTemplates(queryClient, [queryKeys.projectAssets.all(projectId)])
+    const invalidateProjectAssets = async () => {
+        await queryClient.invalidateQueries({
+            queryKey: queryKeys.projectAssets.all(projectId),
+            exact: true,
+        })
+        await queryClient.invalidateQueries({
+            queryKey: queryKeys.projectAssets.characters(projectId),
+            exact: true,
+        })
+    }
 
     return useMutation({
         mutationFn: async (params: {

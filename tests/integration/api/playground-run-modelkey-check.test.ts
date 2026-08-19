@@ -143,6 +143,27 @@ describe('POST /api/playground/run — modelKey enablement gate (Phase 9.1 spine
     expect(payload.outputType).toBe('image')
   })
 
+  it('[signed immutable VoiceLine output reference] -> rejects before playground task submission', async () => {
+    const reserved = `https://cos.example/voice/project-a/episode-a/line-a/${'a'.repeat(32)}-${'b'.repeat(64)}.wav?q-signature=fake`
+    const { POST } = await loadRoute()
+    const req = buildMockRequest({
+      path: '/api/playground/run',
+      method: 'POST',
+      body: {
+        prompt: 'a sunset',
+        outputType: 'image',
+        modelKey: 'atlascloud::nano-banana-pro',
+        referenceImages: [reserved],
+      },
+    })
+
+    const res = await POST(req, { params: Promise.resolve({}) })
+    const responseBody = await res.json()
+    expect(res.status).toBe(400)
+    expect(responseBody.error.details.code).toBe('VOICE_LINE_TASK_OUTPUT_REFERENCE_FORBIDDEN')
+    expect(submitterMock.submitTask).not.toHaveBeenCalled()
+  })
+
   it('enabled video modelKey → 200 + submitTask(playground_video)', async () => {
     const { POST } = await loadRoute()
     const req = buildMockRequest({

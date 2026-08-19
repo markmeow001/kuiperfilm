@@ -35,9 +35,11 @@ const prismaMock = vi.hoisted(() => ({
     findUnique: vi.fn(),
     findFirst: vi.fn(),
     update: vi.fn(async () => undefined),
+    updateMany: vi.fn(async () => ({ count: 1 })),
   },
   novelPromotionVoiceLine: {
     findUnique: vi.fn(),
+    findFirst: vi.fn(),
   },
 }))
 
@@ -67,6 +69,7 @@ vi.mock('bullmq', () => ({
   },
 }))
 
+vi.mock('server-only', () => ({}))
 vi.mock('@/lib/redis', () => ({ queueRedis: {} }))
 vi.mock('@/lib/workers/shared', () => ({
   reportTaskProgress: workerMock.reportTaskProgress,
@@ -100,8 +103,19 @@ describe('chain contract - video queue behavior', () => {
       id: 'panel-1',
       videoUrl: 'cos/base-video.mp4',
     })
+    prismaMock.novelPromotionPanel.findFirst.mockResolvedValue({
+      id: 'panel-1',
+      videoUrl: 'cos/base-video.mp4',
+      storyboardId: 'storyboard-1',
+      storyboard: { id: 'storyboard-1', episodeId: 'episode-1' },
+    })
     prismaMock.novelPromotionVoiceLine.findUnique.mockResolvedValue({
       id: 'line-1',
+      audioUrl: 'cos/line-1.mp3',
+    })
+    prismaMock.novelPromotionVoiceLine.findFirst.mockResolvedValue({
+      id: 'line-1',
+      episodeId: 'episode-1',
       audioUrl: 'cos/line-1.mp3',
     })
   })
@@ -178,12 +192,16 @@ describe('chain contract - video queue behavior', () => {
       voiceLineId: 'line-1',
       lipSyncVideoUrl: 'cos/lip-sync/video.mp4',
     })
-    expect(prismaMock.novelPromotionPanel.update).toHaveBeenCalledWith({
-      where: { id: 'panel-1' },
+    expect(prismaMock.novelPromotionPanel.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 'panel-1',
+        storyboard: { episode: { novelPromotionProject: { projectId: 'project-1' } } },
+      },
       data: {
         lipSyncVideoUrl: 'cos/lip-sync/video.mp4',
         lipSyncTaskId: null,
       },
     })
+    expect(prismaMock.novelPromotionPanel.update).not.toHaveBeenCalled()
   })
 })

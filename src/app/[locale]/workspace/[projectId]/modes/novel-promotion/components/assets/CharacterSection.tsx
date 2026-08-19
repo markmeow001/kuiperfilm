@@ -40,8 +40,6 @@ interface CharacterSectionProps {
     onUndo: (characterId: string, appearanceId: string) => void
     onImageClick: (imageUrl: string) => void
     onImageEdit: (characterId: string, appearanceId: string, imageIndex: number, characterName: string) => void
-    onVoiceChange: (characterId: string, customVoiceUrl: string) => void
-    onVoiceDesign: (characterId: string, characterName: string) => void
     onVoiceSelectFromHub: (characterId: string) => void  // 🆕 从资产中心选择音色
     onCopyFromGlobal: (characterId: string) => void  // 🆕 从资产中心复制
     // 辅助函数
@@ -68,8 +66,6 @@ export default function CharacterSection({
     onUndo,
     onImageClick,
     onImageEdit,
-    onVoiceChange,
-    onVoiceDesign,
     onVoiceSelectFromHub,
     onCopyFromGlobal,
     getAppearances
@@ -266,8 +262,6 @@ export default function CharacterSection({
                                             primaryAppearanceSelected={primarySelected}
                                             projectId={projectId}
                                             onConfirmSelection={onConfirmSelection}
-                                            onVoiceChange={(characterId: string, customVoiceUrl?: string) => customVoiceUrl && onVoiceChange(characterId, customVoiceUrl)}
-                                            onVoiceDesign={onVoiceDesign}
                                             onVoiceSelectFromHub={onVoiceSelectFromHub}
                                         />
                                     )

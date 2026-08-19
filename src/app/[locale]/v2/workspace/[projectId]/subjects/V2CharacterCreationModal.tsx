@@ -15,12 +15,12 @@
  * 欄位:
  *   - 角色名稱 *
  *   - 外觀描述 (對應 schema appearance.description / 視覺特徵)
- *   - 角色描述 (對應 Character.introduction;個性/身份;沒接後端 introduction
- *     欄位以免增加 API 介面複雜度,留 deprecated TODO)
+ *   - 角色描述 (對應 Character.introduction;個性/身份;隨建立交易一併保存)
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { DragEvent } from 'react'
+import { useTranslations } from 'next-intl'
 import { AppIcon } from '@/components/ui/icons'
 import { useCharacterCreationSubmit } from '@/components/shared/assets/character-creation/hooks/useCharacterCreationSubmit'
 import { getCharacterCreatePolicy, type CharacterCreateMode } from './subject-create-policy'
@@ -39,6 +39,7 @@ const TAB_LABELS: Record<CharacterCreateMode, { label: string; icon: 'sparklesAl
 }
 
 export function V2CharacterCreationModal({ projectId, episodeId, onClose, onSuccess }: V2CharacterCreationModalProps) {
+  const t = useTranslations('v2Subjects')
   const [createMode, setCreateMode] = useState<CharacterCreateMode>('description')
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
@@ -52,9 +53,12 @@ export function V2CharacterCreationModal({ projectId, episodeId, onClose, onSucc
     isSubmitting,
     isAiDesigning,
     isExtracting,
+    uploadRecovery,
+    uploadError,
     handleExtractDescription,
     handleCreateWithReference,
     handleCreateWithUpload,
+    handleRetryUpload,
     handleAiDesign,
     handleSubmit,
     handleCreateOnly,
@@ -64,6 +68,7 @@ export function V2CharacterCreationModal({ projectId, episodeId, onClose, onSucc
     episodeId,
     name,
     description,
+    introduction,
     aiInstruction,
     referenceImagesBase64,
     referenceSubMode,
@@ -72,30 +77,7 @@ export function V2CharacterCreationModal({ projectId, episodeId, onClose, onSucc
     changeReason: '',
     setDescription,
     setAiInstruction,
-    onSuccess: async () => {
-      // After the character row + appearance image task are kicked off,
-      // patch in the introduction text. Failure here is non-fatal — the
-      // character still exists; the user can edit later.
-      if (introduction.trim()) {
-        try {
-          await fetch(`/api/novel-promotion/${projectId}/character`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({
-              // Note: PATCH expects characterId. We don't know the new
-              // character's id from the submit hook (it doesn't expose
-              // the create response). Skip silently when we can't —
-              // worst case the introduction is empty and editable later.
-              introduction: introduction.trim(),
-            }),
-          })
-        } catch {
-          /* non-fatal — see comment above */
-        }
-      }
-      onSuccess()
-    },
+    onSuccess,
     onClose,
   })
 
@@ -145,6 +127,7 @@ export function V2CharacterCreationModal({ projectId, episodeId, onClose, onSucc
   })
 
   function dispatchSubmit() {
+    if (uploadRecovery) return handleRetryUpload()
     if (!createPolicy.canGenerate) return
     if (createMode === 'description') return handleSubmit()
     if (createMode === 'reference') return handleCreateWithReference()
@@ -156,6 +139,7 @@ export function V2CharacterCreationModal({ projectId, episodeId, onClose, onSucc
       className="kuiper-modal-backdrop fixed inset-0 z-50 flex items-center justify-center px-4 py-8"
       role="dialog"
       aria-modal="true"
+      aria-labelledby="v2-character-create-title"
       onClick={(e) => {
         if (e.target === e.currentTarget && !isSubmitting && !isAiDesigning) onClose()
       }}
@@ -172,7 +156,7 @@ export function V2CharacterCreationModal({ projectId, episodeId, onClose, onSucc
           <div>
             <div className="flex items-center gap-2.5">
               <AppIcon name="sparklesAlt" className="h-4 w-4 text-primary-400" />
-              <div className="font-fraunces text-lg italic text-text-primary">新建角色</div>
+              <div id="v2-character-create-title" className="font-fraunces text-lg italic text-text-primary">新建角色</div>
             </div>
             <div className="mt-1 font-mono text-[10px] tracking-wider text-text-tertiary">
               選擇創建方式:AI 提示詞生成、上傳參考圖生成、或直接上傳四視圖
@@ -199,7 +183,7 @@ export function V2CharacterCreationModal({ projectId, episodeId, onClose, onSucc
                 key={m}
                 type="button"
                 onClick={() => setCreateMode(m)}
-                disabled={isSubmitting || isAiDesigning}
+                disabled={isSubmitting || isAiDesigning || Boolean(uploadRecovery)}
                 className={`flex items-center justify-center gap-2 rounded-sm border px-4 py-2.5 font-serif-cn text-sm transition-all disabled:opacity-50 ${
                   active
                     ? 'border-primary-500/60 bg-primary-500/10 text-primary-300'
@@ -376,38 +360,51 @@ export function V2CharacterCreationModal({ projectId, episodeId, onClose, onSucc
 
         {/* Footer */}
         <div className="border-t border-primary-900/20 bg-raised/30 px-6 py-4 flex-shrink-0">
+          {uploadRecovery && uploadError ? (
+            <div
+              role="alert"
+              className="mb-3 rounded-sm border border-rose-500/35 bg-rose-500/10 px-3 py-2 font-serif-cn text-sm text-rose-200"
+            >
+              {uploadError}
+            </div>
+          ) : null}
           {createPolicy.hint ? (
             <div className="mb-3 font-mono text-[11px] tracking-wider text-primary-300/80" role="status">
               {createPolicy.hint}
             </div>
           ) : null}
-          <div className="flex items-center justify-end gap-3">
+          <div className="flex flex-col items-stretch justify-end gap-3 sm:flex-row sm:items-center">
             <button
               type="button"
               onClick={onClose}
               disabled={isSubmitting || isAiDesigning}
-              className="rounded-sm px-4 py-2 font-mono text-[12px] uppercase tracking-wider text-text-secondary transition-colors hover:text-text-primary disabled:opacity-50"
+              className="min-h-11 rounded-sm px-4 py-2 font-mono text-[12px] uppercase tracking-wider text-text-secondary transition-colors hover:text-text-primary disabled:opacity-50"
             >
               取消
             </button>
             <button
               type="button"
               onClick={() => void handleCreateOnly()}
-              disabled={!createPolicy.canCreateOnly}
-              className="flex items-center gap-2 rounded-sm border border-primary-500/40 px-5 py-2 font-serif-cn text-sm text-primary-300 transition-all hover:bg-primary-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={!createPolicy.canCreateOnly || Boolean(uploadRecovery)}
+              className="flex min-h-11 items-center justify-center gap-2 rounded-sm border border-primary-500/40 px-5 py-2 font-serif-cn text-sm text-primary-300 transition-all hover:bg-primary-500/10 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <AppIcon name="plus" className="h-4 w-4" />
               只建立角色
             </button>
             <button
               type="submit"
-              disabled={!createPolicy.canGenerate}
-              className="flex items-center gap-2 rounded-sm bg-primary-500 px-5 py-2 font-serif-cn text-sm font-medium text-canvas transition-all hover:bg-primary-400 disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={uploadRecovery ? isSubmitting : !createPolicy.canGenerate}
+              className="flex min-h-11 items-center justify-center gap-2 rounded-sm bg-primary-500 px-5 py-2 font-serif-cn text-sm font-medium text-canvas transition-all hover:bg-primary-400 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isSubmitting ? (
                 <>
                   <AppIcon name="loader" className="h-4 w-4 animate-spin" />
                   建立中…
+                </>
+              ) : uploadRecovery ? (
+                <>
+                  <AppIcon name="upload" className="h-4 w-4" />
+                  {t('uploadRecovery.retry')}
                 </>
               ) : (
                 <>

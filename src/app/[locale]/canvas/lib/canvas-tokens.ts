@@ -9,38 +9,38 @@
  * components and the canvas shell stay visually consistent without copying
  * hex strings around (immutable single source — see coding-style 鐵則).
  *
- * Canvas-local tokens mapped to the Kuiper V2 product language: near-black
- * surfaces, magenta creation actions, violet AI tools, and restrained gold
- * output accents.
+ * Canvas-local tokens mapped to the Kuiper production darkroom. Node-type
+ * accents remain meaningful status markers, while shell actions, selection
+ * and active edges use the shared process cyan language.
  */
 export const CANVAS_TOKENS = {
   bg: {
-    canvas: '#08070B',
-    app: '#100E15',
-    panel: '#15121C',
-    popover: '#191521',
-    card: '#1B1723',
+    canvas: '#070B0F',
+    app: '#0D141B',
+    panel: '#111B24',
+    popover: '#17232D',
+    card: '#111B24',
     hover: 'rgba(255,255,255,0.07)',
-    active: 'rgba(216,70,239,0.16)',
-    input: '#0F0D13',
+    active: 'rgba(85,175,192,0.16)',
+    input: '#0D141B',
   },
-  accent: '#E052E8',
-  accentSoft: 'rgba(224,82,232,0.14)',
+  accent: '#55AFC0',
+  accentSoft: 'rgba(85,175,192,0.14)',
   accentText: '#FFFFFF', // text on accent surfaces
-  cta: '#FFFFFF', // generate ↑ button — white pill, dark glyph
-  ctaText: '#100E15',
+  cta: '#55AFC0',
+  ctaText: '#071014',
   gold: '#E9B95B',
   sceneBlue: '#8D76FF',
   text: {
-    primary: '#F7F7F7',
-    secondary: '#B5ADBE',
-    muted: '#7C7385',
+    primary: '#F2F6F7',
+    secondary: '#A7B3BC',
+    muted: '#7F9099',
   },
-  hairline: '#30293A',
-  selectedRing: '#E052E8',
+  hairline: '#263642',
+  selectedRing: '#55AFC0',
   edge: {
-    idle: '#665D70',
-    lit: '#E052E8',
+    idle: '#4B6271',
+    lit: '#55AFC0',
   },
   shadow: '0 8px 24px rgba(0,0,0,0.28)',
   shadowPopover: '0 24px 60px rgba(0,0,0,0.58)',
@@ -55,16 +55,16 @@ export const NODE_META: Record<
   CanvasNodeType,
   { label: string; accent: string; hint: string }
 > = {
-  character: { label: '角色', accent: '#C8A2FF', hint: '绑参考图 / 角色库' },
-  image: { label: '图片', accent: CANVAS_TOKENS.accent, hint: '文字生图 / 编辑' },
-  video: { label: '视频', accent: '#7BE3A4', hint: '首帧图 → 短片' },
-  text: { label: '文本', accent: CANVAS_TOKENS.text.secondary, hint: '脚本 / 提示词' },
-  director: { label: '导演台', accent: '#8D76FF', hint: '3D 站位 → 参考图' },
-  script: { label: '脚本', accent: '#E9B95B', hint: '剧本 → 分镜 → 批量生图' },
-  audio: { label: '音频', accent: '#F78FD2', hint: '文字 + 参考音 → 克隆配音' },
-  composition: { label: '视频合成', accent: '#55D6A8', hint: '片段排序 → 成片' },
-  mask: { label: '遮罩', accent: '#FF58C5', hint: '圈选背景 / 修补范围' },
+  character: { label: '角色', accent: '#C8A2FF', hint: '綁定參考圖／角色庫' },
+  image: { label: '圖片', accent: CANVAS_TOKENS.accent, hint: '文字生圖／編輯' },
+  video: { label: '影片', accent: '#7BE3A4', hint: '首幀圖 → 短片' },
+  text: { label: '文字', accent: CANVAS_TOKENS.text.secondary, hint: '腳本／提示詞' },
+  director: { label: '導演台', accent: '#8D76FF', hint: '3D 站位 → 參考圖' },
+  script: { label: '腳本', accent: '#E9B95B', hint: '劇本 → 分鏡 → 批次生圖' },
+  audio: { label: '音訊', accent: '#F78FD2', hint: '文字＋參考音 → 複製配音' },
+  composition: { label: '影片合成', accent: '#55D6A8', hint: '片段排序 → 成片' },
+  mask: { label: '遮罩', accent: '#FF58C5', hint: '圈選背景／修補範圍' },
   // Container only — never offered in add menus (ADD_ORDER excludes it);
   // created via G 成组 on a multi-selection.
-  group: { label: '分组', accent: CANVAS_TOKENS.text.muted, hint: '' },
+  group: { label: '群組', accent: CANVAS_TOKENS.text.muted, hint: '' },
 }

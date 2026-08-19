@@ -8,6 +8,7 @@
  * id alone.
  */
 import { prisma } from '@/lib/prisma'
+import { assertNoVoiceLineTaskOutputReferences } from '@/lib/media/recursive-write-policy'
 import type { CanvasSaveInput } from './canvas-validation'
 
 export interface CanvasRecord {
@@ -76,6 +77,8 @@ export async function upsertCanvasForUser(
   userId: string,
   input: CanvasSaveInput,
 ): Promise<CanvasRecord> {
+  await assertNoVoiceLineTaskOutputReferences(input.nodes)
+
   const data = {
     title: input.title ?? '未命名画布',
     kind: input.kind,

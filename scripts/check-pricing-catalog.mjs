@@ -4,7 +4,7 @@ import path from 'node:path'
 const CATALOG_DIR = path.resolve(process.cwd(), 'standards/pricing')
 const CAPABILITY_CATALOG_FILE = path.resolve(process.cwd(), 'standards/capabilities/image-video.catalog.json')
 const API_TYPES = new Set(['text', 'image', 'video', 'voice', 'voice-design', 'lip-sync'])
-const PRICING_MODES = new Set(['flat', 'capability'])
+const PRICING_MODES = new Set(['flat', 'capability', 'usage'])
 const TEXT_TOKEN_TYPES = new Set(['input', 'output'])
 
 function isRecord(value) {
@@ -208,13 +208,38 @@ function validatePricing(issues, file, index, item, capabilityOptionFieldsMap) {
   }
 
   if (!isNonEmptyString(pricing.mode) || !PRICING_MODES.has(pricing.mode)) {
-    pushIssue(issues, file, index, 'pricing.mode', 'pricing.mode must be flat or capability')
+    pushIssue(issues, file, index, 'pricing.mode', 'pricing.mode must be flat, capability, or usage')
     return
   }
 
   if (pricing.mode === 'flat') {
     if (!isFiniteNumber(pricing.flatAmount) || pricing.flatAmount < 0) {
       pushIssue(issues, file, index, 'pricing.flatAmount', 'flatAmount must be finite number >= 0')
+    }
+    return
+  }
+
+  if (pricing.mode === 'usage') {
+    const allowedFields = new Set(['mode', 'currency', 'unit', 'unitAmount', 'countScale'])
+    for (const field of Object.keys(pricing)) {
+      if (!allowedFields.has(field)) {
+        pushIssue(issues, file, index, `pricing.${field}`, `${field} is not allowed in usage mode`)
+      }
+    }
+    if (item.apiType !== 'voice') {
+      pushIssue(issues, file, index, 'pricing.mode', 'usage mode is only valid for voice')
+    }
+    if (pricing.currency !== 'USD') {
+      pushIssue(issues, file, index, 'pricing.currency', 'voice usage currency must be USD')
+    }
+    if (pricing.unit !== 'character') {
+      pushIssue(issues, file, index, 'pricing.unit', 'voice usage unit must be character')
+    }
+    if (!isFiniteNumber(pricing.unitAmount) || pricing.unitAmount < 0) {
+      pushIssue(issues, file, index, 'pricing.unitAmount', 'unitAmount must be finite number >= 0')
+    }
+    if (!Number.isInteger(pricing.countScale) || pricing.countScale <= 0) {
+      pushIssue(issues, file, index, 'pricing.countScale', 'countScale must be a positive integer')
     }
     return
   }

@@ -1,229 +1,190 @@
 'use client'
 
-/**
- * Phase 12 — v2 workspace home (project overview).
- *
- * Replaces the OPC/BCP mockup home with a per-project overview:
- *   - project name + creation date
- *   - 6-step progress checklist (read state from project data)
- *   - shortcut chips into each step
- *   - "繼續" CTA jumps to the highest unfinished step
- */
-
-import Link from 'next/link'
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useTranslations } from 'next-intl'
 import { UserRole } from '@/lib/auth/user-role'
-import { AppIcon } from '@/components/ui/icons'
 import { useProjectData } from '@/lib/query/hooks/useProjectData'
 import { useProjectAccess } from '@/lib/query/hooks/useProjectAccess'
-import { useProjectCharacters, useProjectLocations } from '@/lib/query/hooks/useProjectAssets'
-import { useStoryboards } from '@/lib/query/hooks/useStoryboards'
-import { V2_STEPS, type V2StepId } from '@/components/v2/v2-types'
+import { useProjectProps } from '@/lib/query/hooks/useProjectAssets'
+import { UiStatePanel } from '@/components/v2/UiStatePanel'
+import { ProjectHomeContent } from './ProjectHomeContent'
 import { V2ProjectSettingsPanel } from './V2ProjectSettingsPanel'
 import { ProjectCollaboratorsModal } from './ProjectCollaboratorsModal'
 import { ProjectAuditLogModal } from './ProjectAuditLogModal'
+import { buildProjectHomeModel, type ProjectHomeProject } from './project-home-model'
+import { useProjectHomeEpisodes } from './useProjectHomeEpisodes'
 
 interface V2HomeClientProps {
   projectId: string
   locale: string
 }
 
-interface NovelData {
-  novelText?: string | null
-  videoModel?: string | null
-  episodes?: Array<{ id: string; novelText?: string | null }> | null
-}
-interface ProjectShape {
-  name?: string | null
-  createdAt?: string | null
-  novelPromotionData?: NovelData | null
-  // Phase 12.5 — workspace assignment + optional eager-loaded workspace data
-  workspaceId?: string | null
-  workspace?: { id: string; name: string | null } | null
-  // Phase 2.5 (2026-06-10) — Skill anchor when present
-  originSkillId?: string | null
-  originSkill?: {
-    id: string
-    slug: string
-    name: string
-    nameEn?: string | null
-    authorDisplay: string
-    authorType: 'official' | 'community'
-    isFeatured: boolean
-  } | null
-}
-
-interface PanelLike {
-  id: string
-  imageUrl?: string | null
-  videoUrl?: string | null
+function StatePage({ children }: { children: ReactNode }) {
+  return (
+    <div className="kuiper-dashboard min-h-full px-4 py-8 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-3xl">{children}</div>
+    </div>
+  )
 }
 
 export function V2HomeClient({ projectId, locale }: V2HomeClientProps) {
-  const t = useTranslations('v2Home.projectHome')
+  const t = useTranslations('v2Production.projectStates')
   const projectQuery = useProjectData(projectId)
-  // Phase 12.5 — show 協作者 management button only to owner / admin.
-  // Other roles (ws_owner / editor / viewer) can see the project but
-  // can't reshape its grant tree.
-  const { role: accessRole } = useProjectAccess(projectId)
-  const canManageCollaborators = accessRole === UserRole.OWNER || accessRole === UserRole.ADMIN
+  const access = useProjectAccess(projectId)
+  const episodesQuery = useProjectHomeEpisodes(projectId)
+  const propsQuery = useProjectProps(projectId)
   const [collabModalOpen, setCollabModalOpen] = useState(false)
   const [auditModalOpen, setAuditModalOpen] = useState(false)
-  const charsQuery = useProjectCharacters(projectId)
-  const locsQuery = useProjectLocations(projectId)
-  const project = projectQuery.data as ProjectShape | undefined
-  const firstEpisodeId = project?.novelPromotionData?.episodes?.[0]?.id ?? null
-  const storyboardsQuery = useStoryboards(projectId, firstEpisodeId)
-  const storyboardsData = storyboardsQuery.data as { storyboards?: Array<{ panels?: PanelLike[] }> } | undefined
 
-  const allPanels = (storyboardsData?.storyboards ?? []).flatMap((s) => s.panels ?? [])
-  const panelsWithImage = allPanels.filter((p) => p.imageUrl).length
-  const panelsWithVideo = allPanels.filter((p) => p.videoUrl).length
-
-  const charCount = charsQuery.data?.length ?? 0
-  const locCount = locsQuery.data?.length ?? 0
-  // v2 writes novelText to episodes[0].novelText (project.novelText is never
-  // set because PATCH /api/novel-promotion/[id] silently drops the field).
-  const episodeNovelText = project?.novelPromotionData?.episodes?.[0]?.novelText ?? null
-  const projectNovelText = project?.novelPromotionData?.novelText ?? null
-  const hasNovelText = Boolean((episodeNovelText ?? projectNovelText)?.trim())
-
-  const stepStatus: Record<V2StepId, 'done' | 'in-progress' | 'todo'> = {
-    home: 'done',
-    script: hasNovelText ? 'done' : 'todo',
-    subjects: charCount + locCount > 0 ? 'done' : 'todo',
-    storyboard: panelsWithImage > 0 ? 'done' : allPanels.length > 0 ? 'in-progress' : 'todo',
-    voice: 'todo',
-    final: panelsWithVideo > 0 ? 'in-progress' : 'todo',
+  if (access.isLoading || projectQuery.isLoading) {
+    return (
+      <StatePage>
+        <UiStatePanel
+          state="loading"
+          locale={locale}
+          title={t('loadingTitle')}
+          description={t('loadingDescription')}
+        />
+      </StatePage>
+    )
   }
 
-  // Pick the first non-done step (excluding home) as "繼續" target.
-  const nextStep =
-    V2_STEPS.find((s) => s.id !== 'home' && stepStatus[s.id] !== 'done')?.id ?? 'final'
-
-  const projectName = project?.name?.trim() ? project.name : t('untitledProject')
-
-  return (
-    <div className="px-12 py-10">
-      <div className="max-w-5xl">
-        <p className="mb-2 font-fraunces text-base italic text-amber-500/80">{t('overviewKicker')}</p>
-        <h2 className="font-serif-cn text-3xl font-medium tracking-wide text-stone-100">
-          《{projectName}》
-        </h2>
-
-        {/* Phase 2.5 (2026-06-10) — Skill anchor chip. Shows when the
-            project was created via a Skill picker selection. Worker
-            reads project.originSkill.config at submit time. */}
-        {project?.originSkill ? (
-          <Link
-            href={`/${locale}/skills`}
-            className="mt-3 inline-flex items-center gap-2 rounded-sm border border-violet-500/40 bg-violet-500/5 px-3 py-1.5 font-mono text-[11px] tracking-wider text-violet-200 transition-colors hover:bg-violet-500/10"
-            title="此專案由此 Skill 驅動 — 點擊管理 Skill 庫"
-          >
-            <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-violet-400/80">
-              SKILL
-            </span>
-            <span className="font-serif-cn text-[13px] text-violet-100">
-              {project.originSkill.name}
-            </span>
-            {project.originSkill.isFeatured ? (
-              <span className="rounded-sm bg-amber-500/15 px-1.5 font-mono text-[9px] uppercase tracking-wider text-amber-400">
-                精選
-              </span>
-            ) : null}
-            <span className="text-[10px] text-violet-400/60">
-              {project.originSkill.authorDisplay}
-            </span>
-          </Link>
-        ) : null}
-
-        <div className="mt-2 flex items-center gap-3 font-mono text-[11px] tracking-wider text-stone-500">
-          <span>{t('projectIdLabel')} · {projectId}</span>
-          {canManageCollaborators ? (
+  if (access.isError) {
+    return (
+      <StatePage>
+        <UiStatePanel
+          state="error"
+          locale={locale}
+          title={t('accessErrorTitle')}
+          description={t('accessErrorDescription')}
+          details={access.error?.message ?? t('accessErrorUnknown')}
+          primaryAction={
             <button
               type="button"
-              onClick={() => setCollabModalOpen(true)}
-              className="rounded-sm border border-amber-500/40 bg-amber-500/5 px-2 py-0.5 font-mono text-[11px] tracking-wider text-amber-300 transition-all hover:bg-amber-500/15"
-              title={t('collaboratorsTitle')}
+              className="kuiper-dashboard-primary px-4 text-[14px]"
+              onClick={() => void access.refetch()}
             >
-              {t('collaboratorsButton')}
+              {t('accessRetry')}
             </button>
-          ) : null}
-          {/* Activity log — any read access can open. Transparency by design. */}
-          <button
-            type="button"
-            onClick={() => setAuditModalOpen(true)}
-            className="rounded-sm border border-stone-700 bg-stone-900/40 px-2 py-0.5 font-mono text-[11px] tracking-wider text-stone-400 transition-all hover:border-amber-500/40 hover:text-amber-300"
-            title={t('activityTitle')}
-          >
-            {t('activityButton')}
-          </button>
-        </div>
+          }
+        />
+      </StatePage>
+    )
+  }
 
-        <div className="mt-10 grid grid-cols-2 gap-3 lg:grid-cols-3">
-          {V2_STEPS.filter((s) => s.id !== 'home').map((step) => {
-            const status = stepStatus[step.id]
-            const tone =
-              status === 'done'
-                ? 'border-emerald-500/40 bg-emerald-500/5'
-                : status === 'in-progress'
-                  ? 'border-amber-500/40 bg-amber-500/5'
-                  : 'border-stone-800 bg-stone-900/30'
-            const dot =
-              status === 'done'
-                ? 'bg-emerald-500'
-                : status === 'in-progress'
-                  ? 'bg-amber-500'
-                  : 'bg-stone-700'
-            return (
-              <Link
-                key={step.id}
-                href={`/${locale}/v2/workspace/${projectId}/${step.id}`}
-                className={`group relative flex items-center gap-4 rounded-sm border px-5 py-4 transition-all hover:-translate-y-0.5 ${tone}`}
-              >
-                <div className="font-mono text-[11px] tracking-[0.2em] text-stone-500">{step.num}</div>
-                <AppIcon name={step.icon} className="h-5 w-5 text-stone-400" />
-                <div className="flex-1">
-                  <div className="font-serif-cn text-base text-stone-100">{step.label}</div>
-                  <div className="font-fraunces text-[11px] italic text-stone-500">{step.subtitle}</div>
-                </div>
-                <span className={`h-2 w-2 rounded-full ${dot}`} />
-              </Link>
-            )
-          })}
-        </div>
+  if (!access.allowed) {
+    return (
+      <StatePage>
+        <UiStatePanel
+          state="permission"
+          locale={locale}
+          title={t('permissionTitle')}
+          description={t('permissionDescription')}
+          primaryAction={
+            <button
+              type="button"
+              className="kuiper-dashboard-primary px-4 text-[14px]"
+              onClick={() => void access.refetch()}
+            >
+              {t('permissionRetry')}
+            </button>
+          }
+        />
+      </StatePage>
+    )
+  }
 
-        <div className="mt-10">
-          <Link
-            href={`/${locale}/v2/workspace/${projectId}/${nextStep}`}
-            className="inline-flex items-center gap-2 rounded-sm bg-amber-500 px-6 py-3 font-serif-cn text-base font-medium text-stone-950 transition-all hover:bg-amber-400"
-          >
-            {t('continueCta', { label: V2_STEPS.find((s) => s.id === nextStep)?.label ?? '' })}
-            <AppIcon name="chevronRight" className="h-4 w-4" />
-          </Link>
-        </div>
+  if (projectQuery.isError && !projectQuery.data) {
+    const message = projectQuery.error instanceof Error
+      ? projectQuery.error.message
+      : t('projectErrorUnknown')
+    return (
+      <StatePage>
+        <UiStatePanel
+          state="error"
+          locale={locale}
+          title={t('projectErrorTitle')}
+          description={t('projectErrorDescription')}
+          details={message}
+          primaryAction={
+            <button
+              type="button"
+              className="kuiper-dashboard-primary px-4 text-[14px]"
+              onClick={() => void projectQuery.refetch()}
+            >
+              {t('reload')}
+            </button>
+          }
+        />
+      </StatePage>
+    )
+  }
 
-        {/* Project-level settings — videoRatio + style preset (Stage B) */}
-        <div className="mt-10">
-          <V2ProjectSettingsPanel projectId={projectId} />
-        </div>
+  if (!projectQuery.data) {
+    return (
+      <StatePage>
+        <UiStatePanel
+          state="error"
+          locale={locale}
+          title={t('missingTitle')}
+          description={t('missingDescription')}
+        />
+      </StatePage>
+    )
+  }
 
-        <div className="mt-12 rounded-sm border border-stone-800/60 bg-stone-900/30 p-6">
-          <div className="mb-3 font-fraunces text-sm italic text-amber-500/80">{t('statsKicker')}</div>
-          <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-            <Stat label={t('statCharacters')} value={charCount} />
-            <Stat label={t('statLocations')} value={locCount} />
-            <Stat label={t('statPanels')} value={allPanels.length} />
-            <Stat label={t('statVideos')} value={panelsWithVideo} />
-          </dl>
-        </div>
-      </div>
+  const project = projectQuery.data as ProjectHomeProject
+  const episodes = episodesQuery.data ?? null
+  const propsCount = propsQuery.data?.length ?? null
+  const model = buildProjectHomeModel(project, episodes, propsCount)
+  const canManageCollaborators = access.role === UserRole.OWNER || access.role === UserRole.ADMIN
+  const partialIssues: string[] = []
+  if (projectQuery.isError) {
+    partialIssues.push(
+      projectQuery.error instanceof Error
+        ? t('projectIssue', { message: projectQuery.error.message })
+        : t('projectIssueUnknown'),
+    )
+  }
+  if (episodesQuery.isError) {
+    partialIssues.push(
+      episodesQuery.error instanceof Error
+        ? t('episodeIssue', { message: episodesQuery.error.message })
+        : t('episodeIssueUnknown'),
+    )
+  }
+  if (propsQuery.isError) {
+    partialIssues.push(
+      propsQuery.error instanceof Error
+        ? t('propIssue', { message: propsQuery.error.message })
+        : t('propIssueUnknown'),
+    )
+  }
+
+  return (
+    <>
+      <ProjectHomeContent
+        project={project}
+        projectId={projectId}
+        locale={locale}
+        episodes={episodes}
+        model={model}
+        canEdit={access.canEdit}
+        canManageCollaborators={canManageCollaborators}
+        isSupplementalLoading={
+          (episodesQuery.isLoading && episodesQuery.data === undefined)
+          || (propsQuery.isLoading && propsQuery.data === undefined)
+        }
+        partialIssues={partialIssues}
+        settingsPanel={<V2ProjectSettingsPanel projectId={projectId} />}
+        onOpenCollaborators={() => setCollabModalOpen(true)}
+        onOpenAudit={() => setAuditModalOpen(true)}
+      />
 
       {collabModalOpen ? (
         <ProjectCollaboratorsModal
           projectId={projectId}
-          workspaceId={project?.workspaceId ?? null}
+          workspaceId={project.workspaceId ?? null}
           onClose={() => setCollabModalOpen(false)}
         />
       ) : null}
@@ -234,15 +195,6 @@ export function V2HomeClient({ projectId, locale }: V2HomeClientProps) {
           onClose={() => setAuditModalOpen(false)}
         />
       ) : null}
-    </div>
-  )
-}
-
-function Stat({ label, value }: { label: string; value: number }) {
-  return (
-    <div>
-      <div className="font-serif-cn text-xs text-stone-500">{label}</div>
-      <div className="mt-1 font-display text-3xl font-semibold text-amber-400">{value}</div>
-    </div>
+    </>
   )
 }

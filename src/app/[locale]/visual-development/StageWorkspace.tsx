@@ -138,7 +138,12 @@ export function StageWorkspace({
   }
 
   return (
-    <main ref={mainRef} className="min-h-0 min-w-0 overflow-y-auto overscroll-y-contain bg-canvas [scrollbar-gutter:stable]">
+    <section
+      ref={mainRef}
+      aria-labelledby={`visual-development-stage-${stage.id}`}
+      data-visual-development-stage={stage.id}
+      className="min-w-0 bg-canvas xl:min-h-0 xl:overflow-y-auto xl:overscroll-y-contain xl:[scrollbar-gutter:stable]"
+    >
       <div className="mx-auto w-full max-w-[1180px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
         <div className="mb-6 flex flex-col gap-5 border-b border-white/[0.07] pb-6 sm:flex-row sm:items-end sm:justify-between">
           <div className="min-w-0">
@@ -150,7 +155,10 @@ export function StageWorkspace({
                 {translations.previewNotice}
               </span>
             </div>
-            <h2 className="mt-2 font-serif-cn text-2xl font-semibold tracking-tight text-white">
+            <h2
+              id={`visual-development-stage-${stage.id}`}
+              className="mt-2 font-serif-cn text-2xl font-semibold tracking-tight text-white"
+            >
               {stage.title}
             </h2>
             <p className="mt-2 max-w-3xl font-serif-cn text-sm leading-6 text-text-secondary">
@@ -232,7 +240,7 @@ export function StageWorkspace({
           </div>
         </section>}
       </div>
-    </main>
+    </section>
   )
 }
 

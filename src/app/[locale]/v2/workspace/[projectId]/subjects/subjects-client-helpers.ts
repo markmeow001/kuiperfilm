@@ -25,6 +25,10 @@ export interface CharacterAppearanceLike {
   // converted the field from a JSON-string to an array. The raw DB shape
   // is JSON-string, so accept both forms here defensively.
   imageUrls?: string | string[] | null
+  arkAssetId?: string | null
+  arkAssetStatus?: string | null
+  arkAssetSourceUrl?: string | null
+  arkAssetError?: string | null
 }
 
 export interface CharacterLike {
@@ -85,6 +89,26 @@ export function pickCharacterImage(c: CharacterLike): string | null {
   }
 }
 
+export function pickCharacterAppearanceImage(
+  appearance: CharacterAppearanceLike | null | undefined,
+): string | null {
+  if (!appearance) return null
+  if (appearance.imageUrl) return appearance.imageUrl
+  const raw = appearance.imageUrls
+  if (!raw) return null
+  if (Array.isArray(raw)) {
+    return raw.find((url) => typeof url === 'string' && url.length > 0) ?? null
+  }
+  try {
+    const parsed = JSON.parse(raw) as unknown
+    return Array.isArray(parsed)
+      ? parsed.find((url): url is string => typeof url === 'string' && url.length > 0) ?? null
+      : null
+  } catch {
+    return raw.length > 0 ? raw : null
+  }
+}
+
 export function pickLocationImage(l: LocationLike): string | null {
   if (l.imageUrl) return l.imageUrl
   const found = l.images?.find((img) => Boolean(img.imageUrl))
@@ -103,11 +127,16 @@ export interface SubjectItem {
   // editor mutates and what the regen worker feeds to the image model.
   visualPrompt?: string | null
   imageUrl: string | null
+  appearanceStatus?: {
+    label: string
+    tone: 'info' | 'warning' | 'error'
+  }
   onRegenerate?: () => void
   isRegenerating?: boolean
   isLocked?: boolean
   onLock?: () => void
   isLocking?: boolean
+  lockError?: string | null
   onUpload?: (file: File) => void
   isUploading?: boolean
   onZoom?: (url: string) => void

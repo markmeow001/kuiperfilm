@@ -32,6 +32,11 @@ import {
   pickAppearanceDescription,
 } from './panel-image-task-handler-utils'
 import { loadStyleProfile } from '@/lib/style-profile/loader'
+import {
+  requireNovelPromotionPanelInProject,
+  updateNovelPromotionPanelInProject,
+} from '@/lib/novel-promotion/project-scope'
+import { canonicalizeEpisodeCharacterAppearances } from '@/lib/novel-promotion/episode-appearance'
 
 /**
  * Build natural-language scene description from panel data.
@@ -94,11 +99,10 @@ function buildSceneDescription(params: {
       const character = findCharacterByName(params.projectData.characters || [], reference.name)
       if (!character) return reference.name
 
-      const appearances = character.appearances || []
-      const matchedAppearance =
-        (reference.appearance
-          ? appearances.find((a) => (a.changeReason || '').toLowerCase() === reference.appearance!.toLowerCase())
-          : null) || appearances[0] || null
+      // The server canonical resolver collapses each referenced character
+      // to exactly one episode-authorised appearance before this function.
+      // Panel hints are descriptive legacy metadata, never an authority.
+      const matchedAppearance = character.appearances?.[0] ?? null
 
       const desc = matchedAppearance ? pickAppearanceDescription(matchedAppearance) : ''
       return desc ? `${character.name}（${desc}）` : character.name
@@ -176,19 +180,25 @@ export async function handlePanelImageTask(job: Job<TaskJobData>) {
   const payload = (job.data.payload || {}) as AnyObj
   const panelId = pickFirstString(payload.panelId, job.data.targetId)
   if (!panelId) throw new Error('panelId missing')
+  if (job.data.targetType !== 'NovelPromotionPanel' || job.data.targetId !== panelId) {
+    throw new Error('PANEL_IMAGE_TARGET_MISMATCH')
+  }
 
-  const panel = await prisma.novelPromotionPanel.findUnique({
-    where: { id: panelId },
-    include: {
-      // Phase 11.4 / multi-appearance: panel → storyboard.episodeId so we
-      // can resolve the episode's per-character appearance bindings.
-      storyboard: { select: { episodeId: true } },
-    },
+  // Fail closed before any model/provider work. Jobs are durable and can be
+  // forged or outlive a target move, so route-time authorization is not enough.
+  const panel = await requireNovelPromotionPanelInProject(job.data.projectId, panelId)
+  if (job.data.episodeId && job.data.episodeId !== panel.storyboard.episodeId) {
+    throw new Error('PANEL_IMAGE_TARGET_EPISODE_MISMATCH')
+  }
+
+  const episodeId = panel.storyboard.episodeId
+  const rawProjectData = await resolveNovelData(job.data.projectId)
+  const projectData = await canonicalizeEpisodeCharacterAppearances({
+    projectId: job.data.projectId,
+    episodeId,
+    projectData: rawProjectData,
+    panels: [panel],
   })
-
-  if (!panel) throw new Error('Panel not found')
-
-  const projectData = await resolveNovelData(job.data.projectId)
   const modelConfig = await getProjectModels(job.data.projectId, job.data.userId)
   const modelKey = modelConfig.storyboardModel
   if (!modelKey) throw new Error('Storyboard model not configured')
@@ -196,13 +206,11 @@ export async function handlePanelImageTask(job: Job<TaskJobData>) {
   const candidateCount = clampCount(payload.candidateCount ?? payload.count, 1, 4, 1)
   const isFluxKontext = modelKey.startsWith('flux-kontext')
 
-  const episodeId = panel.storyboard?.episodeId ?? null
-
   // Flux Kontext: scene base only (it treats inputImage as edit base, not character ref)
   // Other models: full reference images (character + location)
   const refs = isFluxKontext
     ? await collectPanelSceneBase(projectData, panel)
-    : await collectPanelReferenceImages(projectData, panel, episodeId)
+    : await collectPanelReferenceImages(projectData, panel)
   // Tencent VOD's CreateAigcImageTask only accepts URL refs (FileInfos
   // type='Url'); base64 entries are silently dropped, which is why
   // iangyc's storyboards were rendering invented characters even though
@@ -325,23 +333,17 @@ export async function handlePanelImageTask(job: Job<TaskJobData>) {
 
   await assertTaskActive(job, 'persist_panel_image')
   if (isFirstGeneration) {
-    await prisma.novelPromotionPanel.update({
-      where: { id: panel.id },
-      data: {
+    await updateNovelPromotionPanelInProject(job.data.projectId, panel.id, {
         imageUrl: candidates[0] || null,
         candidateImages: candidateCount > 1 ? JSON.stringify(candidates) : null,
-      },
     })
   } else {
-    await prisma.novelPromotionPanel.update({
-      where: { id: panel.id },
-      data: {
+    await updateNovelPromotionPanelInProject(job.data.projectId, panel.id, {
         previousImageUrl: panel.imageUrl,
         // Single candidate: directly replace imageUrl so user sees the new image immediately
         ...(candidateCount === 1
           ? { imageUrl: candidates[0] || null, candidateImages: null }
           : { candidateImages: JSON.stringify(candidates) }),
-      },
     })
   }
 

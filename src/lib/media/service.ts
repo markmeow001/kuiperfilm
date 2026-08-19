@@ -1,7 +1,8 @@
 import path from 'node:path'
 import { prisma } from '@/lib/prisma'
-import { extractCOSKey } from '@/lib/cos'
+import { extractCOSKey, getSignedUrl } from '@/lib/cos'
 import { stablePublicIdFromStorageKey } from './hash'
+import { isVoiceLineTaskOutputStorageKey } from '@/lib/voice/voice-line-output-key'
 import type { MediaRef } from './types'
 
 type MediaObjectRow = {
@@ -53,11 +54,11 @@ const MIME_BY_EXT: Record<string, string> = {
 }
 
 function normalizeStorageKey(value: string): string {
-  return value.replace(/^\/+/, '')
+  return value.trim().replace(/^\/+/, '')
 }
 
 function isLikelyExternalUrl(value: string): boolean {
-  return value.startsWith('http://') || value.startsWith('https://')
+  return /^https?:\/\//i.test(value)
 }
 
 function guessMimeTypeFromStorageKey(storageKey: string): string | null {
@@ -69,10 +70,25 @@ function mediaUrl(publicId: string): string {
   return `/m/${encodeURIComponent(publicId)}`
 }
 
+function parseHttpUrl(value: string): URL | null {
+  const candidate = value.startsWith('//') ? `https:${value}` : value
+  if (!/^https?:\/\//i.test(candidate)) return null
+  try {
+    const parsed = new URL(candidate)
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? parsed : null
+  } catch {
+    return null
+  }
+}
+
 function extractPublicIdFromMediaRoute(value: string): string | null {
-  if (!value.startsWith('/m/')) return null
-  const routePart = value.split('?')[0]?.split('#')[0] || ''
-  const encoded = routePart.replace('/m/', '').replace(/^\/+/, '')
+  const normalized = value.trim()
+  const parsedUrl = parseHttpUrl(normalized)
+  const routePart = parsedUrl
+    ? parsedUrl.pathname
+    : normalized.split('?')[0]?.split('#')[0] || ''
+  if (!routePart.startsWith('/m/')) return null
+  const encoded = routePart.slice('/m/'.length).replace(/^\/+/, '')
   if (!encoded) return null
   try {
     return decodeURIComponent(encoded)
@@ -103,6 +119,9 @@ export async function ensureMediaObjectFromStorageKey(
   owner?: MediaObjectOwnerContext,
 ): Promise<MediaRef> {
   const storageKey = normalizeStorageKey(rawStorageKey)
+  if (isVoiceLineTaskOutputStorageKey(storageKey)) {
+    throw new Error('VOICE_LINE_TASK_OUTPUT_REFERENCE_FORBIDDEN')
+  }
 
   const existing = (await mediaModel.findUnique({ where: { storageKey } })) as MediaObjectRow | null
   if (existing != null) {
@@ -179,12 +198,15 @@ export async function getMediaObjectById(id: string) {
  */
 export async function resolveStorageKeyFromMediaValue(value: unknown): Promise<string | null> {
   if (typeof value === 'string') {
-    const publicId = extractPublicIdFromMediaRoute(value)
+    const normalized = value.trim()
+    if (!normalized) return null
+    const publicId = extractPublicIdFromMediaRoute(normalized)
     if (publicId) {
       const media = await getMediaObjectByPublicId(publicId)
       return media?.storageKey || null
     }
-    const key = extractCOSKey(value)
+    const parsedUrl = parseHttpUrl(normalized)
+    const key = extractCOSKey(parsedUrl?.toString() ?? normalized)
     return key ? normalizeStorageKey(key) : null
   }
 
@@ -198,13 +220,29 @@ export async function resolveStorageKeyFromMediaValue(value: unknown): Promise<s
   return null
 }
 
+export async function classifyVoiceLineTaskOutputReference(
+  value: unknown,
+): Promise<'other' | 'reserved' | 'unresolved_media_alias'> {
+  if (typeof value !== 'string' || !value.trim()) return 'other'
+  const normalized = value.trim()
+  const isMediaAlias = extractPublicIdFromMediaRoute(normalized) !== null
+  const storageKey = await resolveStorageKeyFromMediaValue(normalized)
+  if (isMediaAlias && !storageKey) return 'unresolved_media_alias'
+  return storageKey && isVoiceLineTaskOutputStorageKey(normalizeStorageKey(storageKey))
+    ? 'reserved'
+    : 'other'
+}
+
 export function extractStorageKeyFromLegacyValue(value: unknown): string | null {
   if (typeof value !== 'string' || !value.trim()) return null
-  if (value.startsWith('/m/')) return null
+  const normalized = value.trim()
+  if (extractPublicIdFromMediaRoute(normalized)) return null
+  const parsedUrl = parseHttpUrl(normalized)
 
   // Keep external URLs that are actually COS object URLs (path -> key).
-  if (isLikelyExternalUrl(value) || value.startsWith('/api/files/') || !value.startsWith('/')) {
-    return extractCOSKey(value)
+  if (isLikelyExternalUrl(normalized) || normalized.startsWith('/api/files/') || !normalized.startsWith('/')) {
+    const key = extractCOSKey(parsedUrl?.toString() ?? normalized)
+    return key ? normalizeStorageKey(key) : null
   }
 
   return null
@@ -214,9 +252,58 @@ export async function resolveMediaRefFromLegacyValue(
   value: unknown,
   owner?: MediaObjectOwnerContext,
 ): Promise<MediaRef | null> {
+  const classification = await classifyVoiceLineTaskOutputReference(value)
+  if (classification === 'unresolved_media_alias') {
+    if (owner?.uploadedByUserId) {
+      throw new Error('MEDIA_WRITE_REFERENCE_INVALID')
+    }
+    return null
+  }
+  if (classification === 'reserved') {
+    throw new Error('VOICE_LINE_TASK_OUTPUT_REFERENCE_FORBIDDEN')
+  }
   const storageKey = extractStorageKeyFromLegacyValue(value)
   if (!storageKey) return null
   return ensureMediaObjectFromStorageKey(storageKey, undefined, owner)
+}
+
+/**
+ * VoiceLine task outputs are immutable publication artifacts, not reusable
+ * MediaObjects. Serialize them through a virtual signed ref so a read never
+ * creates a database reference that would permanently block terminal cleanup.
+ */
+export async function resolveVoiceLineMediaRef(
+  mediaId: unknown,
+  legacyValue: unknown,
+): Promise<MediaRef | null> {
+  if (typeof mediaId === 'string' && mediaId.trim()) {
+    const mediaById = await getMediaObjectById(mediaId)
+    if (mediaById && !isVoiceLineTaskOutputStorageKey(mediaById.storageKey ?? '')) {
+      return mediaById
+    }
+    if (mediaById?.storageKey) legacyValue = mediaById.storageKey
+  }
+
+  const storageKey = await resolveStorageKeyFromMediaValue(legacyValue)
+  if (storageKey && isVoiceLineTaskOutputStorageKey(normalizeStorageKey(storageKey))) {
+    const canonicalKey = normalizeStorageKey(storageKey)
+    const publicId = stablePublicIdFromStorageKey(canonicalKey)
+    return {
+      id: `voice-line-output:${publicId}`,
+      publicId,
+      url: getSignedUrl(canonicalKey),
+      mimeType: 'audio/wav',
+      sizeBytes: null,
+      width: null,
+      height: null,
+      durationMs: null,
+      sha256: null,
+      updatedAt: null,
+      storageKey: canonicalKey,
+    }
+  }
+
+  return resolveMediaRefFromLegacyValue(legacyValue)
 }
 
 export async function resolveMediaRef(

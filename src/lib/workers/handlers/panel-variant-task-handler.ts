@@ -20,6 +20,11 @@ import {
 } from './image-task-handler-shared'
 import { buildPrompt, PROMPT_IDS } from '@/lib/prompt-i18n'
 import { loadStyleProfile } from '@/lib/style-profile/loader'
+import { canonicalizeEpisodeCharacterAppearances } from '@/lib/novel-promotion/episode-appearance'
+import {
+  requireNovelPromotionPanelInProject,
+  updateNovelPromotionPanelInProject,
+} from '@/lib/novel-promotion/project-scope'
 
 // ── 构建变体提示词 ──────────────────────────────────────
 interface VariantPromptParams {
@@ -74,7 +79,10 @@ function buildCharactersInfo(
   return panelCharacters.map(item => {
     const character = findCharacterByName(projectData.characters || [], item.name)
     const intro = character?.introduction || ''
-    const appearance = item.appearance || '默认形象'
+    // The canonical resolver collapses this character to its one
+    // episode-authorised appearance. The panel's legacy hint is descriptive
+    // input only and cannot override that binding.
+    const appearance = character?.appearances?.[0]?.changeReason || '默认形象'
     return `- ${item.name}（${appearance}）${intro ? `：${intro}` : ''}`
   }).join('\n')
 }
@@ -115,15 +123,30 @@ export async function handlePanelVariantTask(job: Job<TaskJobData>) {
   if (!newPanelId || !sourcePanelId) {
     throw new Error('panel_variant missing newPanelId/sourcePanelId')
   }
+  if (job.data.targetType !== 'NovelPromotionPanel' || job.data.targetId !== newPanelId) {
+    throw new Error('PANEL_VARIANT_TARGET_MISMATCH')
+  }
 
-  // Panel 已在 API route 中创建，这里只需获取它
-  const newPanel = await prisma.novelPromotionPanel.findUnique({ where: { id: newPanelId } })
-  if (!newPanel) throw new Error('New panel not found (should have been created by API route)')
+  // Queue payloads are durable and untrusted. Resolve both panels through
+  // the project-scoped DAL before model/provider work, and require one
+  // episode so the source image cannot smuggle another episode's identity.
+  const newPanel = await requireNovelPromotionPanelInProject(job.data.projectId, newPanelId)
+  const sourcePanel = await requireNovelPromotionPanelInProject(job.data.projectId, sourcePanelId)
+  const episodeId = newPanel.storyboard.episodeId
+  if (
+    sourcePanel.storyboard.episodeId !== episodeId
+    || (job.data.episodeId && job.data.episodeId !== episodeId)
+  ) {
+    throw new Error('PANEL_VARIANT_EPISODE_MISMATCH')
+  }
 
-  const sourcePanel = await prisma.novelPromotionPanel.findUnique({ where: { id: sourcePanelId } })
-  if (!sourcePanel) throw new Error('Source panel not found')
-
-  const projectData = await resolveNovelData(job.data.projectId)
+  const rawProjectData = await resolveNovelData(job.data.projectId)
+  const projectData = await canonicalizeEpisodeCharacterAppearances({
+    projectId: job.data.projectId,
+    episodeId,
+    projectData: rawProjectData,
+    panels: [newPanel, sourcePanel],
+  })
   if (!projectData.videoRatio) throw new Error('Project videoRatio not configured')
   const aspectRatio = projectData.videoRatio
 
@@ -189,10 +212,11 @@ export async function handlePanelVariantTask(job: Job<TaskJobData>) {
   const cosKey = await uploadImageSourceToCos(source, 'panel-variant', newPanel.id)
 
   await assertTaskActive(job, 'persist_panel_variant')
-  await prisma.novelPromotionPanel.update({
-    where: { id: newPanel.id },
-    data: { imageUrl: cosKey },
-  })
+  await updateNovelPromotionPanelInProject(
+    job.data.projectId,
+    newPanel.id,
+    { imageUrl: cosKey },
+  )
 
   return {
     panelId: newPanel.id,

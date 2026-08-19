@@ -36,7 +36,9 @@ export function getModelPriceTexts(model: CustomModel, t: ProviderCardTranslator
 
   const label = typeof model.priceLabel === 'string' ? model.priceLabel.trim() : ''
   if (label) {
-    return [label === '--' ? t('priceUnavailable') : `¥${label}`]
+    if (label === '--') return [t('priceUnavailable')]
+    const hasCurrencyPrefix = /^[¥$€£]/u.test(label)
+    return [hasCurrencyPrefix ? label : `¥${label}`]
   }
   if (typeof model.price === 'number' && Number.isFinite(model.price) && model.price > 0) {
     return [`¥${formatPriceAmount(model.price)}`]

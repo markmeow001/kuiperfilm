@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslations } from 'next-intl'
+import { CreativeToolShell } from '@/components/v2/CreativeToolShell'
 import { useUserModels } from '@/lib/query/hooks/useUserModels'
 import { PRODUCTION_STAGE_IDS, type ProductionStageId } from '@/lib/visual-development/production-stages'
 import {
@@ -35,6 +36,7 @@ import type {
   FaceBibleWorkspaceController,
   CharacterOption,
 } from './visual-development-types'
+import styles from './VisualDevelopmentShell.module.css'
 
 interface VisualDevelopmentClientProps {
   locale: string
@@ -558,79 +560,127 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
   const nextStage = activeStageIndex >= 0 ? stages[activeStageIndex + 1] ?? null : null
 
   return (
-    <div className="kuiper-stage flex min-h-screen flex-col overflow-hidden text-text-primary xl:h-dvh xl:min-h-0">
-      <VisualDevelopmentHeader locale={locale} projectId={projectId} projects={projects} characters={characters} characterCode={selectedCharacterCode} onProjectChange={changeProject} onCharacterChange={selectCharacter} onCreateProject={createProject} saveStatus={saveStatus} labels={{ back: t('header.back'), eyebrow: t('header.eyebrow'), system: t('header.system'), title: t('header.title'), project: t('header.project'), noProject: t('header.noProject'), character: t('header.character'), noCharacter: t('header.noCharacter'), preview: t('header.preview'), newProject: t('header.newProject'), projectName: t('header.projectName'), projectDescription: t('header.projectDescription'), create: t('header.create'), creating: t('header.creating'), cancel: t('header.cancel'), export: t('header.export'), exportCanon: t('header.exportCanon'), exportApproved: t('header.exportApproved'), exportFull: t('header.exportFull'), saving: t('header.saving'), saved: t('header.saved'), saveError: t('header.saveError') }} />
-
-      <div className="grid min-h-0 flex-1 lg:grid-cols-[248px_minmax(0,1fr)] xl:grid-rows-[minmax(0,1fr)] xl:grid-cols-[248px_minmax(0,1fr)_304px] xl:overflow-hidden">
-        <DevelopmentRail
-          activeStageId={activeStageId}
-          groups={{
-            foundation: t('rail.groups.foundation'),
-            identity: t('rail.groups.identity'),
-            design: t('rail.groups.design'),
-            production: t('rail.groups.production'),
-          }}
-          locale={locale}
-          onSelect={setActiveStageId}
-          stages={stages}
-          title={t('rail.title')}
-        />
-
-        <StageWorkspace
-          scriptImportController={scriptImportController}
-          researchController={researchController}
-          worldBibleController={worldBibleController}
-          castingController={castingController}
-          faceBibleController={faceBibleController}
-          hairDesignController={hairDesignController}
-          productionStageController={productionStageController}
-          candidateCount={candidateCount}
+    <CreativeToolShell
+      locale={locale}
+      eyebrow={t('header.eyebrow')}
+      title={t('header.title')}
+      description={t('header.description')}
+      backHref={`/${locale}/v2`}
+      backLabel={t('header.back')}
+    >
+      <div className={styles.workspaceViewport}>
+        <VisualDevelopmentHeader
+          projectId={projectId}
+          projects={projects}
           characters={characters}
           characterCode={selectedCharacterCode}
-          isLoadingCharacter={isLoadingWorkspace}
+          onProjectChange={changeProject}
           onCharacterChange={selectCharacter}
-          onCandidateCountChange={setCandidateCount}
-          stage={activeStage}
-          nextStage={nextStage}
-          onStageSelect={setActiveStageId}
-          translations={stageWorkspaceTranslations}
+          onCreateProject={createProject}
+          saveStatus={saveStatus}
+          labels={{
+            ariaLabel: t('header.controls'),
+            project: t('header.project'),
+            noProject: t('header.noProject'),
+            character: t('header.character'),
+            noCharacter: t('header.noCharacter'),
+            preview: t('header.preview'),
+            newProject: t('header.newProject'),
+            projectName: t('header.projectName'),
+            projectDescription: t('header.projectDescription'),
+            create: t('header.create'),
+            creating: t('header.creating'),
+            cancel: t('header.cancel'),
+            close: t('header.close'),
+            export: t('header.export'),
+            exportCanon: t('header.exportCanon'),
+            exportApproved: t('header.exportApproved'),
+            exportFull: t('header.exportFull'),
+            saving: t('header.saving'),
+            saved: t('header.saved'),
+            saveError: t('header.saveError'),
+          }}
         />
 
-        <DevelopmentInspector
-          batch={activeStageId === 'face' ? faceBatch : activeStageId === 'hair' ? activeHairBatch : PRODUCTION_STAGE_IDS.includes(activeStageId as ProductionStageId) ? activeProductionBatch : batch}
-          candidateCount={activeStageId === 'face' ? 10 : activeStageId === 'hair' && activeHairBatch?.stage === 'hair-validation' ? 8 : activeStageId === 'hair' ? 10 : PRODUCTION_STAGE_IDS.includes(activeStageId as ProductionStageId) ? (productionStageController.stage.variants.length === 8 ? 8 : 4) : candidateCount}
-          worldReady={worldBibleController.status === 'world_locked'}
-          characterReady={Boolean(form.characterName && form.characterDna.role && form.characterDna.coreTraits)}
-          modelLabel={modelsQuery.data?.image.find((model) => model.value === (
-            activeStageId === 'world'
-              ? worldBibleController.form.modelKey
-              : activeStageId === 'face'
-              ? faceForm.modelKey
-              : activeStageId === 'hair'
-                ? hairDesignController.form.modelKey
-                : PRODUCTION_STAGE_IDS.includes(activeStageId as ProductionStageId)
-                  ? productionStageController.form.modelKey
-                : form.modelKey
-          ))?.label ?? null}
-          labels={{
-            title: t('inspector.title'),
-            canon: t('inspector.canon'),
-            promptStack: t('inspector.promptStack'),
-            worldBible: t('inspector.worldBible'),
-            characterDna: t('inspector.characterDna'),
-            stageTemplate: t('inspector.stageTemplate'),
-            modelAdapter: t('inspector.modelAdapter'),
-            empty: t('inspector.empty'),
-            loaded: t('inspector.loaded'),
-            notConnected: t('inspector.notConnected'),
-            seedRegistry: t('inspector.seedRegistry'),
-            lockPolicy: t('inspector.lockPolicy'),
-            lockPolicyDescription: t('inspector.lockPolicyDescription'),
-            recordNotice: t('inspector.recordNotice'),
-          }}
-          stage={activeStage}
-        />
+        <div className={styles.workspaceGrid}>
+          <DevelopmentRail
+            activeStageId={activeStageId}
+            groups={{
+              foundation: t('rail.groups.foundation'),
+              identity: t('rail.groups.identity'),
+              design: t('rail.groups.design'),
+              production: t('rail.groups.production'),
+            }}
+            locale={locale}
+            onSelect={setActiveStageId}
+            stages={stages}
+            labels={{
+              title: t('rail.title'),
+              kicker: t('rail.kicker'),
+              phase: t('rail.phase'),
+              playground: t('rail.playground'),
+            }}
+          />
+
+          <StageWorkspace
+            scriptImportController={scriptImportController}
+            researchController={researchController}
+            worldBibleController={worldBibleController}
+            castingController={castingController}
+            faceBibleController={faceBibleController}
+            hairDesignController={hairDesignController}
+            productionStageController={productionStageController}
+            candidateCount={candidateCount}
+            characters={characters}
+            characterCode={selectedCharacterCode}
+            isLoadingCharacter={isLoadingWorkspace}
+            onCharacterChange={selectCharacter}
+            onCandidateCountChange={setCandidateCount}
+            stage={activeStage}
+            nextStage={nextStage}
+            onStageSelect={setActiveStageId}
+            translations={stageWorkspaceTranslations}
+          />
+
+          <div className={styles.inspectorSlot}>
+            <DevelopmentInspector
+              batch={activeStageId === 'face' ? faceBatch : activeStageId === 'hair' ? activeHairBatch : PRODUCTION_STAGE_IDS.includes(activeStageId as ProductionStageId) ? activeProductionBatch : batch}
+              candidateCount={activeStageId === 'face' ? 10 : activeStageId === 'hair' && activeHairBatch?.stage === 'hair-validation' ? 8 : activeStageId === 'hair' ? 10 : PRODUCTION_STAGE_IDS.includes(activeStageId as ProductionStageId) ? (productionStageController.stage.variants.length === 8 ? 8 : 4) : candidateCount}
+              worldReady={worldBibleController.status === 'world_locked'}
+              characterReady={Boolean(form.characterName && form.characterDna.role && form.characterDna.coreTraits)}
+              modelLabel={modelsQuery.data?.image.find((model) => model.value === (
+                activeStageId === 'world'
+                  ? worldBibleController.form.modelKey
+                  : activeStageId === 'face'
+                  ? faceForm.modelKey
+                  : activeStageId === 'hair'
+                    ? hairDesignController.form.modelKey
+                    : PRODUCTION_STAGE_IDS.includes(activeStageId as ProductionStageId)
+                      ? productionStageController.form.modelKey
+                    : form.modelKey
+              ))?.label ?? null}
+              labels={{
+                kicker: t('inspector.kicker'),
+                title: t('inspector.title'),
+                canon: t('inspector.canon'),
+                promptStack: t('inspector.promptStack'),
+                worldBible: t('inspector.worldBible'),
+                characterDna: t('inspector.characterDna'),
+                stageTemplate: t('inspector.stageTemplate'),
+                modelAdapter: t('inspector.modelAdapter'),
+                empty: t('inspector.empty'),
+                loaded: t('inspector.loaded'),
+                notConnected: t('inspector.notConnected'),
+                seedRegistry: t('inspector.seedRegistry'),
+                lockPolicy: t('inspector.lockPolicy'),
+                lockPolicyDescription: t('inspector.lockPolicyDescription'),
+                recordNotice: t('inspector.recordNotice'),
+              }}
+              stage={activeStage}
+            />
+          </div>
+        </div>
       </div>
-    </div>
+    </CreativeToolShell>
   )
 }

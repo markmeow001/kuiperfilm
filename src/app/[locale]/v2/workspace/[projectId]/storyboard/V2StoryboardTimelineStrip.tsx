@@ -17,17 +17,15 @@
  */
 
 import type { ReactNode } from 'react'
-import type { UseMutationResult } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
 import { AppIcon } from '@/components/ui/icons'
-import { resolveErrorDisplay } from '@/lib/errors/display'
 import {
   accentForGroupId,
   type PanelLike,
   type AnalyzeState,
   type FailedTaskMeta,
 } from './storyboard-client-helpers'
-import type { AutoGroupResult } from '@/lib/query/mutations/auto-group-multi-shot-mutation'
+import type { AutoGroupMutation } from '@/lib/query/mutations/auto-group-multi-shot-mutation'
 import { StripPanelThumb } from './StripPanelThumb'
 
 export interface V2StoryboardTimelineStripProps {
@@ -54,12 +52,12 @@ export interface V2StoryboardTimelineStripProps {
   onStaleCleanupOpen: () => void
   currentEpisodeId: string | null
   canEdit: boolean
-  autoGroup: UseMutationResult<AutoGroupResult, Error, { episodeId: string }>
+  autoGroup: AutoGroupMutation
   onAutoGroup: () => void
 
   // ── batch cluster ──
   batchImageState: { submitted: number; total: number } | null
-  batchVideoState: { submitted: number; total: number } | null
+  batchVideoMode: 'idle' | 'busy' | 'view'
   onBatchGenerateImages: () => void
   onBatchGenerateVideos: () => void
   regenPanelPending: boolean
@@ -72,6 +70,7 @@ export interface V2StoryboardTimelineStripProps {
   serverInflightPanelVideoIds: Set<string>
   failedPanelImageIds: Map<string, FailedTaskMeta>
   failedPanelVideoIds: Map<string, FailedTaskMeta>
+  appearanceGenerationBlocked: boolean
 }
 
 export function V2StoryboardTimelineStrip(props: V2StoryboardTimelineStripProps) {
@@ -100,7 +99,7 @@ export function V2StoryboardTimelineStrip(props: V2StoryboardTimelineStripProps)
     autoGroup,
     onAutoGroup,
     batchImageState,
-    batchVideoState,
+    batchVideoMode,
     onBatchGenerateImages,
     onBatchGenerateVideos,
     regenPanelPending,
@@ -111,6 +110,7 @@ export function V2StoryboardTimelineStrip(props: V2StoryboardTimelineStripProps)
     serverInflightPanelVideoIds,
     failedPanelImageIds,
     failedPanelVideoIds,
+    appearanceGenerationBlocked,
   } = props
 
   return (
@@ -157,7 +157,7 @@ export function V2StoryboardTimelineStrip(props: V2StoryboardTimelineStripProps)
             disabled={autoGroup.isPending || allPanels.length < 2 || !canEdit}
             onClick={onAutoGroup}
             title={t('timeline.autoGroupTitle')}
-            className="flex items-center gap-1.5 rounded-sm border border-violet-500/40 bg-violet-500/10 px-3 py-1.5 font-mono text-[14px] tracking-wider text-violet-300 transition-all hover:bg-violet-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex items-center gap-1.5 rounded-sm border border-[var(--production-blue)]/45 bg-[var(--production-blue-soft)] px-3 py-1.5 font-mono text-[14px] tracking-wider text-[var(--process-cyan-strong)] transition-all hover:border-[var(--production-blue)] hover:bg-[var(--production-blue-soft)] disabled:cursor-not-allowed disabled:opacity-50"
           >
             <AppIcon name="sparklesAlt" className="h-3 w-3" />
             {autoGroup.isPending ? t('buttons.splitting') : hasGroups ? t('buttons.resplit') : t('buttons.smartSplit')}
@@ -175,7 +175,7 @@ export function V2StoryboardTimelineStrip(props: V2StoryboardTimelineStripProps)
             return (
               <button
                 type="button"
-                disabled={batchImageState !== null || regenPanelPending || !canEdit}
+                disabled={batchImageState !== null || regenPanelPending || !canEdit || appearanceGenerationBlocked}
                 onClick={onBatchGenerateImages}
                 title={t('timeline.batchImageTitle', { count: missingImages })}
                 className="flex items-center gap-1.5 rounded-sm border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 font-mono text-[14px] tracking-wider text-emerald-300 transition-all hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50"
@@ -195,15 +195,17 @@ export function V2StoryboardTimelineStrip(props: V2StoryboardTimelineStripProps)
             return (
               <button
                 type="button"
-                disabled={batchVideoState !== null || generateVideoPending || !canEdit}
+                disabled={batchVideoMode === 'busy' || generateVideoPending || !canEdit || appearanceGenerationBlocked}
                 onClick={onBatchGenerateVideos}
                 title={t('timeline.batchVideoTitle', { count: eligibleForVideo })}
                 className="flex items-center gap-1.5 rounded-sm border border-sky-500/40 bg-sky-500/10 px-3 py-1.5 font-mono text-[14px] tracking-wider text-sky-300 transition-all hover:bg-sky-500/20 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <AppIcon name="play" className="h-3 w-3" />
-                {batchVideoState
-                  ? t('timeline.batchVideoSubmitting', { done: batchVideoState.submitted, total: batchVideoState.total })
-                  : t('timeline.batchVideoLabel', { count: eligibleForVideo })}
+                {batchVideoMode === 'busy'
+                  ? t('timeline.batchVideoPreparing')
+                  : batchVideoMode === 'view'
+                    ? t('timeline.batchVideoViewRun')
+                    : t('timeline.batchVideoLabel', { count: eligibleForVideo })}
               </button>
             )
           })()}
@@ -232,25 +234,6 @@ export function V2StoryboardTimelineStrip(props: V2StoryboardTimelineStripProps)
           {t('generateSplash.submitErrorPrefix', { message: analyzeState.message })}
         </div>
       ) : null}
-      {autoGroup.isError ? (() => {
-        // 2026-05-21 — route mutation error through resolveErrorDisplay
-        // so CONFLICT / TASK_STILL_PROCESSING / EPISODE_NO_CLIPS all
-        // surface their targeted friendly text instead of the raw
-        // payload message (which was already partly friendly via
-        // resolveTaskErrorMessage, but didn't pick up our specific
-        // sub-codes like TASK_STILL_PROCESSING).
-        const err = autoGroup.error as Error & { payload?: { error?: { code?: string; message?: string } } }
-        const payload = err?.payload
-        const display = resolveErrorDisplay({
-          code: payload?.error?.code ?? null,
-          message: payload?.error?.message ?? err?.message ?? null,
-        })
-        return (
-          <div className="mb-2 rounded-sm border border-rose-500/30 bg-rose-500/10 px-3 py-1.5 text-xs text-rose-300">
-            {t('errors.splitFailedWithReason', { reason: display?.message ?? err?.message ?? t('errors.unknown') })}
-          </div>
-        )
-      })() : null}
       <div className="flex gap-2 overflow-x-auto pb-2">
         {allPanels.map((p, i) => {
           const groupBoundary = i > 0

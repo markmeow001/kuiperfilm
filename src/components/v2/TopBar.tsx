@@ -26,7 +26,10 @@ import { AppIcon } from '@/components/ui/icons'
 import { UserMenu } from './UserMenu'
 import { NotificationBell } from './NotificationBell'
 import { RequestEditAccessModal } from './RequestEditAccessModal'
-import { findV2Step, V2_STEPS, v2StepIndex, type V2StepId } from './v2-types'
+import type { V2StepId } from './v2-types'
+import { ProductionProgress } from './ProductionProgress'
+import { buildProjectSwitchHref } from './project-switcher-route'
+import { getV2WorkspacePresentation } from './v2-workspace-presentation'
 
 interface TopBarProps {
   currentStep: V2StepId
@@ -35,6 +38,7 @@ interface TopBarProps {
   projectName?: string
   /** Optional draft number (default 01). Matched by the DRAFT NN/06 caption. */
   draftNumber?: number
+  locale?: string
 }
 
 interface ProjectShape {
@@ -47,29 +51,37 @@ interface ProjectListRow {
   updatedAt: string
 }
 
-export function TopBar({ currentStep, projectId, projectName, draftNumber }: TopBarProps) {
+export function TopBar({
+  currentStep,
+  projectId,
+  projectName,
+  draftNumber,
+  locale: localeOverride,
+}: TopBarProps) {
   const params = useParams<{ locale?: string }>()
-  const locale = params?.locale ?? 'zh'
+  const locale = localeOverride ?? params?.locale ?? 'zh'
   const tTopbar = useTranslations('collab.topbar')
   const projectQuery = useProjectData(projectId ?? null)
   const liveName = (projectQuery.data as ProjectShape | undefined)?.name ?? null
   const resolvedName = projectName ?? liveName ?? tTopbar('untitledProject')
-  const step = findV2Step(currentStep)
-  const stepIdx = v2StepIndex(currentStep)
-  const totalSteps = V2_STEPS.length
+  const presentation = getV2WorkspacePresentation(locale)
+  const step = presentation.steps.find((candidate) => candidate.id === currentStep)
+  if (!step) throw new Error(`unknown v2 step: ${currentStep}`)
+  const totalSteps = presentation.steps.length
   const draftLabel = String(draftNumber ?? 1).padStart(2, '0')
 
   return (
-    <header className="sticky top-0 z-30 border-b border-white/[0.07] bg-[#050506]/88 px-4 backdrop-blur-xl sm:px-6">
-      <div className="flex min-h-[72px] items-center justify-between gap-4">
-        <div className="flex min-w-0 items-center gap-3 sm:gap-5">
+    <header className="kuiper-shell-topbar sticky top-0 z-30 border-b px-3 backdrop-blur-xl sm:px-6">
+      <div className="flex min-h-[76px] min-w-0 items-center justify-between gap-2 sm:gap-4">
+        <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-5">
           <div className="shrink-0">
-            <div className="font-mono text-[9px] tracking-[0.22em] text-primary-500">
-              STEP {step.num}
+            <div className="flex items-center gap-2 font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--process-cyan-strong)]">
+              <span className="h-1.5 w-1.5 rounded-full bg-[var(--process-cyan)]" />
+              {presentation.stagePrefix} {step.num}
             </div>
-            <h1 className="mt-1 flex items-baseline gap-2 font-serif-cn text-lg font-semibold text-text-primary">
+            <h1 className="mt-1 flex items-baseline gap-2 text-[17px] font-semibold tracking-[-0.01em] text-text-primary">
               {step.label}
-              <span className="hidden font-display text-sm font-normal italic text-text-tertiary sm:inline">
+              <span className="hidden text-[12px] font-normal text-text-tertiary sm:inline">
                 {step.subtitle}
               </span>
             </h1>
@@ -83,13 +95,15 @@ export function TopBar({ currentStep, projectId, projectName, draftNumber }: Top
             totalSteps={totalSteps}
           />
         </div>
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 items-center gap-1 sm:gap-2">
           {/* Phase 12.5 (2026-05-22) — role badge.
               Only renders when projectId is supplied (i.e. inside a
               project, not on /v2 home). Tells the user at a glance
               whether they own / admin / edit / view this project. */}
           {projectId ? (
-            <RoleBadgeWithRequest projectId={projectId} projectName={resolvedName} />
+            <div className="hidden items-center md:flex">
+              <RoleBadgeWithRequest projectId={projectId} projectName={resolvedName} />
+            </div>
           ) : null}
           {/* Phase 12.5 — notification bell. Mounted on every page so
               owners get incoming requests anywhere they navigate. */}
@@ -98,15 +112,13 @@ export function TopBar({ currentStep, projectId, projectName, draftNumber }: Top
         </div>
       </div>
 
-      <div className="flex items-center gap-1 pb-2">
-        {V2_STEPS.map((s, i) => (
-          <div
-            key={s.id}
-            className={`h-0.5 flex-1 rounded-full transition-all ${
-              i <= stepIdx ? 'bg-primary-500' : 'bg-stone-800'
-            }`}
-          />
-        ))}
+      <div className="pb-2">
+        <ProductionProgress
+          currentStep={currentStep}
+          compact
+          locale={locale}
+          tone="dark"
+        />
       </div>
     </header>
   )
@@ -133,19 +145,6 @@ function ProjectSwitcher({
   const [loading, setLoading] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   const pathname = usePathname()
-  // Infer the current step from the URL so switching projects keeps the
-  // user in the same step instead of dumping them to project home.
-  // Pathname is /<locale>/v2/workspace/<projectId>(/<step>)?(?tab=...)?
-  // — we only honour known step segments to avoid forwarding garbage.
-  const currentStepSegment = (() => {
-    if (!pathname) return ''
-    const parts = pathname.split('/').filter(Boolean)
-    const wsIdx = parts.findIndex((p) => p === 'workspace')
-    if (wsIdx === -1 || wsIdx + 2 >= parts.length) return ''
-    const step = parts[wsIdx + 2]
-    const known = ['script', 'subjects', 'storyboard', 'voice', 'final']
-    return known.includes(step) ? step : ''
-  })()
 
   // Click-outside to close
   useEffect(() => {
@@ -155,8 +154,15 @@ function ProjectSwitcher({
         setOpen(false)
       }
     }
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') setOpen(false)
+    }
     document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', handler)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
   }, [open])
 
   // Lazy fetch the project list the first time the dropdown opens
@@ -186,16 +192,19 @@ function ProjectSwitcher({
   const otherProjects = (projects ?? []).filter((p) => p.id !== currentProjectId)
 
   return (
-    <div ref={ref} className="relative text-right">
+    <div ref={ref} className="relative shrink-0 text-right">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="group flex min-w-0 items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.04] px-3 py-2 transition-colors hover:border-primary-500/35 hover:bg-white/[0.06]"
+        aria-expanded={open}
+        aria-haspopup="menu"
+        aria-label={`${t('switchProject')}: ${currentProjectName}`}
+        className="group flex h-11 w-11 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.04] p-2 transition-colors hover:border-[var(--process-cyan)]/50 hover:bg-white/[0.06] sm:h-auto sm:w-auto sm:min-h-11 sm:justify-start sm:gap-2 sm:px-3 sm:py-2"
         title={t('switchProject')}
       >
-        <AppIcon name="folderOpen" className="hidden h-4 w-4 shrink-0 text-text-tertiary sm:block" />
-        <div className="min-w-0 text-left">
-          <div className="max-w-28 truncate font-serif-cn text-xs text-text-secondary group-hover:text-primary-300 sm:max-w-48">
+        <AppIcon name="folderOpen" className="h-4 w-4 shrink-0 text-text-tertiary" />
+        <div className="hidden min-w-0 text-left sm:block">
+          <div className="max-w-28 truncate text-xs font-semibold text-[var(--darkroom-muted)] group-hover:text-[var(--darkroom-text)] sm:max-w-48">
             {currentProjectName}
           </div>
           <div className="mt-0.5 hidden font-mono text-[9px] tracking-[0.14em] text-text-tertiary sm:block">
@@ -204,13 +213,16 @@ function ProjectSwitcher({
         </div>
         <AppIcon
           name="chevronDown"
-          className={`h-3 w-3 text-stone-500 transition-transform group-hover:text-primary-400 ${open ? 'rotate-180' : ''}`}
+          className={`hidden h-3 w-3 text-[var(--darkroom-muted)] transition-transform group-hover:text-[var(--process-cyan-strong)] sm:block ${open ? 'rotate-180' : ''}`}
         />
       </button>
 
       {open ? (
-        <div className="absolute left-0 top-full z-30 mt-2 w-72 overflow-hidden rounded-2xl border border-white/[0.09] bg-overlay shadow-2xl">
-          <div className="border-b border-white/[0.07] px-4 py-3 font-mono text-[10px] uppercase tracking-[0.2em] text-primary-400">
+        <div
+          role="menu"
+          className="fixed left-3 right-3 top-[68px] z-30 mt-2 w-auto overflow-hidden rounded-2xl border border-white/[0.09] bg-[var(--darkroom-raised)] shadow-2xl sm:absolute sm:left-0 sm:right-auto sm:top-full sm:w-72"
+        >
+          <div className="border-b border-white/[0.07] px-4 py-3 font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--process-cyan-strong)]">
             {t('switchProject')}
           </div>
 
@@ -227,8 +239,9 @@ function ProjectSwitcher({
               otherProjects.map((p) => (
                 <Link
                   key={p.id}
-                  href={`/${locale}/v2/workspace/${p.id}${currentStepSegment ? `/${currentStepSegment}` : ''}`}
-                  className="block px-4 py-2.5 font-serif-cn text-sm text-text-secondary transition-colors hover:bg-primary-500/10 hover:text-primary-300"
+                  href={buildProjectSwitchHref({ pathname, locale, projectId: p.id })}
+                  role="menuitem"
+                  className="block min-h-11 px-4 py-2.5 text-sm text-text-secondary transition-colors hover:bg-[var(--process-cyan-soft)] hover:text-[var(--darkroom-text)]"
                   onClick={() => setOpen(false)}
                 >
                   {p.name || t('untitledProject')}
@@ -240,7 +253,8 @@ function ProjectSwitcher({
           <div className="border-t border-white/[0.07]">
             <Link
               href={`/${locale}/v2`}
-              className="block px-4 py-2.5 font-serif-cn text-sm text-primary-400 transition-colors hover:bg-primary-500/10"
+              role="menuitem"
+              className="block min-h-11 px-4 py-2.5 text-sm font-semibold text-[var(--process-cyan-strong)] transition-colors hover:bg-[var(--process-cyan-soft)]"
               onClick={() => setOpen(false)}
             >
               {t('newOrAllProjects')}
@@ -264,11 +278,11 @@ function ProjectSwitcher({
  *     confirms WHY their buttons are greyed out (otherwise users blame
  *     the app for being broken)
  *
- * Color palette intentionally mirrors role authority:
- *   - ADMIN: rose (different from anything else — sys admin is special)
- *   - OWNER: amber filled (you own this)
- *   - EDITOR: amber outline (workspace-granted RW)
- *   - VIEWER: stone (read-only, low contrast on purpose)
+ * Colour and text mirror role authority without relying on colour alone:
+ *   - ADMIN: rose (system authority)
+ *   - OWNER: cyan filled (project owner)
+ *   - EDITOR: cyan outline (workspace-granted RW)
+ *   - VIEWER: neutral (read-only)
  *
  * Renders nothing while loading or on 403 — better than flashing
  * the wrong role for a beat.
@@ -323,7 +337,7 @@ function RoleBadgeWithRequest({
         <button
           type="button"
           onClick={() => setRequestOpen(true)}
-          className="rounded-sm border border-primary-500/40 bg-primary-500/5 px-2 py-0.5 font-mono text-[11px] tracking-wider text-primary-300 transition-colors hover:bg-primary-500/15"
+          className="min-h-11 rounded-xl border border-[var(--process-cyan)]/40 bg-[var(--process-cyan-soft)] px-2.5 py-1 font-mono text-[11px] tracking-wider text-[var(--process-cyan-strong)] transition-colors hover:border-[var(--process-cyan)]"
           title={t('requestEditTitle')}
         >
           {t('requestEdit')}
@@ -361,28 +375,28 @@ function roleBadgeStyle(role: ProjectAccessRole, canEdit: boolean, t: RoleBadgeT
   if (role === UserRole.OWNER) {
     return {
       label: t('owner'),
-      className: 'border-primary-500/60 bg-primary-500/15 text-primary-200',
+      className: 'border-[var(--process-cyan)]/60 bg-[var(--process-cyan-soft)] text-[var(--process-cyan-strong)]',
       title: t('ownerTitle'),
     }
   }
   if (role === 'ws_owner' || role === 'ws_owner_legacy') {
     return {
       label: t('editor'),
-      className: 'border-primary-500/40 bg-primary-500/5 text-primary-300',
+      className: 'border-[var(--process-cyan)]/40 bg-[var(--process-cyan-soft)] text-[var(--process-cyan-strong)]',
       title: t('wsOwnerTitle'),
     }
   }
   if (role === UserRole.EDITOR || canEdit) {
     return {
       label: t('editor'),
-      className: 'border-primary-500/40 bg-primary-500/5 text-primary-300',
+      className: 'border-[var(--process-cyan)]/40 bg-[var(--process-cyan-soft)] text-[var(--process-cyan-strong)]',
       title: t('editorTitle'),
     }
   }
   // viewer
   return {
     label: t('viewer'),
-    className: 'border-stone-700 bg-stone-900/40 text-stone-400',
+    className: 'border-[var(--darkroom-border)] bg-[var(--darkroom-raised)] text-[var(--darkroom-muted)]',
     title: t('viewerTitle'),
   }
 }

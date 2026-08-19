@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma'
+import { assertNoVoiceLineTaskOutputReferences } from '@/lib/media/recursive-write-policy'
 import {
   RUN_EVENT_TYPE,
   RUN_STATE_MAX_BYTES,
@@ -443,6 +444,8 @@ async function applyRunProjection(tx: GraphRuntimeTx, input: RunEventInput) {
 }
 
 export async function createRun(input: CreateRunInput) {
+  await assertNoVoiceLineTaskOutputReferences(input.input)
+
   const row = await runtimeClient.graphRun.create({
     data: {
       userId: input.userId,

@@ -1,65 +1,65 @@
 'use client'
 
-/**
- * Phase 12.x.x / Stage B — project-level settings panel.
- *
- * Lifts videoRatio + style-preset chips out of ScriptPage so the user
- * sets them once when the project is created and never has to revisit
- * inside the per-episode script flow. Used inline on the project home
- * (and reusable elsewhere if Stage A's new-project form ever wants
- * inline preview).
- */
-
-import { useMemo } from 'react'
+import { useMemo, useRef, useState } from 'react'
+import { useLocale, useTranslations } from 'next-intl'
 import { AppIcon } from '@/components/ui/icons'
 import { useProjectData } from '@/lib/query/hooks/useProjectData'
+import { useStyleProfile } from '@/lib/query/hooks/useStyleProfile'
 import { useUserModels } from '@/lib/query/hooks/useUserModels'
 import { useUpdateProjectConfig } from '@/lib/query/mutations/useProjectConfigMutations'
-import { useStyleProfile } from '@/lib/query/hooks/useStyleProfile'
-import { useUpdateStyleProfile } from '@/lib/query/mutations/updateStyleProfile'
+import {
+  useUpdateStyleProfile,
+  type StyleProfileUpdatePayload,
+} from '@/lib/query/mutations/updateStyleProfile'
 import {
   STYLE_PROFILE_PRESETS,
   PRESET_ORDER_BY_CATEGORY,
-  CATEGORY_LABEL_ZH,
   type PresetKey,
   type PresetCategory,
 } from '@/lib/style-profile/presets'
 import { visualStyles, lightingPresets } from '@/lib/style-library'
 
-const RATIO_OPTIONS: Array<{ value: string; label: string; caption: string }> = [
-  { value: '9:16', label: '9:16', caption: '豎屏' },
-  { value: '16:9', label: '16:9', caption: '橫屏' },
-  { value: '1:1', label: '1:1', caption: '方形' },
-  { value: '4:3', label: '4:3', caption: '經典' },
-]
+const RATIO_OPTIONS = [
+  { value: '9:16', label: '9:16', captionKey: 'ratioPortrait' },
+  { value: '16:9', label: '16:9', captionKey: 'ratioLandscape' },
+  { value: '1:1', label: '1:1', captionKey: 'ratioSquare' },
+  { value: '4:3', label: '4:3', captionKey: 'ratioClassic' },
+] as const
 
-// 2026-06-16 — 整集目標總時長（秒）。Kept in sync with the inline widget in
-// storyboard/VideoModelPickerInline.tsx. Surfaced here on the project home so
-// it can be set BEFORE the first 分鏡 generation (the inline one only appears
-// after groups exist). Affects script_to_storyboard panel count + grouping.
-const DURATION_OPTIONS: Array<{ value: number; label: string; caption: string }> = [
-  { value: 30, label: '30s', caption: '短' },
-  { value: 60, label: '1 分鐘', caption: '預設' },
-  { value: 90, label: '1 分半', caption: '' },
-  { value: 120, label: '2 分鐘', caption: '' },
-  { value: 180, label: '3 分鐘', caption: '長' },
-]
+const DURATION_OPTIONS = [
+  { value: 30, labelKey: 'durationThirty', captionKey: 'durationShort' },
+  { value: 60, labelKey: 'durationMinute', captionKey: 'durationDefault' },
+  { value: 90, labelKey: 'durationNinety', captionKey: null },
+  { value: 120, labelKey: 'durationTwoMinutes', captionKey: null },
+  { value: 180, labelKey: 'durationThreeMinutes', captionKey: 'durationLong' },
+] as const
+
+const RESOLUTION_OPTIONS = [
+  { value: '480p', label: '480p', captionKey: 'resolutionDraft' },
+  { value: '720p', label: '720p', captionKey: 'resolutionDefault' },
+  { value: '1080p', label: '1080p', captionKey: 'resolutionHigh' },
+] as const
 
 const CATEGORY_ORDER: PresetCategory[] = [
-  'realistic', 'anime', 'chinese', 'korean', 'cg-3d', 'western',
+  'realistic',
+  'anime',
+  'chinese',
+  'korean',
+  'cg-3d',
+  'western',
 ]
+const LIBRARY_CATEGORY_ORDER = ['A', 'B', 'C', 'D', 'E', 'F', 'G'] as const
 
-// Phase B — visual style library category labels (matches DB.category enum).
-const LIBRARY_CATEGORY_LABEL: Record<string, string> = {
-  A: '寫實影視',
-  B: '日韓動畫',
-  C: '中國風',
-  D: '歐美動畫',
-  E: 'CG / 3D',
-  F: '插畫 / 遊戲',
-  G: '紀實 / 風格化',
-}
-const LIBRARY_CATEGORY_ORDER = ['A', 'B', 'C', 'D', 'E', 'F', 'G']
+const CHOICE_BASE_CLASS =
+  'min-h-11 rounded-[9px] border px-3 py-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--production-focus)] disabled:cursor-not-allowed disabled:opacity-50'
+const CHOICE_ACTIVE_CLASS =
+  'border-[var(--process-cyan)] bg-[var(--process-cyan-soft)] text-[var(--process-cyan-strong)]'
+const CHOICE_IDLE_CLASS =
+  'border-[var(--production-border)] text-[var(--production-ink-muted)] hover:border-[var(--production-border-dark)] hover:bg-[var(--production-muted)] hover:text-[var(--production-ink)]'
+const TILE_ACTIVE_CLASS =
+  'border-[var(--process-cyan)] ring-2 ring-[rgba(85,175,192,0.22)]'
+const TILE_IDLE_CLASS =
+  'border-[var(--production-border)] hover:border-[var(--production-border-dark)]'
 
 interface ProjectShape {
   novelPromotionData?: {
@@ -67,39 +67,36 @@ interface ProjectShape {
     videoResolution?: string | null
     videoModel?: string | null
     targetDuration?: number | null
-    // 2026-06-16 — per-project text/analysis model (drives 一鍵分析 +
-    // 角色/場景/道具 extraction). The global /profile default only seeds NEW
-    // projects, so existing projects can only be changed here.
     analysisModel?: string | null
   } | null
 }
 
-// 2026-05-22 — keep in sync with src/lib/generators/ark.ts
-// ARK_SEEDANCE_MODEL_SPECS.resolutionOptions. Fast variant tops at 720p.
-const RESOLUTION_OPTIONS: Array<{ value: '480p' | '720p' | '1080p'; label: string; caption: string }> = [
-  { value: '480p', label: '480p', caption: '草稿 · 最省' },
-  { value: '720p', label: '720p', caption: '默認 · 推薦' },
-  { value: '1080p', label: '1080p', caption: '高畫質 · ~2.25× 成本' },
-]
+type ConfigPayload = { key: string; value: unknown }
+type SaveOperation =
+  | { kind: 'config'; payload: ConfigPayload }
+  | { kind: 'style'; payload: StyleProfileUpdatePayload }
+type SaveState =
+  | { status: 'idle' }
+  | { status: 'saving'; operation: SaveOperation }
+  | { status: 'saved'; operation: SaveOperation }
+  | { status: 'error'; operation: SaveOperation; error: string }
 
-// Models with resolution choice. Other Seedance routes (taijiai 720p-only,
-// AtlasCloud's per-variant ids, fal's per-endpoint ids) bake the resolution
-// into the model id so the picker is meaningless for them.
 function modelSupportsResolutionChoice(videoModel: string | null | undefined): boolean {
   if (!videoModel) return false
-  return videoModel === 'ark::doubao-seedance-2-0-260128'
-    || videoModel === 'ark::doubao-seedance-2-0-fast-260128'
-    // 2026-06-16 — AtlasCloud Seedance 2.0 R2V honors the project-level
-    // resolution now that the worker forwards it (was baked to 720p). Live
-    // schema confirms 480p/720p/1080p for this variant. Only r2v is wired;
-    // fast-r2v / t2v / i2v stay 720p-only.
-    || videoModel === 'atlascloud::seedance-2.0-r2v'
+  return (
+    videoModel === 'ark::doubao-seedance-2-0-260128' ||
+    videoModel === 'ark::doubao-seedance-2-0-fast-260128' ||
+    videoModel === 'atlascloud::seedance-2.0-r2v'
+  )
 }
 
 function modelSupports1080p(videoModel: string | null | undefined): boolean {
   if (!videoModel) return true
-  // Fast variant rejects 1080p per Volcengine docs.
   return videoModel !== 'ark::doubao-seedance-2-0-fast-260128'
+}
+
+function errorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error && error.message.trim() ? error.message : fallback
 }
 
 interface V2ProjectSettingsPanelProps {
@@ -107,15 +104,58 @@ interface V2ProjectSettingsPanelProps {
 }
 
 export function V2ProjectSettingsPanel({ projectId }: V2ProjectSettingsPanelProps) {
+  const t = useTranslations('v2Production.projectSettings')
+  const locale = useLocale()
+  const isZh = locale.toLowerCase().startsWith('zh')
   const projectQuery = useProjectData(projectId)
   const styleQuery = useStyleProfile(projectId)
   const userModelsQuery = useUserModels()
   const updateConfig = useUpdateProjectConfig(projectId)
   const updateStyle = useUpdateStyleProfile(projectId)
+  const saveLock = useRef(false)
+  const [saveState, setSaveState] = useState<SaveState>({ status: 'idle' })
+
+  const sources = [
+    {
+      key: 'project' as const,
+      label: t('sourceProject'),
+      data: projectQuery.data,
+      isPending: projectQuery.isPending,
+      isFetching: projectQuery.isFetching,
+      isError: projectQuery.isError,
+      error: projectQuery.error,
+      refetch: projectQuery.refetch,
+    },
+    {
+      key: 'style' as const,
+      label: t('sourceStyle'),
+      data: styleQuery.data,
+      isPending: styleQuery.isPending,
+      isFetching: styleQuery.isFetching,
+      isError: styleQuery.isError,
+      error: styleQuery.error,
+      refetch: styleQuery.refetch,
+    },
+    {
+      key: 'models' as const,
+      label: t('sourceModels'),
+      data: userModelsQuery.data,
+      isPending: userModelsQuery.isPending,
+      isFetching: userModelsQuery.isFetching,
+      isError: userModelsQuery.isError,
+      error: userModelsQuery.error,
+      refetch: userModelsQuery.refetch,
+    },
+  ]
+  const unavailableSources = sources.filter((source) => source.data == null)
+  const backgroundIssues = sources.filter(
+    (source) => source.data != null && source.isError,
+  )
 
   const project = projectQuery.data as ProjectShape | undefined
   const videoRatio = project?.novelPromotionData?.videoRatio ?? '9:16'
-  const videoResolution = (project?.novelPromotionData?.videoResolution ?? '720p') as '480p' | '720p' | '1080p'
+  const videoResolution = (project?.novelPromotionData?.videoResolution ??
+    '720p') as '480p' | '720p' | '1080p'
   const videoModel = project?.novelPromotionData?.videoModel ?? null
   const targetDuration = project?.novelPromotionData?.targetDuration ?? 60
   const analysisModel = project?.novelPromotionData?.analysisModel ?? null
@@ -123,141 +163,274 @@ export function V2ProjectSettingsPanel({ projectId }: V2ProjectSettingsPanelProp
   const showResolutionPicker = modelSupportsResolutionChoice(videoModel)
   const allow1080p = modelSupports1080p(videoModel)
   const selectedPresetKey = (styleQuery.data?.stylePresetKey ?? null) as PresetKey | null
-  const selectedPresetLabel = selectedPresetKey
-    ? STYLE_PROFILE_PRESETS[selectedPresetKey].zhLabel
+  const selectedPreset = selectedPresetKey
+    ? STYLE_PROFILE_PRESETS[selectedPresetKey]
+    : undefined
+  const selectedPresetLabel = selectedPreset
+    ? isZh
+      ? selectedPreset.zhLabel
+      : selectedPreset.label
     : null
-
   const selectedVisualStyleId = styleQuery.data?.visualStyleId ?? null
   const selectedLightingPresetId = styleQuery.data?.lightingPresetId ?? null
   const selectedVisualStyleLabel = useMemo(() => {
     if (!selectedVisualStyleId) return null
-    const hit = visualStyles.find((s) => s.id === selectedVisualStyleId)
-    return hit?.nameZh ?? null
-  }, [selectedVisualStyleId])
+    const hit = visualStyles.find((style) => style.id === selectedVisualStyleId)
+    return hit ? (isZh ? hit.nameZh : hit.nameEn) : null
+  }, [isZh, selectedVisualStyleId])
 
-  const presetGroups = useMemo(() => {
-    return CATEGORY_ORDER.map((cat) => ({
-      category: cat,
-      label: CATEGORY_LABEL_ZH[cat],
-      keys: PRESET_ORDER_BY_CATEGORY[cat],
-    }))
-  }, [])
-
-  const libraryGroups = useMemo(() => {
-    return LIBRARY_CATEGORY_ORDER.map((cat) => ({
-      category: cat,
-      label: LIBRARY_CATEGORY_LABEL[cat] ?? cat,
-      styles: visualStyles
-        .filter((s) => s.category === cat && s.isActive !== false)
-        .sort((a, b) => a.displayOrder - b.displayOrder),
-    })).filter((group) => group.styles.length > 0)
-  }, [])
-
+  const presetGroups = useMemo(
+    () =>
+      CATEGORY_ORDER.map((category) => ({
+        category,
+        keys: PRESET_ORDER_BY_CATEGORY[category],
+      })),
+    [],
+  )
+  const libraryGroups = useMemo(
+    () =>
+      LIBRARY_CATEGORY_ORDER.map((category) => ({
+        category,
+        styles: visualStyles
+          .filter((style) => style.category === category && style.isActive !== false)
+          .sort((a, b) => a.displayOrder - b.displayOrder),
+      })).filter((group) => group.styles.length > 0),
+    [],
+  )
   const sortedLightings = useMemo(
     () =>
       lightingPresets
-        .filter((l) => l.isActive !== false)
+        .filter((lighting) => lighting.isActive !== false)
         .sort((a, b) => a.displayOrder - b.displayOrder),
     [],
   )
 
-  function handleRatioChange(value: string) {
-    updateConfig.mutate({ key: 'videoRatio', value })
+  const mutationBusy =
+    saveState.status === 'saving' || updateConfig.isPending || updateStyle.isPending
+
+  async function runSave(operation: SaveOperation) {
+    if (saveLock.current || updateConfig.isPending || updateStyle.isPending) return
+    saveLock.current = true
+    setSaveState({ status: 'saving', operation })
+    try {
+      if (operation.kind === 'config') {
+        await updateConfig.mutateAsync(operation.payload)
+      } else {
+        await updateStyle.mutateAsync(operation.payload)
+      }
+      setSaveState({ status: 'saved', operation })
+    } catch (error) {
+      setSaveState({
+        status: 'error',
+        operation,
+        error: errorMessage(error, t('unknownError')),
+      })
+    } finally {
+      saveLock.current = false
+    }
   }
 
-  function handleTargetDurationChange(value: number) {
-    updateConfig.mutate({ key: 'targetDuration', value })
-  }
+  const panelHeader = (
+    <div className="mb-4 flex items-center gap-2">
+      <AppIcon
+        name="sparklesAlt"
+        className="h-4 w-4 text-[var(--process-cyan-strong)]"
+      />
+      <span className="font-fraunces text-sm font-semibold text-[var(--production-ink)]">
+        {t('title')}
+      </span>
+    </div>
+  )
 
-  function handleResolutionChange(value: '480p' | '720p' | '1080p') {
-    updateConfig.mutate({ key: 'videoResolution', value })
-  }
-
-  function handleAnalysisModelChange(value: string) {
-    if (value) updateConfig.mutate({ key: 'analysisModel', value })
-  }
-
-  function handleApplyPreset(key: PresetKey) {
-    const entry = STYLE_PROFILE_PRESETS[key]
-    updateStyle.mutate({
-      stylePositivePrompt: entry.positivePrompt,
-      styleNegativePrompt: entry.negativePrompt,
-      stylePresetKey: key,
-    })
-  }
-
-  function handleApplyVisualStyle(styleId: string | null) {
-    updateStyle.mutate({ visualStyleId: styleId })
-  }
-
-  function handleApplyLighting(lightingId: string | null) {
-    updateStyle.mutate({ lightingPresetId: lightingId })
+  if (unavailableSources.length > 0) {
+    const hasError = unavailableSources.some(
+      (source) => source.isError || !source.isPending,
+    )
+    return (
+      <section className="rounded-[14px] border border-[var(--production-border)] bg-[var(--production-surface)] p-4 text-[var(--production-ink)] sm:p-6">
+        {panelHeader}
+        <div
+          className="rounded-[12px] border border-[var(--production-border)] bg-[var(--production-muted)] p-4"
+          aria-busy={!hasError}
+        >
+          <h3 className="font-fraunces text-base font-semibold">
+            {hasError ? t('loadErrorTitle') : t('loadingTitle')}
+          </h3>
+          <p className="mt-1 text-sm leading-6 text-[var(--production-ink-muted)]">
+            {t('loadingDescription')}
+          </p>
+          <div className="mt-4 grid gap-2 sm:grid-cols-3">
+            {unavailableSources.map((source) => {
+              const sourceFailed = source.isError || !source.isPending
+              return (
+                <div
+                  key={source.key}
+                  data-testid={`settings-source-${source.key}`}
+                  className="rounded-[10px] border border-[var(--production-border)] bg-[var(--production-surface)] p-3"
+                >
+                  <p className="text-sm font-semibold">{source.label}</p>
+                  <p className="mt-1 text-xs leading-5 text-[var(--production-ink-muted)]">
+                    {sourceFailed
+                      ? errorMessage(
+                          source.error,
+                          source.isError ? t('sourceError') : t('sourceUnavailable'),
+                        )
+                      : t('sourceLoading')}
+                  </p>
+                  {sourceFailed ? (
+                    <button
+                      type="button"
+                      onClick={() => void source.refetch()}
+                      disabled={source.isFetching}
+                      className={`${CHOICE_BASE_CLASS} mt-3 text-xs ${CHOICE_IDLE_CLASS}`}
+                    >
+                      {t('retry')}
+                    </button>
+                  ) : null}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </section>
+    )
   }
 
   return (
-    <div className="rounded-sm border border-stone-800/60 bg-stone-900/30 p-6">
-      <div className="mb-4 flex items-center gap-2">
-        <AppIcon name="sparklesAlt" className="h-4 w-4 text-amber-500/80" />
-        <span className="font-fraunces text-sm italic text-amber-500/80">Project Settings</span>
-      </div>
+    <section className="rounded-[14px] border border-[var(--production-border)] bg-[var(--production-surface)] p-4 text-[var(--production-ink)] sm:p-6">
+      {panelHeader}
 
-      {/* Video ratio */}
+      {backgroundIssues.length > 0 ? (
+        <div className="mb-5 rounded-[12px] border border-[var(--warning)] bg-[rgba(245,158,11,0.08)] p-4">
+          <p className="text-sm font-semibold text-[var(--production-ink)]">
+            {t('backgroundIssueTitle')}
+          </p>
+          <p className="mt-1 text-xs leading-5 text-[var(--production-ink-muted)]">
+            {t('backgroundIssueDescription')}
+          </p>
+          <div className="mt-3 grid gap-2 sm:grid-cols-3">
+            {backgroundIssues.map((source) => (
+              <div
+                key={source.key}
+                data-testid={`settings-background-${source.key}`}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-[9px] border border-[var(--production-border)] bg-[var(--production-surface)] p-2.5"
+              >
+                <span className="min-w-0 text-xs text-[var(--production-ink-muted)]">
+                  <strong className="text-[var(--production-ink)]">{source.label}</strong>
+                  {' · '}
+                  {errorMessage(source.error, t('unknownError'))}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => void source.refetch()}
+                  disabled={mutationBusy || source.isFetching}
+                  className={`${CHOICE_BASE_CLASS} text-xs ${CHOICE_IDLE_CLASS}`}
+                >
+                  {t('retry')}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {saveState.status === 'saving' || saveState.status === 'saved' ? (
+        <div
+          role="status"
+          aria-live="polite"
+          className="mb-5 rounded-[10px] border border-[var(--process-cyan)] bg-[var(--process-cyan-soft)] px-3 py-2 text-sm text-[var(--process-cyan-strong)]"
+        >
+          {saveState.status === 'saving' ? t('saving') : t('saved')}
+        </div>
+      ) : null}
+
+      {saveState.status === 'error' ? (
+        <div
+          role="alert"
+          aria-live="assertive"
+          className="mb-5 rounded-[10px] border border-[var(--production-danger)] bg-[rgba(240,118,118,0.08)] p-3"
+        >
+          <p className="text-sm font-semibold text-[var(--production-ink)]">
+            {t('saveFailed')}
+          </p>
+          <p className="mt-1 break-words text-xs leading-5 text-[var(--production-ink-muted)]">
+            {t('saveErrorDetail', { message: saveState.error })}
+          </p>
+          <button
+            type="button"
+            onClick={() => void runSave(saveState.operation)}
+            disabled={mutationBusy}
+            className={`${CHOICE_BASE_CLASS} mt-3 text-xs ${CHOICE_IDLE_CLASS}`}
+          >
+            {t('retrySave')}
+          </button>
+        </div>
+      ) : null}
+
       <div className="mb-5">
-        <div className="mb-2 font-mono text-[14px] tracking-wider text-stone-500">
-          畫面比例 · ASPECT
+        <div className="mb-2 font-mono text-[14px] tracking-wider text-[var(--production-ink-muted)]">
+          {t('aspectTitle')}
         </div>
         <div className="flex flex-wrap gap-2">
-          {RATIO_OPTIONS.map((r) => {
-            const active = r.value === videoRatio
+          {RATIO_OPTIONS.map((ratio) => {
+            const active = ratio.value === videoRatio
             return (
               <button
-                key={r.value}
+                key={ratio.value}
                 type="button"
-                onClick={() => handleRatioChange(r.value)}
-                disabled={updateConfig.isPending}
-                className={`rounded-sm border px-3 py-2 font-mono text-xs transition-all disabled:opacity-50 ${
-                  active
-                    ? 'border-amber-500/50 bg-amber-500/10 text-amber-400'
-                    : 'border-stone-800 text-stone-500 hover:border-stone-700'
+                onClick={() =>
+                  void runSave({
+                    kind: 'config',
+                    payload: { key: 'videoRatio', value: ratio.value },
+                  })
+                }
+                disabled={mutationBusy}
+                aria-pressed={active}
+                className={`${CHOICE_BASE_CLASS} font-mono text-xs ${
+                  active ? CHOICE_ACTIVE_CLASS : CHOICE_IDLE_CLASS
                 }`}
               >
-                {r.label}
-                <span className="ml-1.5 font-serif-cn text-[14px] opacity-70">{r.caption}</span>
+                {ratio.label}
+                <span className="ml-1.5 text-[14px] opacity-70">
+                  {t(ratio.captionKey)}
+                </span>
               </button>
             )
           })}
         </div>
       </div>
 
-      {/* Target duration — settable here BEFORE the first 分鏡 generation
-          (the inline storyboard widget only appears after groups exist, so
-          users couldn't pick duration up-front). Affects panel count +
-          grouping; needs 重新分析 / 重新切組 to re-apply to the LLM. */}
       <div className="mb-5">
-        <div className="mb-2 font-mono text-[14px] tracking-wider text-stone-500">
-          整集目標時長 · DURATION
-          <span className="ml-2 font-serif-cn text-[14px] text-stone-600">
-            影響分鏡數量 — 改了要按「重新分析 / 重新切組」才生效
+        <div className="mb-2 font-mono text-[14px] tracking-wider text-[var(--production-ink-muted)]">
+          {t('durationTitle')}
+          <span className="ml-2 text-[14px] text-[var(--production-ink-muted)]">
+            {t('durationHint')}
           </span>
         </div>
         <div className="flex flex-wrap gap-2">
-          {DURATION_OPTIONS.map((d) => {
-            const active = d.value === targetDuration
+          {DURATION_OPTIONS.map((duration) => {
+            const active = duration.value === targetDuration
             return (
               <button
-                key={d.value}
+                key={duration.value}
                 type="button"
-                onClick={() => handleTargetDurationChange(d.value)}
-                disabled={updateConfig.isPending}
-                className={`rounded-sm border px-3 py-2 font-mono text-xs transition-all disabled:opacity-50 ${
-                  active
-                    ? 'border-amber-500/50 bg-amber-500/10 text-amber-400'
-                    : 'border-stone-800 text-stone-500 hover:border-stone-700'
+                onClick={() =>
+                  void runSave({
+                    kind: 'config',
+                    payload: { key: 'targetDuration', value: duration.value },
+                  })
+                }
+                disabled={mutationBusy}
+                aria-pressed={active}
+                className={`${CHOICE_BASE_CLASS} font-mono text-xs ${
+                  active ? CHOICE_ACTIVE_CLASS : CHOICE_IDLE_CLASS
                 }`}
               >
-                {d.label}
-                {d.caption ? (
-                  <span className="ml-1.5 font-serif-cn text-[14px] opacity-70">{d.caption}</span>
+                {t(duration.labelKey)}
+                {duration.captionKey ? (
+                  <span className="ml-1.5 text-[14px] opacity-70">
+                    {t(duration.captionKey)}
+                  </span>
                 ) : null}
               </button>
             )
@@ -265,36 +438,40 @@ export function V2ProjectSettingsPanel({ projectId }: V2ProjectSettingsPanelProp
         </div>
       </div>
 
-      {/* Resolution — only when the selected video model lets the user
-          choose. taijiai/atlascloud/fal Seedance variants bake resolution
-          into the model id, so the selector would be misleading there. */}
       {showResolutionPicker ? (
         <div className="mb-5">
-          <div className="mb-2 font-mono text-[14px] tracking-wider text-stone-500">
-            畫面解析度 · RESOLUTION
-            <span className="ml-2 font-serif-cn text-[14px] text-stone-600">
-              1080p 大約是 720p 的 2.25× 成本
+          <div className="mb-2 font-mono text-[14px] tracking-wider text-[var(--production-ink-muted)]">
+            {t('resolutionTitle')}
+            <span className="ml-2 text-[14px] text-[var(--production-ink-muted)]">
+              {t('resolutionHint')}
             </span>
           </div>
           <div className="flex flex-wrap gap-2">
-            {RESOLUTION_OPTIONS.map((r) => {
-              const disabled = r.value === '1080p' && !allow1080p
-              const active = r.value === videoResolution && !disabled
+            {RESOLUTION_OPTIONS.map((resolution) => {
+              const unsupported = resolution.value === '1080p' && !allow1080p
+              const active = resolution.value === videoResolution && !unsupported
               return (
                 <button
-                  key={r.value}
+                  key={resolution.value}
                   type="button"
-                  onClick={() => !disabled && handleResolutionChange(r.value)}
-                  disabled={updateConfig.isPending || disabled}
-                  title={disabled ? '當前模型 (Fast 變體) 不支援 1080p' : undefined}
-                  className={`rounded-sm border px-3 py-2 font-mono text-xs transition-all disabled:opacity-30 disabled:cursor-not-allowed ${
-                    active
-                      ? 'border-amber-500/50 bg-amber-500/10 text-amber-400'
-                      : 'border-stone-800 text-stone-500 hover:border-stone-700'
+                  onClick={() =>
+                    !unsupported &&
+                    void runSave({
+                      kind: 'config',
+                      payload: { key: 'videoResolution', value: resolution.value },
+                    })
+                  }
+                  disabled={mutationBusy || unsupported}
+                  title={unsupported ? t('resolutionUnsupported') : undefined}
+                  aria-pressed={active}
+                  className={`${CHOICE_BASE_CLASS} font-mono text-xs disabled:opacity-30 ${
+                    active ? CHOICE_ACTIVE_CLASS : CHOICE_IDLE_CLASS
                   }`}
                 >
-                  {r.label}
-                  <span className="ml-1.5 font-serif-cn text-[14px] opacity-70">{r.caption}</span>
+                  {resolution.label}
+                  <span className="ml-1.5 text-[14px] opacity-70">
+                    {t(resolution.captionKey)}
+                  </span>
                 </button>
               )
             })}
@@ -302,55 +479,69 @@ export function V2ProjectSettingsPanel({ projectId }: V2ProjectSettingsPanelProp
         </div>
       ) : null}
 
-      {/* Text / analysis model — drives 一鍵分析 + 角色/場景/道具 extraction.
-          Stored per-project on analysisModel; the global /profile default only
-          seeds NEW projects, so existing projects must be changed here. */}
       <div className="mb-5">
-        <div className="mb-2 font-mono text-[14px] tracking-wider text-stone-500">
-          文本 / 分析模型 · TEXT MODEL
-          <span className="ml-2 font-serif-cn text-[14px] text-stone-600">
-            劇本拆解 · 角色/場景/道具 抽取用此模型
+        <div className="mb-2 font-mono text-[14px] tracking-wider text-[var(--production-ink-muted)]">
+          {t('analysisTitle')}
+          <span className="ml-2 text-[14px] text-[var(--production-ink-muted)]">
+            {t('analysisHint')}
           </span>
         </div>
         {textModels.length === 0 ? (
-          <div className="font-serif-cn text-[13px] text-stone-600">
-            尚無啟用的文本模型 — 請到 /profile 啟用後再選
+          <div className="text-[13px] text-[var(--production-ink-muted)]">
+            {t('noTextModels')}
           </div>
         ) : (
           <select
             value={analysisModel ?? ''}
-            onChange={(e) => handleAnalysisModelChange(e.target.value)}
-            disabled={updateConfig.isPending}
-            className="w-full max-w-[420px] rounded-sm border border-stone-800 bg-stone-900 px-3 py-2 font-mono text-xs text-stone-200 outline-none focus:border-amber-500/40 disabled:opacity-50"
+            onChange={(event) => {
+              if (!event.target.value) return
+              void runSave({
+                kind: 'config',
+                payload: { key: 'analysisModel', value: event.target.value },
+              })
+            }}
+            disabled={mutationBusy}
+            aria-label={t('analysisTitle')}
+            className="min-h-11 w-full max-w-[420px] rounded-[10px] border border-[var(--production-border)] bg-[var(--production-muted)] px-3 py-2 font-mono text-xs text-[var(--production-ink)] outline-none hover:border-[var(--production-border-dark)] focus-visible:border-[var(--production-focus)] focus-visible:ring-2 focus-visible:ring-[rgba(85,175,192,0.24)] disabled:opacity-50"
           >
             {!analysisModel ? (
-              <option value="" disabled>— 選擇文本模型 —</option>
+              <option value="" disabled>
+                {t('selectTextModel')}
+              </option>
             ) : null}
-            {analysisModel && !textModels.some((m) => m.value === analysisModel) ? (
-              <option value={analysisModel}>{analysisModel}（目前選用 · 未在啟用清單）</option>
+            {analysisModel && !textModels.some((model) => model.value === analysisModel) ? (
+              <option value={analysisModel}>
+                {analysisModel} ({t('currentModelUnavailable')})
+              </option>
             ) : null}
-            {textModels.map((m) => (
-              <option key={m.value} value={m.value}>
-                {m.label}{(m.providerName ?? m.provider) ? ` · ${m.providerName ?? m.provider}` : ''}
+            {textModels.map((model) => (
+              <option key={model.value} value={model.value}>
+                {model.label}
+                {model.providerName ?? model.provider
+                  ? ` · ${model.providerName ?? model.provider}`
+                  : ''}
               </option>
             ))}
           </select>
         )}
       </div>
 
-      {/* Style preset */}
       <div>
-        <div className="mb-2 font-mono text-[14px] tracking-wider text-stone-500">
-          畫面風格 · STYLE
+        <div className="mb-2 font-mono text-[14px] tracking-wider text-[var(--production-ink-muted)]">
+          {t('styleTitle')}
           {selectedPresetLabel ? (
-            <span className="ml-2 font-serif-cn text-amber-400">({selectedPresetLabel})</span>
+            <span className="ml-2 text-[var(--process-cyan-strong)]">
+              {t('selectedStyle', { name: selectedPresetLabel })}
+            </span>
           ) : null}
         </div>
         <div className="space-y-3">
           {presetGroups.map((group) => (
             <div key={group.category}>
-              <div className="mb-1.5 font-mono text-[12px] uppercase tracking-wider text-stone-600">
-                {group.label}
+              <div className="mb-1.5 font-mono text-[12px] uppercase tracking-wider text-[var(--production-ink-muted)]">
+                {t(
+                  `presetCategories.${group.category === 'cg-3d' ? 'cg3d' : group.category}`,
+                )}
               </div>
               <div className="flex flex-wrap gap-1.5">
                 {group.keys.map((key) => {
@@ -360,15 +551,23 @@ export function V2ProjectSettingsPanel({ projectId }: V2ProjectSettingsPanelProp
                     <button
                       key={key}
                       type="button"
-                      onClick={() => handleApplyPreset(key)}
-                      disabled={updateStyle.isPending}
-                      className={`rounded-sm border px-3 py-1.5 font-serif-cn text-sm transition-all disabled:opacity-50 ${
-                        active
-                          ? 'border-amber-500/50 bg-amber-500/10 text-amber-400'
-                          : 'border-stone-800 text-stone-400 hover:border-stone-700'
+                      onClick={() =>
+                        void runSave({
+                          kind: 'style',
+                          payload: {
+                            stylePositivePrompt: entry.positivePrompt,
+                            styleNegativePrompt: entry.negativePrompt,
+                            stylePresetKey: key,
+                          },
+                        })
+                      }
+                      disabled={mutationBusy}
+                      aria-pressed={active}
+                      className={`${CHOICE_BASE_CLASS} text-sm ${
+                        active ? CHOICE_ACTIVE_CLASS : CHOICE_IDLE_CLASS
                       }`}
                     >
-                      {entry.zhLabel}
+                      {isZh ? entry.zhLabel : entry.label}
                     </button>
                   )
                 })}
@@ -378,49 +577,57 @@ export function V2ProjectSettingsPanel({ projectId }: V2ProjectSettingsPanelProp
         </div>
       </div>
 
-      {/* Phase B — visual style library (29 curated styles + 8 lightings) */}
-      <div className="mt-6 border-t border-stone-800/60 pt-5">
-        <div className="mb-2 flex items-center justify-between font-mono text-[14px] tracking-wider text-stone-500">
+      <div className="mt-6 border-t border-[var(--production-border)] pt-5">
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2 font-mono text-[14px] tracking-wider text-[var(--production-ink-muted)]">
           <span>
-            視覺風格庫 · VISUAL STYLE LIBRARY
+            {t('visualLibraryTitle')}
             {selectedVisualStyleLabel ? (
-              <span className="ml-2 font-serif-cn text-amber-400">({selectedVisualStyleLabel})</span>
+              <span className="ml-2 text-[var(--process-cyan-strong)]">
+                {t('selectedStyle', { name: selectedVisualStyleLabel })}
+              </span>
             ) : null}
           </span>
           {selectedVisualStyleId ? (
             <button
               type="button"
-              onClick={() => handleApplyVisualStyle(null)}
-              disabled={updateStyle.isPending}
-              className="rounded-sm border border-stone-800 px-2 py-0.5 font-mono text-[11px] text-stone-500 hover:border-stone-700 disabled:opacity-50"
+              onClick={() =>
+                void runSave({ kind: 'style', payload: { visualStyleId: null } })
+              }
+              disabled={mutationBusy}
+              className={`${CHOICE_BASE_CLASS} text-[11px] ${CHOICE_IDLE_CLASS}`}
             >
-              CLEAR
+              {t('clear')}
             </button>
           ) : null}
         </div>
-        <p className="mb-3 font-serif-cn text-[12px] leading-relaxed text-stone-600">
-          選一個風格會在 Kling 生成時注入文本級風格錨點，疊加在現有畫面風格之上。未選 = 跟原本一樣。
+        <p className="mb-3 text-[12px] leading-relaxed text-[var(--production-ink-muted)]">
+          {t('visualLibraryDescription')}
         </p>
         <div className="space-y-3">
           {libraryGroups.map((group) => (
             <div key={group.category}>
-              <div className="mb-1.5 font-mono text-[12px] uppercase tracking-wider text-stone-600">
-                {group.category} · {group.label}
+              <div className="mb-1.5 font-mono text-[12px] uppercase tracking-wider text-[var(--production-ink-muted)]">
+                {group.category} · {t(`libraryCategories.${group.category}`)}
               </div>
               <div className="flex flex-wrap gap-2">
                 {group.styles.map((style) => {
                   const active = style.id === selectedVisualStyleId
+                  const styleName = isZh ? style.nameZh : style.nameEn
                   return (
                     <button
                       key={style.id}
                       type="button"
-                      onClick={() => handleApplyVisualStyle(style.id)}
-                      disabled={updateStyle.isPending}
+                      onClick={() =>
+                        void runSave({
+                          kind: 'style',
+                          payload: { visualStyleId: style.id },
+                        })
+                      }
+                      disabled={mutationBusy}
                       title={style.styleAnchor}
-                      className={`group flex w-[88px] flex-col overflow-hidden rounded-sm border transition-all disabled:opacity-50 ${
-                        active
-                          ? 'border-amber-500/60 ring-1 ring-amber-500/30'
-                          : 'border-stone-800 hover:border-stone-700'
+                      aria-pressed={active}
+                      className={`group flex min-h-11 w-[96px] flex-col overflow-hidden rounded-[10px] border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--production-focus)] disabled:opacity-50 ${
+                        active ? TILE_ACTIVE_CLASS : TILE_IDLE_CLASS
                       }`}
                     >
                       {style.thumbnailUrl ? (
@@ -432,16 +639,18 @@ export function V2ProjectSettingsPanel({ projectId }: V2ProjectSettingsPanelProp
                           className="h-[70px] w-full object-cover transition-transform group-hover:scale-105"
                         />
                       ) : (
-                        <div className="flex h-[70px] w-full items-center justify-center bg-gradient-to-br from-stone-900 to-stone-950 font-mono text-[20px] tracking-wider text-stone-700">
+                        <div className="flex h-[70px] w-full items-center justify-center bg-[var(--production-paper)] font-mono text-[20px] tracking-wider text-[var(--production-ink-muted)]">
                           {style.category}
                         </div>
                       )}
                       <span
-                        className={`truncate px-1.5 py-1 text-center font-serif-cn text-xs ${
-                          active ? 'bg-amber-500/10 text-amber-400' : 'bg-stone-900/60 text-stone-400'
+                        className={`truncate px-1.5 py-1 text-center text-xs ${
+                          active
+                            ? 'bg-[var(--process-cyan-soft)] text-[var(--process-cyan-strong)]'
+                            : 'bg-[var(--production-muted)] text-[var(--production-ink-muted)]'
                         }`}
                       >
-                        {style.nameZh}
+                        {styleName}
                       </span>
                     </button>
                   )
@@ -451,35 +660,44 @@ export function V2ProjectSettingsPanel({ projectId }: V2ProjectSettingsPanelProp
           ))}
         </div>
 
-        {/* Lighting preset row */}
         <div className="mt-4">
-          <div className="mb-1.5 flex items-center justify-between font-mono text-[12px] uppercase tracking-wider text-stone-600">
-            <span>光影預設 · LIGHTING</span>
+          <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2 font-mono text-[12px] uppercase tracking-wider text-[var(--production-ink-muted)]">
+            <span>{t('lightingTitle')}</span>
             {selectedLightingPresetId ? (
               <button
                 type="button"
-                onClick={() => handleApplyLighting(null)}
-                disabled={updateStyle.isPending}
-                className="rounded-sm border border-stone-800 px-2 py-0.5 font-mono text-[11px] text-stone-500 hover:border-stone-700 disabled:opacity-50"
+                onClick={() =>
+                  void runSave({
+                    kind: 'style',
+                    payload: { lightingPresetId: null },
+                  })
+                }
+                disabled={mutationBusy}
+                className={`${CHOICE_BASE_CLASS} text-[11px] ${CHOICE_IDLE_CLASS}`}
               >
-                CLEAR
+                {t('clear')}
               </button>
             ) : null}
           </div>
           <div className="flex flex-wrap gap-2">
             {sortedLightings.map((lighting) => {
               const active = lighting.id === selectedLightingPresetId
+              const lightingName = isZh ? lighting.nameZh : lighting.nameEn
               return (
                 <button
                   key={lighting.id}
                   type="button"
-                  onClick={() => handleApplyLighting(lighting.id)}
-                  disabled={updateStyle.isPending}
+                  onClick={() =>
+                    void runSave({
+                      kind: 'style',
+                      payload: { lightingPresetId: lighting.id },
+                    })
+                  }
+                  disabled={mutationBusy}
                   title={lighting.lightingOverride}
-                  className={`group flex w-[88px] flex-col overflow-hidden rounded-sm border transition-all disabled:opacity-50 ${
-                    active
-                      ? 'border-amber-500/60 ring-1 ring-amber-500/30'
-                      : 'border-stone-800 hover:border-stone-700'
+                  aria-pressed={active}
+                  className={`group flex min-h-11 w-[96px] flex-col overflow-hidden rounded-[10px] border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--production-focus)] disabled:opacity-50 ${
+                    active ? TILE_ACTIVE_CLASS : TILE_IDLE_CLASS
                   }`}
                 >
                   {lighting.thumbnailUrl ? (
@@ -491,16 +709,21 @@ export function V2ProjectSettingsPanel({ projectId }: V2ProjectSettingsPanelProp
                       className="h-[70px] w-full object-cover transition-transform group-hover:scale-105"
                     />
                   ) : (
-                    <div className="flex h-[70px] w-full items-center justify-center bg-gradient-to-br from-stone-900 to-stone-950">
-                      <AppIcon name="sparklesAlt" className="h-4 w-4 text-stone-700" />
+                    <div className="flex h-[70px] w-full items-center justify-center bg-[var(--production-paper)]">
+                      <AppIcon
+                        name="sparklesAlt"
+                        className="h-4 w-4 text-[var(--production-ink-muted)]"
+                      />
                     </div>
                   )}
                   <span
-                    className={`truncate px-1.5 py-1 text-center font-serif-cn text-xs ${
-                      active ? 'bg-amber-500/10 text-amber-400' : 'bg-stone-900/60 text-stone-400'
+                    className={`truncate px-1.5 py-1 text-center text-xs ${
+                      active
+                        ? 'bg-[var(--process-cyan-soft)] text-[var(--process-cyan-strong)]'
+                        : 'bg-[var(--production-muted)] text-[var(--production-ink-muted)]'
                     }`}
                   >
-                    {lighting.nameZh}
+                    {lightingName}
                   </span>
                 </button>
               )
@@ -508,6 +731,6 @@ export function V2ProjectSettingsPanel({ projectId }: V2ProjectSettingsPanelProp
           </div>
         </div>
       </div>
-    </div>
+    </section>
   )
 }

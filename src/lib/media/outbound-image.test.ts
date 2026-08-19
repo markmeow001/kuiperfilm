@@ -6,7 +6,10 @@ import {
   normalizeToOriginalMediaUrl,
   sanitizeImageInputsForTaskPayload,
 } from './outbound-image'
-import { resolveStorageKeyFromMediaValue } from '@/lib/media/service'
+import {
+  classifyVoiceLineTaskOutputReference,
+  resolveStorageKeyFromMediaValue,
+} from '@/lib/media/service'
 
 vi.mock('@/lib/cos', () => ({
   getSignedUrl: vi.fn((key: string) => `/signed/${key}`),
@@ -17,15 +20,21 @@ vi.mock('@/lib/cos', () => ({
 
 vi.mock('@/lib/media/service', () => ({
   resolveStorageKeyFromMediaValue: vi.fn(),
+  classifyVoiceLineTaskOutputReference: vi.fn(),
 }))
 
 describe('outbound-image normalization', () => {
   const fetchMock = vi.fn()
   const resolveStorageKeyMock = vi.mocked(resolveStorageKeyFromMediaValue)
+  const classifyVoiceLineTaskOutputReferenceMock = vi.mocked(
+    classifyVoiceLineTaskOutputReference,
+  )
 
   beforeEach(() => {
     vi.clearAllMocks()
     vi.stubGlobal('fetch', fetchMock)
+
+    classifyVoiceLineTaskOutputReferenceMock.mockResolvedValue('other')
 
     resolveStorageKeyMock.mockImplementation(async (value: unknown) => {
       if (value === '/m/pub-1') return 'images/from-media.png'
@@ -153,8 +162,8 @@ describe('outbound-image normalization', () => {
     })
   })
 
-  it('sanitizes task payload urls and reports input issues', () => {
-    const result = sanitizeImageInputsForTaskPayload([
+  it('sanitizes task payload urls and reports input issues', async () => {
+    const result = await sanitizeImageInputsForTaskPayload([
       '/_next/image?url=images%2Fa.png&w=1080&q=75',
       '',
       123,
@@ -167,6 +176,53 @@ describe('outbound-image normalization', () => {
       'empty_value_skipped',
       'non_string_skipped',
       'relative_path_rejected',
+    ])
+  })
+
+  it.each([
+    [
+      'raw VoiceLine task output',
+      `voice/project-a/episode-a/line-a/${'a'.repeat(32)}-${'b'.repeat(64)}.wav`,
+      'reserved' as const,
+      'VOICE_LINE_TASK_OUTPUT_REFERENCE_FORBIDDEN',
+    ],
+    [
+      'signed VoiceLine task output',
+      `https://cos.example/voice/project-a/episode-a/line-a/${'a'.repeat(32)}-${'b'.repeat(64)}.wav?q-signature=fake`,
+      'reserved' as const,
+      'VOICE_LINE_TASK_OUTPUT_REFERENCE_FORBIDDEN',
+    ],
+    [
+      'VoiceLine task output /m alias',
+      '/m/voice-line-task-output',
+      'reserved' as const,
+      'VOICE_LINE_TASK_OUTPUT_REFERENCE_FORBIDDEN',
+    ],
+    [
+      'unresolved /m alias',
+      '/m/missing',
+      'unresolved_media_alias' as const,
+      'MEDIA_WRITE_REFERENCE_INVALID',
+    ],
+  ])('[%s] -> rejects the whole task payload input list', async (
+    _label,
+    value,
+    classification,
+    expectedCode,
+  ) => {
+    classifyVoiceLineTaskOutputReferenceMock.mockImplementation(async (input) => (
+      input === value ? classification : 'other'
+    ))
+
+    await expect(
+      sanitizeImageInputsForTaskPayload(['images/allowed.png', value]),
+    ).rejects.toMatchObject({
+      code: 'INVALID_PARAMS',
+      details: { code: expectedCode },
+    })
+    expect(classifyVoiceLineTaskOutputReferenceMock.mock.calls.map(([input]) => input)).toEqual([
+      'images/allowed.png',
+      value,
     ])
   })
 })

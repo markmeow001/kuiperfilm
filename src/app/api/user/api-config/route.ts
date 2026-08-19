@@ -247,6 +247,26 @@ function buildPricingDisplayMap(): PricingDisplayMap {
       const amount = entry.pricing.flatAmount ?? 0
       min = amount
       max = amount
+    } else if (entry.pricing.mode === 'usage') {
+      const unitAmount = entry.pricing.unitAmount
+      const countScale = entry.pricing.countScale
+      if (
+        entry.pricing.currency !== 'USD'
+        || entry.pricing.unit !== 'character'
+        || typeof unitAmount !== 'number'
+        || typeof countScale !== 'number'
+      ) {
+        continue
+      }
+      min = unitAmount
+      max = unitAmount
+      const quantityLabel = countScale === 1_000 ? '1K' : String(countScale)
+      map[composePricingDisplayKey(modelType, entry.provider, entry.modelId)] = {
+        min,
+        max,
+        label: `$${formatPriceAmount(unitAmount)} / ${quantityLabel} chars`,
+      }
+      continue
     } else {
       const tiers = entry.pricing.tiers || []
       const amounts = tiers.map((tier) => tier.amount)

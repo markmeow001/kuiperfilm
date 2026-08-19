@@ -79,6 +79,7 @@ const ANALYZE_TYPES = new Set<string>([
   'character_profile_confirm',
   'character_profile_batch_confirm',
   'ai_modify_shot_prompt',
+  'auto_group_multi_shot',
   'regenerate_storyboard_text',
   'canvas_storyboard',
   'canvas_director_routes',

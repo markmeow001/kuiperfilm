@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireProjectAuthLight, isErrorResponse } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
+import { findNovelPromotionEpisodeStoryboardMediaInProject } from '@/lib/novel-promotion/project-scope'
 
 interface PanelData {
     panelIndex: number | null
@@ -52,20 +53,7 @@ export const POST = apiHandler(async (
 
     if (episodeId) {
         // 只获取指定剧集的数据
-        const episode = await prisma.novelPromotionEpisode.findUnique({
-            where: { id: episodeId },
-            include: {
-                storyboards: {
-                    include: {
-                        panels: { orderBy: { panelIndex: 'asc' } }
-                    },
-                    orderBy: { createdAt: 'asc' }
-                },
-                clips: {
-                    orderBy: { createdAt: 'asc' }
-                }
-            }
-        })
+        const episode = await findNovelPromotionEpisodeStoryboardMediaInProject(projectId, episodeId)
         if (episode) {
             episodes = [episode]
         }

@@ -31,11 +31,24 @@ vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }))
 // these tests (we drive it via storageKey directly via ensureMediaObjectFromStorageKey).
 // Stub minimal implementation so import doesn't fail.
 vi.mock('@/lib/cos', () => ({
-  extractCOSKey: (value: string | null | undefined) => value ?? null,
+  extractCOSKey: (value: string | null | undefined) => {
+    if (!value) return null
+    const normalized = value.trim()
+    if (/^https?:\/\//i.test(normalized)) {
+      return decodeURIComponent(new URL(normalized).pathname).replace(/^\/+/, '')
+    }
+    return normalized.replace(/^\/+/, '')
+  },
+  getSignedUrl: (key: string) => `/signed/${encodeURIComponent(key)}`,
 }))
 
 // ===== Real import (after mocks) =====
-import { ensureMediaObjectFromStorageKey } from '@/lib/media/service'
+import {
+  classifyVoiceLineTaskOutputReference,
+  ensureMediaObjectFromStorageKey,
+  resolveMediaRefFromLegacyValue,
+  resolveVoiceLineMediaRef,
+} from '@/lib/media/service'
 
 const STORAGE_KEY = 'cos/test/foo.png'
 // stable publicId is m_ + sha256(storageKey).slice(0,40); precomputed via lib's hash:
@@ -65,7 +78,10 @@ function buildExistingRow(overrides: Partial<{
 
 describe('media/service ensureMediaObjectFromStorageKey ownerContext behavior', () => {
   beforeEach(() => {
-    vi.clearAllMocks()
+    vi.resetAllMocks()
+    prismaMock.mediaObject.findUnique.mockResolvedValue(null)
+    prismaMock.mediaObject.upsert.mockResolvedValue(buildExistingRow())
+    prismaMock.mediaObject.update.mockResolvedValue(buildExistingRow())
   })
 
   it('new row + ownerContext -> upsert.create writes uploadedByUserId from ownerContext', async () => {
@@ -84,6 +100,103 @@ describe('media/service ensureMediaObjectFromStorageKey ownerContext behavior', 
     // update branch (called when publicId already exists due to race) should also
     // set uploadedByUserId on lazy fill
     expect(upsertArg.update).toMatchObject({ uploadedByUserId: 'user-1' })
+  })
+
+  it('[task-scoped VoiceLine output + owner write context] -> [rejects before any MediaObject read/write]', async () => {
+    const taskOutput = `voice/project-a/episode-a/line-a/${'a'.repeat(32)}-${'b'.repeat(64)}.wav`
+
+    await expect(
+      ensureMediaObjectFromStorageKey(taskOutput, undefined, { uploadedByUserId: 'user-1' }),
+    ).rejects.toThrow('VOICE_LINE_TASK_OUTPUT_REFERENCE_FORBIDDEN')
+
+    expect(prismaMock.mediaObject.findUnique).not.toHaveBeenCalled()
+    expect(prismaMock.mediaObject.upsert).not.toHaveBeenCalled()
+    expect(prismaMock.mediaObject.update).not.toHaveBeenCalled()
+  })
+
+  it('[task-scoped VoiceLine output + read without owner] -> [never creates a MediaObject]', async () => {
+    const taskOutput = `voice/project-a/episode-a/line-a/${'a'.repeat(32)}-${'b'.repeat(64)}.wav`
+
+    await expect(resolveMediaRefFromLegacyValue(taskOutput)).rejects.toThrow(
+      'VOICE_LINE_TASK_OUTPUT_REFERENCE_FORBIDDEN',
+    )
+
+    expect(prismaMock.mediaObject.findUnique).not.toHaveBeenCalled()
+    expect(prismaMock.mediaObject.upsert).not.toHaveBeenCalled()
+    expect(prismaMock.mediaObject.update).not.toHaveBeenCalled()
+  })
+
+  it('[VoiceLine serializer + raw task output] -> [returns an ephemeral signed ref without MediaObject mutation]', async () => {
+    const taskOutput = `voice/project-a/episode-a/line-a/${'a'.repeat(32)}-${'b'.repeat(64)}.wav`
+
+    const ref = await resolveVoiceLineMediaRef(null, taskOutput)
+
+    expect(ref).toMatchObject({
+      storageKey: taskOutput,
+      url: `/signed/${encodeURIComponent(taskOutput)}`,
+    })
+    expect(prismaMock.mediaObject.findUnique).not.toHaveBeenCalled()
+    expect(prismaMock.mediaObject.upsert).not.toHaveBeenCalled()
+    expect(prismaMock.mediaObject.update).not.toHaveBeenCalled()
+  })
+
+  it('[historical VoiceLine MediaObject relation + task output] -> [serializes virtually without mutation]', async () => {
+    const taskOutput = `voice/project-a/episode-a/line-a/${'a'.repeat(32)}-${'b'.repeat(64)}.wav`
+    prismaMock.mediaObject.findUnique.mockResolvedValueOnce(buildExistingRow({
+      id: 'historical-task-media',
+      publicId: 'historical-public',
+      storageKey: taskOutput,
+    }))
+
+    const ref = await resolveVoiceLineMediaRef('historical-task-media', null)
+
+    expect(ref?.storageKey).toBe(taskOutput)
+    expect(ref?.id).toMatch(/^voice-line-output:/)
+    expect(prismaMock.mediaObject.upsert).not.toHaveBeenCalled()
+    expect(prismaMock.mediaObject.update).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['trimmed raw key', `  voice/project-a/episode-a/line-a/${'a'.repeat(32)}-${'b'.repeat(64)}.wav  `],
+    ['uppercase URL scheme', `HTTPS://cos.example/voice/project-a/episode-a/line-a/${'a'.repeat(32)}-${'b'.repeat(64)}.wav`],
+  ])('[canonical reference: %s] -> [reserved]', async (_label, value) => {
+    await expect(classifyVoiceLineTaskOutputReference(value)).resolves.toBe('reserved')
+  })
+
+  it.each([
+    ['absolute media route', 'https://app.example/m/missing'],
+    ['protocol-relative media route', '//app.example/m/missing'],
+  ])('[unresolved canonical alias: %s] -> [fails closed]', async (_label, value) => {
+    prismaMock.mediaObject.findUnique.mockResolvedValueOnce(null)
+    await expect(classifyVoiceLineTaskOutputReference(value)).resolves.toBe(
+      'unresolved_media_alias',
+    )
+  })
+
+  it('[task-scoped VoiceLine output /m alias + owner write context] -> [resolves alias then rejects without media mutation]', async () => {
+    const taskOutput = `voice/project-a/episode-a/line-a/${'a'.repeat(32)}-${'b'.repeat(64)}.wav`
+    prismaMock.mediaObject.findUnique.mockResolvedValueOnce(buildExistingRow({
+      publicId: 'generated-audio',
+      storageKey: taskOutput,
+    }))
+
+    await expect(
+      resolveMediaRefFromLegacyValue('/m/generated-audio', { uploadedByUserId: 'user-1' }),
+    ).rejects.toThrow('VOICE_LINE_TASK_OUTPUT_REFERENCE_FORBIDDEN')
+
+    expect(prismaMock.mediaObject.upsert).not.toHaveBeenCalled()
+    expect(prismaMock.mediaObject.update).not.toHaveBeenCalled()
+  })
+
+  it('[unknown /m alias + owner write context] -> [fails closed instead of persisting an unresolved raw alias]', async () => {
+    prismaMock.mediaObject.findUnique.mockResolvedValueOnce(null)
+
+    await expect(
+      resolveMediaRefFromLegacyValue('/m/missing', { uploadedByUserId: 'user-1' }),
+    ).rejects.toThrow('MEDIA_WRITE_REFERENCE_INVALID')
+
+    expect(prismaMock.mediaObject.upsert).not.toHaveBeenCalled()
+    expect(prismaMock.mediaObject.update).not.toHaveBeenCalled()
   })
 
   it('new row WITHOUT ownerContext -> upsert.create writes uploadedByUserId = null (legacy)', async () => {

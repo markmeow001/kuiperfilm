@@ -14,7 +14,6 @@
 
 import '@xyflow/react/dist/style.css'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import Link from 'next/link'
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -59,6 +58,8 @@ import { CanvasAssistantPanel } from './CanvasAssistantPanel'
 import { buildCanvasAssistantContext } from './lib/canvas-assistant-context'
 import { applyCanvasAssistantPlan } from './lib/canvas-assistant-apply'
 import type { CanvasAssistantPlan } from '@/lib/canvas/assistant-contract'
+import { CreativeToolShell } from '@/components/v2/CreativeToolShell'
+import styles from './CanvasShell.module.css'
 
 const uid = () =>
   typeof crypto !== 'undefined' && crypto.randomUUID
@@ -119,7 +120,7 @@ function CanvasInner({ locale, importIntent }: CanvasClientProps) {
   const [resourcesOpen, setResourcesOpen] = useState(false)
   const [assistantOpen, setAssistantOpen] = useState(false)
   const [resourceError, setResourceError] = useState<string | null>(null)
-  const [canvasTitle, setCanvasTitle] = useState('未命名画布')
+  const [canvasTitle, setCanvasTitle] = useState('未命名畫布')
   const [activeCanvasId, setActiveCanvasId] = useState<string | null>(null)
   const [zoom, setZoom] = useState(1)
   const rf = useReactFlow()
@@ -181,7 +182,7 @@ function CanvasInner({ locale, importIntent }: CanvasClientProps) {
     async (files: File[], flow: { x: number; y: number }) => {
       const images = files.filter((file) => /^image\/(jpeg|png|webp)$/.test(file.type))
       if (images.length === 0) {
-        flashDropError('仅支持拖入 jpg/png/webp 图片', 3000)
+        flashDropError('僅支援拖入 jpg/png/webp 圖片', 3000)
         return
       }
       captureHistory()
@@ -194,14 +195,14 @@ function CanvasInner({ locale, importIntent }: CanvasClientProps) {
             position: { x: flow.x - 140 + i * 320, y: flow.y - 40 },
             data: {
               ...DEFAULT_NODE_DATA,
-              title: file.name.replace(/\.[^.]+$/, '') || '图片',
+              title: file.name.replace(/\.[^.]+$/, '') || '圖片',
               anchorKey: res.key,
               anchorUrl: res.signedUrl,
             },
           }
           setNodes((ns) => [...ns, node])
         } catch (err) {
-          flashDropError((err as Error)?.message ?? `${file.name} 上传失败`, 4000)
+          flashDropError((err as Error)?.message ?? `${file.name} 上傳失敗`, 4000)
         }
       }
     },
@@ -236,7 +237,7 @@ function CanvasInner({ locale, importIntent }: CanvasClientProps) {
     () =>
       edges.map((e) => {
         if ((e.data as { invalid?: boolean } | undefined)?.invalid) {
-          return { ...e, animated: false, style: { stroke: '#D85C5C', strokeWidth: 2, strokeDasharray: '5 4' }, label: '无效连线' }
+          return { ...e, animated: false, style: { stroke: '#D85C5C', strokeWidth: 2, strokeDasharray: '5 4' }, label: '無效連線' }
         }
         const working = workingNodeIds.has(e.target) || workingNodeIds.has(e.source)
         return {
@@ -259,7 +260,7 @@ function CanvasInner({ locale, importIntent }: CanvasClientProps) {
       : null
     const canvas = requested ?? canvasQuery.data?.canvas
     if (importIntent && !requested) {
-      setResourceError('找不到 Live Composite 指定的目标画布；未自动建立节点')
+      setResourceError('找不到 Live Composite 指定的目標畫布；未自動建立節點')
     }
     if (!canvas) return
     canvasIdRef.current = canvas.id
@@ -308,7 +309,7 @@ function CanvasInner({ locale, importIntent }: CanvasClientProps) {
           // 保存失败必须浮出（CLAUDE.md 不静默吞错）——2026-07-18 mask 事故：
           // 服务端 schema 拒掉整包时用户毫无感知，刷新即丢一切改动。
           onError: (err) => {
-            flashDropError(`画布保存失败：${(err as Error)?.message ?? '未知错误'} — 更改不会被保留`, 8000)
+            flashDropError(`畫布儲存失敗：${(err as Error)?.message ?? '未知錯誤'} — 變更不會被保留`, 8000)
           },
           onSettled: () => {
             creatingRef.current = false
@@ -334,7 +335,7 @@ function CanvasInner({ locale, importIntent }: CanvasClientProps) {
       const targetType = p.target ? rf.getNode(p.target)?.type as CanvasNodeType | undefined : undefined
       if (!sourceType || !targetType || !canConnectCanvasNodes(sourceType, targetType)) {
         flashDropError(
-          sourceType && targetType ? canvasConnectionHint(sourceType, targetType) : '这两个节点没有可传递的数据类型',
+          sourceType && targetType ? canvasConnectionHint(sourceType, targetType) : '這兩個節點沒有可傳遞的資料類型',
           3000,
         )
         return
@@ -517,7 +518,7 @@ function CanvasInner({ locale, importIntent }: CanvasClientProps) {
       type: 'group',
       position: { x: gx, y: gy },
       style: { width: b.width + PAD * 2, height: b.height + PAD * 2 + HEADER },
-      data: { ...DEFAULT_NODE_DATA, title: isStoryboard ? '分镜组' : '分组', ...(isStoryboard ? { groupKind: 'storyboard' as const, orderedChildIds: sel.map((node) => node.id), storyboardColumns: 4 as const, showShotNumber: true } : {}) },
+      data: { ...DEFAULT_NODE_DATA, title: isStoryboard ? '分鏡組' : '群組', ...(isStoryboard ? { groupKind: 'storyboard' as const, orderedChildIds: sel.map((node) => node.id), storyboardColumns: 4 as const, showShotNumber: true } : {}) },
       selected: true,
     }
     const selIds = new Set(sel.map((n) => n.id))
@@ -736,7 +737,7 @@ function CanvasInner({ locale, importIntent }: CanvasClientProps) {
     const asset = assetLibraryQuery.data.find((item) => item.id === importIntent.assetId)
     if (!asset) {
       importedAssetRef.current = importIntent.assetId
-      setResourceError('合成输出已存入资产库，但找不到对应资产，无法自动建立节点')
+      setResourceError('合成輸出已存入資產庫，但找不到對應資產，無法自動建立節點')
       window.history.replaceState(null, '', clearCanvasImportAssetFromHref(window.location.href))
       return
     }
@@ -750,7 +751,7 @@ function CanvasInner({ locale, importIntent }: CanvasClientProps) {
   /** 清空画布 — 批量生成/测试残留一键清（确认后全删，含连线）。 */
   const clearCanvas = useCallback(() => {
     if (nodes.length === 0) return
-    if (!window.confirm(`清空画布：将删除全部 ${nodes.length} 个节点与连线，且无法恢复。确定？`)) return
+    if (!window.confirm(`清空畫布：將刪除全部 ${nodes.length} 個節點與連線，且無法復原。確定？`)) return
     captureHistory()
     setEdges([])
     setNodes([])
@@ -804,14 +805,14 @@ function CanvasInner({ locale, importIntent }: CanvasClientProps) {
     try {
       await action()
     } catch (err) {
-      setResourceError(err instanceof Error ? err.message : '操作失败')
+      setResourceError(err instanceof Error ? err.message : '操作失敗')
     }
   }, [])
 
   const createBlankCanvas = useCallback(() => runResourceAction(async () => {
     await saveCurrentNow()
     const ordinal = (canvasQuery.data?.resources.filter((item) => item.kind === 'canvas').length ?? 0) + 1
-    const result = await save.mutateAsync({ title: `未命名画布 ${ordinal}`, kind: 'canvas', nodes: [], edges: [], viewport: { x: 0, y: 0, zoom: 1 } })
+    const result = await save.mutateAsync({ title: `未命名畫布 ${ordinal}`, kind: 'canvas', nodes: [], edges: [], viewport: { x: 0, y: 0, zoom: 1 } })
     loadCanvasRecord(result.canvas)
   }), [runResourceAction, saveCurrentNow, canvasQuery.data?.resources, save, loadCanvasRecord])
 
@@ -825,7 +826,7 @@ function CanvasInner({ locale, importIntent }: CanvasClientProps) {
   }), [runResourceAction, saveCurrentNow, loadCanvasRecord])
 
   const saveAsWorkflow = useCallback(() => runResourceAction(async () => {
-    const title = window.prompt('工作流名称', `${canvasTitle} 工作流`)?.trim()
+    const title = window.prompt('工作流名稱', `${canvasTitle} 工作流`)?.trim()
     if (!title) return
     const serialized = serializeCanvas(nodes, edges, instanceRef.current?.getViewport() ?? { x: 0, y: 0, zoom: 1 })
     await save.mutateAsync({ title, kind: 'workflow', ...serialized })
@@ -844,7 +845,7 @@ function CanvasInner({ locale, importIntent }: CanvasClientProps) {
   }), [runResourceAction, saveCurrentNow, save, loadCanvasRecord])
 
   const renameResource = useCallback((resource: CanvasRecordView) => runResourceAction(async () => {
-    const title = window.prompt(resource.kind === 'canvas' ? '画布名称' : '工作流名称', resource.title)?.trim()
+    const title = window.prompt(resource.kind === 'canvas' ? '畫布名稱' : '工作流名稱', resource.title)?.trim()
     if (!title || title === resource.title) return
     const result = await save.mutateAsync({
       id: resource.id,
@@ -858,26 +859,26 @@ function CanvasInner({ locale, importIntent }: CanvasClientProps) {
   }), [runResourceAction, save])
 
   const removeResource = useCallback((resource: CanvasRecordView) => runResourceAction(async () => {
-    if (!window.confirm(`删除${resource.kind === 'canvas' ? '画布' : '工作流'}「${resource.title}」？此操作无法恢复。`)) return
+    if (!window.confirm(`刪除${resource.kind === 'canvas' ? '畫布' : '工作流'}「${resource.title}」？此操作無法復原。`)) return
     await deleteCanvas.mutateAsync(resource.id)
     if (resource.id !== canvasIdRef.current) return
     const next = canvasQuery.data?.resources.find((item) => item.kind === 'canvas' && item.id !== resource.id)
     if (next) loadCanvasRecord(next)
     else {
-      const result = await save.mutateAsync({ title: '未命名画布 1', kind: 'canvas', nodes: [], edges: [], viewport: { x: 0, y: 0, zoom: 1 } })
+      const result = await save.mutateAsync({ title: '未命名畫布 1', kind: 'canvas', nodes: [], edges: [], viewport: { x: 0, y: 0, zoom: 1 } })
       loadCanvasRecord(result.canvas)
     }
   }), [runResourceAction, deleteCanvas, canvasQuery.data?.resources, loadCanvasRecord, save])
 
   const dockButtons = useMemo(
     () => [
-      { key: 'add', label: '添加节点', onClick: openDockMenu },
+      { key: 'add', label: '新增節點', onClick: openDockMenu },
       { key: 'toolbox', label: '工具箱', onClick: () => setToolbox((v) => !v) },
-      { key: 'sequence', label: '镜头序列', onClick: () => setShowSequence((v) => !v) },
-      { key: 'character', label: '资产库', onClick: () => setCharLib((v) => !v) },
+      { key: 'sequence', label: '鏡頭序列', onClick: () => setShowSequence((v) => !v) },
+      { key: 'character', label: '資產庫', onClick: () => setCharLib((v) => !v) },
       { key: 'assistant', label: 'AI 助理', onClick: () => setAssistantOpen((value) => !value) },
-      { key: 'clear', label: '清空画布', onClick: clearCanvas },
-      { key: 'shortcuts', label: '快捷键', onClick: () => setShortcutsOpen((v) => !v) },
+      { key: 'clear', label: '清空畫布', onClick: clearCanvas },
+      { key: 'shortcuts', label: '快捷鍵', onClick: () => setShortcutsOpen((v) => !v) },
     ],
     [openDockMenu, clearCanvas],
   )
@@ -898,13 +899,31 @@ function CanvasInner({ locale, importIntent }: CanvasClientProps) {
 
   return (
     <CanvasAssetsProvider canvasId={activeCanvasId}>
-    <div
-      ref={wrapperRef}
-      className="fixed inset-0 overflow-hidden"
-      style={{ background: CANVAS_TOKENS.bg.canvas }}
-      onDragOver={(e) => { if (e.dataTransfer?.types?.includes('Files')) e.preventDefault() }}
-      onDrop={onFileDrop}
+    <CreativeToolShell
+      locale={locale}
+      eyebrow="創作工具"
+      title="無限畫布"
+      description={canvasTitle}
+      backHref={`/${locale}/v2`}
+      backLabel="返回製作首頁"
+      actions={(
+        <button
+          type="button"
+          aria-expanded={resourcesOpen}
+          onClick={() => setResourcesOpen((value) => !value)}
+          className={styles.headerAction}
+        >
+          畫布與工作流
+        </button>
+      )}
     >
+      <div
+        ref={wrapperRef}
+        className={styles.canvasViewport}
+        style={{ background: CANVAS_TOKENS.bg.canvas }}
+        onDragOver={(e) => { if (e.dataTransfer?.types?.includes('Files')) e.preventDefault() }}
+        onDrop={onFileDrop}
+      >
       <ReactFlow
         nodes={nodes}
         edges={displayEdges}
@@ -962,18 +981,6 @@ function CanvasInner({ locale, importIntent }: CanvasClientProps) {
         ) : null}
       </ReactFlow>
 
-      {/* Top bar — LibTV floating capsule (transparent over canvas, no full-width bar) */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex h-12 items-center justify-between px-3">
-        <div
-          className="pointer-events-auto flex h-10 items-center gap-3 rounded-xl px-3 text-[13px]"
-          style={{ background: CANVAS_TOKENS.bg.panel, border: `1px solid ${CANVAS_TOKENS.hairline}`, boxShadow: CANVAS_TOKENS.shadow }}
-        >
-          <Link href={`/${locale}/v2`} className="text-[12px]" style={{ color: CANVAS_TOKENS.text.secondary }}>‹ 返回</Link>
-          <button type="button" onClick={() => setResourcesOpen((value) => !value)} className="rounded-md px-1.5 py-1 hover:bg-white/10" style={{ color: CANVAS_TOKENS.text.primary }}>无限画布 ▾</button>
-          <span style={{ color: CANVAS_TOKENS.text.muted }}>· {canvasTitle}</span>
-        </div>
-      </div>
-
       {resourcesOpen ? (
         <CanvasResourceMenu
           currentId={canvasIdRef.current}
@@ -992,35 +999,35 @@ function CanvasInner({ locale, importIntent }: CanvasClientProps) {
 
       {/* Bottom-left control strip — 资产/整理/小地图/缩放 (LibTV layout) */}
       <div
-        className="absolute bottom-5 left-4 z-20 flex items-center gap-1 rounded-xl p-1"
+        className={`${styles.viewportControls} absolute bottom-5 left-4 z-20 flex items-center gap-1 rounded-xl p-1`}
         style={{ background: CANVAS_TOKENS.bg.panel, border: `1px solid ${CANVAS_TOKENS.hairline}`, boxShadow: CANVAS_TOKENS.shadow }}
       >
         <button
           type="button"
           onClick={optimizeLayout}
-          title="整理画布 ⌥⇧F"
+          title="整理畫布 ⌥⇧F"
           className="h-7 rounded-lg px-2 text-[12px] transition-colors"
           style={{ color: CANVAS_TOKENS.text.secondary }}
           onMouseEnter={(e) => { e.currentTarget.style.background = CANVAS_TOKENS.bg.hover }}
           onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
         >
-          整理画布
+          整理畫布
         </button>
         <button
           type="button"
           onClick={() => setShowMinimap((v) => !v)}
-          title="切换小地图"
+          title="切換小地圖"
           className="h-7 rounded-lg px-2 text-[12px] transition-colors"
           style={{ color: showMinimap ? CANVAS_TOKENS.text.primary : CANVAS_TOKENS.text.secondary, background: showMinimap ? CANVAS_TOKENS.bg.hover : 'transparent' }}
         >
-          小地图
+          小地圖
         </button>
         <div className="mx-0.5 h-4 w-px" style={{ background: CANVAS_TOKENS.hairline }} />
-        <button type="button" onClick={() => rf.zoomOut()} title="缩小 ⌘-" className="h-7 w-7 rounded-lg text-[14px]" style={{ color: CANVAS_TOKENS.text.secondary }}>−</button>
+        <button type="button" onClick={() => rf.zoomOut()} title="縮小 ⌘-" className="h-7 w-7 rounded-lg text-[14px]" style={{ color: CANVAS_TOKENS.text.secondary }}>−</button>
         <button
           type="button"
           onClick={() => rf.fitView({ duration: 300 })}
-          title="适应画布 ⌘0"
+          title="符合畫布 ⌘0"
           className="h-7 rounded-lg px-1.5 font-mono text-[12px]"
           style={{ color: CANVAS_TOKENS.text.secondary }}
         >
@@ -1046,14 +1053,14 @@ function CanvasInner({ locale, importIntent }: CanvasClientProps) {
 
       {/* Empty-state launcher */}
       {nodes.length === 0 && !menu ? (
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center px-6">
+        <div className={`${styles.emptyStateLauncher} pointer-events-none absolute inset-0 flex items-center justify-center px-6`}>
           <div
-            className="pointer-events-auto w-full max-w-2xl rounded-3xl border p-6 text-center backdrop-blur-xl"
+            className={`${styles.emptyStateCard} pointer-events-auto w-full max-w-2xl rounded-3xl border p-6 text-center backdrop-blur-xl`}
             style={{ background: `${CANVAS_TOKENS.bg.panel}d9`, borderColor: CANVAS_TOKENS.hairline, boxShadow: CANVAS_TOKENS.shadowPopover }}
           >
             <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-2xl text-xl" style={{ background: CANVAS_TOKENS.accentSoft, color: CANVAS_TOKENS.accent }}>◇</div>
-            <h1 className="text-lg font-semibold" style={{ color: CANVAS_TOKENS.text.primary }}>从一个镜头，延伸成完整制作流程</h1>
-            <p className="mt-1 text-[12px]" style={{ color: CANVAS_TOKENS.text.muted }}>选择模板快速开始，也可以双击或右键空白画布自由新增节点</p>
+            <h2 className="text-lg font-semibold" style={{ color: CANVAS_TOKENS.text.primary }}>從一個鏡頭，延伸成完整製作流程</h2>
+            <p className="mt-1 text-[12px]" style={{ color: CANVAS_TOKENS.text.muted }}>選擇範本快速開始，也可以雙擊或右鍵空白畫布自由新增節點</p>
             <div className="mt-5 grid gap-2 sm:grid-cols-2">
               {TOOLBOX_PRESETS.map((preset) => (
                 <button
@@ -1087,7 +1094,7 @@ function CanvasInner({ locale, importIntent }: CanvasClientProps) {
             }}
           >
             <div className="px-3 py-2 font-mono text-[11px]" style={{ color: CANVAS_TOKENS.text.muted, borderBottom: `1px solid ${CANVAS_TOKENS.hairline}` }}>
-              {menu.fromNodeId ? '引用该节点生成' : '添加节点'}
+              {menu.fromNodeId ? '引用此節點生成' : '新增節點'}
             </div>
             {ADD_ORDER.map((t) => (
               <button
@@ -1123,11 +1130,11 @@ function CanvasInner({ locale, importIntent }: CanvasClientProps) {
             }}
           >
             {([
-              { label: '聚焦此节点', on: () => focusNode(ctxMenu.nodeId), kbd: '' },
-              { label: '优化工作流布局', on: () => optimizeLayout(), kbd: '' },
+              { label: '聚焦此節點', on: () => focusNode(ctxMenu.nodeId), kbd: '' },
+              { label: '整理工作流版面', on: () => optimizeLayout(), kbd: '' },
               { sep: true },
               {
-                label: nodes.find((node) => node.id === ctxMenu.nodeId)?.data.locked ? '解锁节点' : '锁定节点',
+                label: nodes.find((node) => node.id === ctxMenu.nodeId)?.data.locked ? '解鎖節點' : '鎖定節點',
                 on: () => {
                   captureHistory()
                   setNodes((current) => current.map((node) => node.id === ctxMenu.nodeId
@@ -1136,13 +1143,13 @@ function CanvasInner({ locale, importIntent }: CanvasClientProps) {
                 },
                 kbd: '',
               },
-              { label: '置于顶层', on: () => { captureHistory(); setNodes((current) => setSelectedLayer(current.map((node) => ({ ...node, selected: node.id === ctxMenu.nodeId })), 'front')) }, kbd: '', disabled: Boolean(nodes.find((node) => node.id === ctxMenu.nodeId)?.parentId) },
-              { label: '置于底层', on: () => { captureHistory(); setNodes((current) => setSelectedLayer(current.map((node) => ({ ...node, selected: node.id === ctxMenu.nodeId })), 'back')) }, kbd: '', disabled: Boolean(nodes.find((node) => node.id === ctxMenu.nodeId)?.parentId) },
+              { label: '置於頂層', on: () => { captureHistory(); setNodes((current) => setSelectedLayer(current.map((node) => ({ ...node, selected: node.id === ctxMenu.nodeId })), 'front')) }, kbd: '', disabled: Boolean(nodes.find((node) => node.id === ctxMenu.nodeId)?.parentId) },
+              { label: '置於底層', on: () => { captureHistory(); setNodes((current) => setSelectedLayer(current.map((node) => ({ ...node, selected: node.id === ctxMenu.nodeId })), 'back')) }, kbd: '', disabled: Boolean(nodes.find((node) => node.id === ctxMenu.nodeId)?.parentId) },
               { sep: true },
-              { label: '复制节点', on: () => copyNode(ctxMenu.nodeId), kbd: '⌘C' },
-              { label: '创建副本', on: () => duplicateNode(ctxMenu.nodeId), kbd: '⌘D' },
-              { label: '粘贴', on: () => pasteNode(), kbd: '⌘V', disabled: !clipboardRef.current },
-              { label: '删除', on: () => { captureHistory(); deleteNode(ctxMenu.nodeId) }, kbd: '⌘⌫', danger: true, disabled: Boolean(nodes.find((node) => node.id === ctxMenu.nodeId)?.data.locked) },
+              { label: '複製節點', on: () => copyNode(ctxMenu.nodeId), kbd: '⌘C' },
+              { label: '建立副本', on: () => duplicateNode(ctxMenu.nodeId), kbd: '⌘D' },
+              { label: '貼上', on: () => pasteNode(), kbd: '⌘V', disabled: !clipboardRef.current },
+              { label: '刪除', on: () => { captureHistory(); deleteNode(ctxMenu.nodeId) }, kbd: '⌘⌫', danger: true, disabled: Boolean(nodes.find((node) => node.id === ctxMenu.nodeId)?.data.locked) },
             ] as Array<{ label?: string; on?: () => void; kbd?: string; sep?: boolean; disabled?: boolean; danger?: boolean }>).map((item, i) =>
               item.sep ? (
                 <div key={`sep-${i}`} className="my-1 h-px" style={{ background: CANVAS_TOKENS.hairline }} />
@@ -1179,12 +1186,12 @@ function CanvasInner({ locale, importIntent }: CanvasClientProps) {
             }}
           >
             {([
-              { label: '添加节点', on: () => { setMenu({ ...paneMenu, fromNodeId: null }); setPaneMenu(null) }, kbd: 'Tab' },
-              { label: '上传图片', on: () => { pendingUploadPositionRef.current = { x: paneMenu.flowX, y: paneMenu.flowY }; uploadInputRef.current?.click() }, kbd: '' },
+              { label: '新增節點', on: () => { setMenu({ ...paneMenu, fromNodeId: null }); setPaneMenu(null) }, kbd: 'Tab' },
+              { label: '上傳圖片', on: () => { pendingUploadPositionRef.current = { x: paneMenu.flowX, y: paneMenu.flowY }; uploadInputRef.current?.click() }, kbd: '' },
               { sep: true },
-              { label: '粘贴到这里', on: () => pasteNode(paneMenu.flowX, paneMenu.flowY), kbd: '⌘V', disabled: !clipboardRef.current },
-              { label: '全选节点', on: () => setNodes((current) => current.map((node) => ({ ...node, selected: true }))), kbd: '⌘A', disabled: nodes.length === 0 },
-              { label: '整理画布', on: optimizeLayout, kbd: '⌥⇧F', disabled: nodes.length < 2 },
+              { label: '貼到這裡', on: () => pasteNode(paneMenu.flowX, paneMenu.flowY), kbd: '⌘V', disabled: !clipboardRef.current },
+              { label: '全選節點', on: () => setNodes((current) => current.map((node) => ({ ...node, selected: true }))), kbd: '⌘A', disabled: nodes.length === 0 },
+              { label: '整理畫布', on: optimizeLayout, kbd: '⌥⇧F', disabled: nodes.length < 2 },
             ] as Array<{ label?: string; on?: () => void; kbd?: string; sep?: boolean; disabled?: boolean }>).map((item, index) =>
               item.sep ? (
                 <div key={`pane-sep-${index}`} className="my-1 h-px" style={{ background: CANVAS_TOKENS.hairline }} />
@@ -1209,12 +1216,12 @@ function CanvasInner({ locale, importIntent }: CanvasClientProps) {
       {/* 镜头序列条 — the drama as an ordered list of shots */}
       {showSequence ? (
         <div
-          className="absolute inset-x-0 bottom-20 z-20 mx-auto flex max-w-[92%] items-center gap-2 overflow-x-auto rounded-xl p-2"
+          className={`${styles.sequenceStrip} absolute inset-x-0 bottom-20 z-20 mx-auto flex max-w-[92%] items-center gap-2 overflow-x-auto rounded-xl p-2`}
           style={{ background: `${CANVAS_TOKENS.bg.panel}f0`, border: `1px solid ${CANVAS_TOKENS.hairline}`, boxShadow: '0 12px 32px rgba(0,0,0,0.5)', backdropFilter: 'blur(8px)' }}
         >
-          <span className="shrink-0 px-1 font-mono text-[11px]" style={{ color: CANVAS_TOKENS.text.muted }}>镜头序列 ({shots.length})</span>
+          <span className="shrink-0 px-1 font-mono text-[11px]" style={{ color: CANVAS_TOKENS.text.muted }}>鏡頭序列（{shots.length}）</span>
           {shots.length === 0 ? (
-            <span className="px-2 text-[11px]" style={{ color: CANVAS_TOKENS.text.muted }}>暂无镜头 · 加图片/视频节点</span>
+            <span className="px-2 text-[11px]" style={{ color: CANVAS_TOKENS.text.muted }}>尚無鏡頭 · 新增圖片／影片節點</span>
           ) : null}
           {shots.map((n, i) => {
             const data = n.data as CanvasNodeData
@@ -1247,7 +1254,7 @@ function CanvasInner({ locale, importIntent }: CanvasClientProps) {
         <>
           <div className="absolute inset-0 z-20" onClick={() => setToolbox(false)} />
           <div className="absolute bottom-20 left-1/2 z-30 w-80 -translate-x-1/2 rounded-xl p-2" style={{ background: CANVAS_TOKENS.bg.popover, border: `1px solid ${CANVAS_TOKENS.hairline}`, boxShadow: '0 16px 40px rgba(0,0,0,0.55)' }}>
-            <div className="mb-1 px-1 font-mono text-[11px]" style={{ color: CANVAS_TOKENS.text.muted }}>工具箱 · 一键预设工作流</div>
+            <div className="mb-1 px-1 font-mono text-[11px]" style={{ color: CANVAS_TOKENS.text.muted }}>工具箱 · 一鍵預設工作流</div>
             {TOOLBOX_PRESETS.map((p) => (
               <button key={p.key} type="button" onClick={() => applyToolboxPreset(p.key)} className="flex w-full items-center justify-between rounded-md px-3 py-2 text-left hover:bg-white/5" style={{ color: CANVAS_TOKENS.text.primary }}>
                 <span className="text-[13px]">{p.label}</span>
@@ -1263,11 +1270,11 @@ function CanvasInner({ locale, importIntent }: CanvasClientProps) {
         <>
           <div className="absolute inset-0 z-20" onClick={() => setCharLib(false)} />
           <div className="absolute bottom-20 left-1/2 z-30 max-h-[50vh] w-96 -translate-x-1/2 overflow-y-auto rounded-xl p-2" style={{ background: CANVAS_TOKENS.bg.popover, border: `1px solid ${CANVAS_TOKENS.hairline}`, boxShadow: '0 16px 40px rgba(0,0,0,0.55)' }}>
-            <div className="mb-2 px-1 font-mono text-[11px]" style={{ color: CANVAS_TOKENS.text.muted }}>资产库 · 点选放入画布</div>
-            <div className="mb-2 grid grid-cols-4 gap-1">{(['character', 'scene', 'image', 'video'] as const).map((value) => <button key={value} type="button" onClick={() => setAssetType(value)} className="rounded-md py-1 text-[11px]" style={{ background: assetType === value ? CANVAS_TOKENS.bg.active : CANVAS_TOKENS.bg.input, color: CANVAS_TOKENS.text.secondary }}>{value === 'character' ? '角色' : value === 'scene' ? '场景' : value === 'image' ? '图片' : '视频'}</button>)}</div>
-            {assetLibraryQuery.isLoading ? <div className="px-2 py-3 text-[11px]" style={{ color: CANVAS_TOKENS.text.muted }}>加载中…</div> : null}
-            {assetLibraryQuery.isError ? <div className="px-2 py-3 text-[11px]" style={{ color: '#FF8A8A' }}>加载资产库失败 · <button type="button" className="underline" onClick={() => assetLibraryQuery.refetch()}>重试</button></div> : null}
-            {assetLibraryQuery.data && assetLibraryQuery.data.filter((asset) => asset.type === assetType).length === 0 ? <div className="px-2 py-3 text-[11px]" style={{ color: CANVAS_TOKENS.text.muted }}>此分类暂无资产</div> : null}
+            <div className="mb-2 px-1 font-mono text-[11px]" style={{ color: CANVAS_TOKENS.text.muted }}>資產庫 · 點選放入畫布</div>
+            <div className="mb-2 grid grid-cols-4 gap-1">{(['character', 'scene', 'image', 'video'] as const).map((value) => <button key={value} type="button" onClick={() => setAssetType(value)} className="rounded-md py-1 text-[11px]" style={{ background: assetType === value ? CANVAS_TOKENS.bg.active : CANVAS_TOKENS.bg.input, color: CANVAS_TOKENS.text.secondary }}>{value === 'character' ? '角色' : value === 'scene' ? '場景' : value === 'image' ? '圖片' : '影片'}</button>)}</div>
+            {assetLibraryQuery.isLoading ? <div className="px-2 py-3 text-[11px]" style={{ color: CANVAS_TOKENS.text.muted }}>載入中…</div> : null}
+            {assetLibraryQuery.isError ? <div className="px-2 py-3 text-[11px]" style={{ color: '#FF8A8A' }}>載入資產庫失敗 · <button type="button" className="underline" onClick={() => assetLibraryQuery.refetch()}>重試</button></div> : null}
+            {assetLibraryQuery.data && assetLibraryQuery.data.filter((asset) => asset.type === assetType).length === 0 ? <div className="px-2 py-3 text-[11px]" style={{ color: CANVAS_TOKENS.text.muted }}>此分類暫無資產</div> : null}
             <div className="grid grid-cols-3 gap-2">
               {(assetLibraryQuery.data ?? []).filter((asset) => asset.type === assetType).map((asset) => (
                 <button key={asset.id} type="button" onClick={() => dropAsset(asset)} title={asset.name} className="overflow-hidden rounded-md" style={{ border: `1px solid ${CANVAS_TOKENS.hairline}`, background: CANVAS_TOKENS.bg.app }}>
@@ -1289,29 +1296,29 @@ function CanvasInner({ locale, importIntent }: CanvasClientProps) {
           className="absolute left-1/2 top-16 z-30 -translate-x-1/2 rounded-lg px-3 py-1.5 text-[12px]"
           style={{ background: CANVAS_TOKENS.bg.popover, border: `1px solid ${CANVAS_TOKENS.hairline}`, color: dropError ? '#FF8A8A' : CANVAS_TOKENS.text.secondary, boxShadow: CANVAS_TOKENS.shadow }}
         >
-          {dropError ?? '图片上传中…'}
+          {dropError ?? '圖片上傳中…'}
         </div>
       ) : null}
 
       {/* Selection toolbar */}
       {selectedNodes.length > 0 ? (
         <div
-          className="absolute left-1/2 top-16 z-20 flex max-w-[calc(100vw-32px)] -translate-x-1/2 items-center gap-1 overflow-x-auto rounded-2xl p-1.5"
+          className={`${styles.selectionToolbar} absolute left-1/2 top-4 z-20 flex max-w-[calc(100vw-32px)] -translate-x-1/2 items-center gap-1 overflow-x-auto rounded-2xl p-1.5`}
           style={{ background: CANVAS_TOKENS.bg.panel, border: `1px solid ${CANVAS_TOKENS.hairline}`, boxShadow: CANVAS_TOKENS.shadow }}
         >
-          <span className="px-1.5 text-[12px]" style={{ color: CANVAS_TOKENS.text.muted }}>已选 {selectedNodes.length}</span>
+          <span className="px-1.5 text-[12px]" style={{ color: CANVAS_TOKENS.text.muted }}>已選取 {selectedNodes.length}</span>
           <button type="button" onClick={zoomToSelection} className="h-7 rounded-lg px-2 text-[12px] hover:bg-white/10" style={{ color: CANVAS_TOKENS.text.primary }}>聚焦</button>
           <button type="button" onClick={() => setAssistantOpen(true)} className="h-7 rounded-lg px-2 text-[12px] hover:bg-white/10" style={{ color: CANVAS_TOKENS.accent }}>✨ AI 助理</button>
-          <button type="button" onClick={() => setSelectionLocked(!selectionLocked)} className="h-7 rounded-lg px-2 text-[12px] hover:bg-white/10" style={{ color: selectionLocked ? CANVAS_TOKENS.gold : CANVAS_TOKENS.text.primary }}>{selectionLocked ? '解锁' : '锁定'}</button>
+          <button type="button" onClick={() => setSelectionLocked(!selectionLocked)} className="h-7 rounded-lg px-2 text-[12px] hover:bg-white/10" style={{ color: selectionLocked ? CANVAS_TOKENS.gold : CANVAS_TOKENS.text.primary }}>{selectionLocked ? '解鎖' : '鎖定'}</button>
           <button type="button" disabled={selectedTopLevelNodes.length === 0} onClick={() => changeSelectedLayer('front')} className="h-7 rounded-lg px-2 text-[12px] hover:bg-white/10 disabled:opacity-35" style={{ color: CANVAS_TOKENS.text.primary }}>置顶</button>
           <button type="button" disabled={selectedTopLevelNodes.length === 0} onClick={() => changeSelectedLayer('back')} className="h-7 rounded-lg px-2 text-[12px] hover:bg-white/10 disabled:opacity-35" style={{ color: CANVAS_TOKENS.text.primary }}>置底</button>
           {selectedMovableTopLevelNodes.length >= 2 ? (
             <>
               <button type="button" onClick={() => alignSelected('left')} className="h-7 rounded-lg px-2 text-[12px] hover:bg-white/10" style={{ color: CANVAS_TOKENS.text.primary }}>左对齐</button>
-              <button type="button" onClick={() => alignSelected('top')} className="h-7 rounded-lg px-2 text-[12px] hover:bg-white/10" style={{ color: CANVAS_TOKENS.text.primary }}>顶对齐</button>
-              <button type="button" onClick={() => alignSelected('horizontal')} className="h-7 rounded-lg px-2 text-[12px] hover:bg-white/10" style={{ color: CANVAS_TOKENS.text.primary }}>横向均分</button>
-              <button type="button" onClick={() => alignSelected('vertical')} className="h-7 rounded-lg px-2 text-[12px] hover:bg-white/10" style={{ color: CANVAS_TOKENS.text.primary }}>纵向均分</button>
-              <button type="button" onClick={groupSelected} className="h-7 rounded-lg px-2 text-[12px] hover:bg-white/10" style={{ color: CANVAS_TOKENS.text.primary }}>成组</button>
+              <button type="button" onClick={() => alignSelected('top')} className="h-7 rounded-lg px-2 text-[12px] hover:bg-white/10" style={{ color: CANVAS_TOKENS.text.primary }}>頂端對齊</button>
+              <button type="button" onClick={() => alignSelected('horizontal')} className="h-7 rounded-lg px-2 text-[12px] hover:bg-white/10" style={{ color: CANVAS_TOKENS.text.primary }}>橫向均分</button>
+              <button type="button" onClick={() => alignSelected('vertical')} className="h-7 rounded-lg px-2 text-[12px] hover:bg-white/10" style={{ color: CANVAS_TOKENS.text.primary }}>縱向均分</button>
+              <button type="button" onClick={groupSelected} className="h-7 rounded-lg px-2 text-[12px] hover:bg-white/10" style={{ color: CANVAS_TOKENS.text.primary }}>建立群組</button>
             </>
           ) : null}
           {selectedNodes.some((node) => node.type === 'group' || node.parentId) ? (
@@ -1338,7 +1345,7 @@ function CanvasInner({ locale, importIntent }: CanvasClientProps) {
             className="h-7 rounded-lg px-2 text-[12px] hover:bg-white/10"
             style={{ color: CANVAS_TOKENS.text.primary }}
           >
-            创建副本
+            建立副本
           </button>
           <button
             type="button"
@@ -1347,7 +1354,7 @@ function CanvasInner({ locale, importIntent }: CanvasClientProps) {
             className="h-7 rounded-lg px-2 text-[12px] hover:bg-white/10"
             style={{ color: '#FF8A8A', opacity: selectedNodes.every((node) => Boolean(node.data.locked)) ? 0.4 : 1 }}
           >
-            删除
+            刪除
           </button>
         </div>
       ) : null}
@@ -1370,20 +1377,20 @@ function CanvasInner({ locale, importIntent }: CanvasClientProps) {
             className="absolute bottom-20 left-1/2 z-40 w-72 -translate-x-1/2 rounded-xl p-3"
             style={{ background: CANVAS_TOKENS.bg.popover, border: `1px solid ${CANVAS_TOKENS.hairline}`, boxShadow: CANVAS_TOKENS.shadowPopover }}
           >
-            <div className="mb-2 text-[12px] font-semibold" style={{ color: CANVAS_TOKENS.text.primary }}>快捷键</div>
+            <div className="mb-2 text-[12px] font-semibold" style={{ color: CANVAS_TOKENS.text.primary }}>快捷鍵</div>
             {([
-              ['新建节点', 'Tab'],
-              ['成组 / 解组', 'G / ⇧G'],
-              ['创建副本', 'D / ⌘D'],
-              ['复制 / 粘贴', '⌘C / ⌘V'],
-              ['框选多个节点', '⇧ 拖曳'],
-              ['全选', '⌘A'],
-              ['删除选中', 'Del'],
-              ['锁定后禁止移动 / 删除', '工具列'],
-              ['聚焦选中', '工具列'],
-              ['整理画布', '⌥⇧F'],
-              ['添加节点', '双击空白'],
-              ['导演台 移动/旋转/缩放', 'V / R / S'],
+              ['新增節點', 'Tab'],
+              ['成組／解組', 'G / ⇧G'],
+              ['建立副本', 'D / ⌘D'],
+              ['複製／貼上', '⌘C / ⌘V'],
+              ['框選多個節點', '⇧ 拖曳'],
+              ['全選', '⌘A'],
+              ['刪除選取項目', 'Del'],
+              ['鎖定後禁止移動／刪除', '工具列'],
+              ['聚焦選取項目', '工具列'],
+              ['整理畫布', '⌥⇧F'],
+              ['新增節點', '按兩下空白處'],
+              ['導演台 移動／旋轉／縮放', 'V / R / S'],
             ] as const).map(([label, key]) => (
               <div key={label} className="flex items-center justify-between py-1 text-[12px]">
                 <span style={{ color: CANVAS_TOKENS.text.secondary }}>{label}</span>
@@ -1396,10 +1403,10 @@ function CanvasInner({ locale, importIntent }: CanvasClientProps) {
 
       {/* Bottom-center dock — LibTV rounded-12 card, 49px tall, 8px padding/gap */}
       <div
-        className="absolute bottom-5 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 rounded-xl p-2"
+        className={`${styles.primaryDock} absolute bottom-5 left-1/2 z-20 flex items-center gap-2 rounded-xl p-2`}
         style={{ background: CANVAS_TOKENS.bg.panel, border: `1px solid ${CANVAS_TOKENS.hairline}`, boxShadow: CANVAS_TOKENS.shadow }}
       >
-        <button type="button" onClick={undoCanvas} disabled={!canUndo} title="撤销 ⌘Z" className="h-8 rounded-lg px-2 text-[13px] disabled:opacity-30" style={{ color: CANVAS_TOKENS.text.secondary }}>↶</button>
+        <button type="button" onClick={undoCanvas} disabled={!canUndo} title="復原 ⌘Z" className="h-8 rounded-lg px-2 text-[13px] disabled:opacity-30" style={{ color: CANVAS_TOKENS.text.secondary }}>↶</button>
         <button type="button" onClick={redoCanvas} disabled={!canRedo} title="重做 ⇧⌘Z" className="h-8 rounded-lg px-2 text-[13px] disabled:opacity-30" style={{ color: CANVAS_TOKENS.text.secondary }}>↷</button>
         <div className="h-5 w-px" style={{ background: CANVAS_TOKENS.hairline }} />
         {dockButtons.map((b) => (
@@ -1414,7 +1421,8 @@ function CanvasInner({ locale, importIntent }: CanvasClientProps) {
           </button>
         ))}
       </div>
-    </div>
+      </div>
+    </CreativeToolShell>
     </CanvasAssetsProvider>
   )
 }

@@ -13,7 +13,7 @@ export interface PricingResolutionResolved {
   status: 'resolved'
   entry: BuiltinPricingCatalogEntry
   amount: number
-  mode: 'flat' | 'capability'
+  mode: 'flat' | 'capability' | 'usage'
 }
 
 export interface PricingResolutionNotConfigured {
@@ -141,6 +141,23 @@ export function resolveBuiltinPricing(input: {
       entry,
       amount,
       mode: 'flat',
+    }
+  }
+
+  if (entry.pricing.mode === 'usage') {
+    const amount = entry.pricing.unitAmount
+    if (typeof amount !== 'number') {
+      return {
+        status: 'missing_capability_match',
+        entry,
+        selections: cloneSelections(input.selections),
+      }
+    }
+    return {
+      status: 'resolved',
+      entry,
+      amount,
+      mode: 'usage',
     }
   }
 

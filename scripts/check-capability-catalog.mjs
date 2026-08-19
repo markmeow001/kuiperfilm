@@ -1,8 +1,32 @@
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 
- const CATALOG_DIR = path.resolve(process.cwd(), 'standards/capabilities')
+const CATALOG_DIR = path.resolve(process.cwd(), 'standards/capabilities')
 const CAPABILITY_NAMESPACES = new Set(['llm', 'image', 'video', 'audio', 'lipsync'])
+const AUDIO_BOOLEAN_FIELDS = [
+  'supportReferenceAudio',
+  'supportEmotionPrompt',
+  'supportEmotionStrength',
+  'supportEmotionVector',
+  'supportSpeed',
+  'supportPitch',
+  'supportVolume',
+  'supportPause',
+]
+const AUDIO_RANGE_BINDINGS = [
+  { supportField: 'supportEmotionStrength', rangeField: 'emotionStrengthRange' },
+  { supportField: 'supportSpeed', rangeField: 'speedRange' },
+  { supportField: 'supportPitch', rangeField: 'pitchRange' },
+  { supportField: 'supportVolume', rangeField: 'volumeRange' },
+]
+const AUDIO_RANGE_FIELDS = new Set(['min', 'max', 'step', 'defaultValue'])
+const AUDIO_CAPABILITY_ALLOWED_FIELDS = new Set([
+  'voiceOptions',
+  'rateOptions',
+  ...AUDIO_BOOLEAN_FIELDS,
+  ...AUDIO_RANGE_BINDINGS.map(({ rangeField }) => rangeField),
+  'fieldI18n',
+])
 // IMPORTANT: keep this allow-list in sync with the TS contract
 // `src/lib/model-config-contract.ts` and the capability namespace types.
 // Phase 11.5 added `supportNegativePrompt` / `supportReferenceImage` to the
@@ -36,7 +60,7 @@ const CAPABILITY_NAMESPACE_ALLOWED_FIELDS = {
     'supportReturnLastFrame',
     'fieldI18n',
   ]),
-  audio: new Set(['voiceOptions', 'rateOptions', 'fieldI18n']),
+  audio: AUDIO_CAPABILITY_ALLOWED_FIELDS,
   lipsync: new Set(['modeOptions', 'fieldI18n']),
 }
 const CAPABILITY_NAMESPACE_I18N_FIELDS = {
@@ -170,6 +194,72 @@ function validateFieldI18nMap(issues, file, index, namespace, namespaceValue) {
   }
 }
 
+function validateAudioCapabilityRange(issues, file, index, audio, supportField, rangeField) {
+  const range = audio[rangeField]
+  const rangePath = `capabilities.audio.${rangeField}`
+
+  if (range === undefined) {
+    if (audio[supportField] === true) {
+      pushIssue(issues, file, index, rangePath, `${rangeField} is required when ${supportField} is true`)
+    }
+    return
+  }
+
+  if (!isRecord(range)) {
+    pushIssue(issues, file, index, rangePath, `${rangeField} must be an object`)
+    return
+  }
+
+  for (const field of Object.keys(range)) {
+    if (!AUDIO_RANGE_FIELDS.has(field)) {
+      pushIssue(issues, file, index, `${rangePath}.${field}`, `Unknown range field: ${field}`)
+    }
+  }
+
+  const { min, max, step, defaultValue } = range
+  for (const [field, value] of Object.entries({ min, max, step, defaultValue })) {
+    if (typeof value !== 'number' || !Number.isFinite(value)) {
+      pushIssue(issues, file, index, `${rangePath}.${field}`, `${field} must be a finite number`)
+    }
+  }
+
+  if (typeof min === 'number' && Number.isFinite(min)
+    && typeof max === 'number' && Number.isFinite(max)
+    && min >= max) {
+    pushIssue(issues, file, index, rangePath, `${rangeField} min must be less than max`)
+  }
+  if (typeof step === 'number' && Number.isFinite(step) && step <= 0) {
+    pushIssue(issues, file, index, `${rangePath}.step`, `${rangeField} step must be greater than zero`)
+  }
+  if (typeof min === 'number' && Number.isFinite(min)
+    && typeof max === 'number' && Number.isFinite(max)
+    && typeof defaultValue === 'number' && Number.isFinite(defaultValue)
+    && (defaultValue < min || defaultValue > max)) {
+    pushIssue(
+      issues,
+      file,
+      index,
+      `${rangePath}.defaultValue`,
+      `${rangeField} defaultValue must be within min and max`,
+    )
+  }
+  if (audio[supportField] !== true) {
+    pushIssue(issues, file, index, rangePath, `${rangeField} requires ${supportField} to be true`)
+  }
+}
+
+function validateAudioCapabilities(issues, file, index, audio) {
+  for (const field of AUDIO_BOOLEAN_FIELDS) {
+    if (audio[field] !== undefined && typeof audio[field] !== 'boolean') {
+      pushIssue(issues, file, index, `capabilities.audio.${field}`, `${field} must be boolean`)
+    }
+  }
+
+  for (const { supportField, rangeField } of AUDIO_RANGE_BINDINGS) {
+    validateAudioCapabilityRange(issues, file, index, audio, supportField, rangeField)
+  }
+}
+
 function validateCapabilitiesForModelType(issues, file, index, modelType, capabilities) {
   if (capabilities === undefined || capabilities === null) return
   if (!isRecord(capabilities)) {
@@ -269,6 +359,7 @@ function validateCapabilitiesForModelType(issues, file, index, modelType, capabi
       if (audio.rateOptions !== undefined && !isStringArray(audio.rateOptions)) {
         pushIssue(issues, file, index, 'capabilities.audio.rateOptions', 'must be string array')
       }
+      validateAudioCapabilities(issues, file, index, audio)
       validateFieldI18nMap(issues, file, index, 'audio', audio)
     }
   }

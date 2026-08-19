@@ -59,7 +59,7 @@ export function DepthReferenceBudget({
                   : kind === 'character'
                   ? 'border-cyan-200/55 bg-cyan-300/35'
                   : kind === 'scene'
-                    ? 'border-violet-300/50 bg-violet-300/30'
+                    ? 'border-stone-400/45 bg-stone-300/20'
                     : 'border-white/10 bg-black/25'
               }`}
             />
@@ -72,7 +72,7 @@ export function DepthReferenceBudget({
           {mappings.map((mapping) => (
             <div key={mapping.id} className="flex min-w-0 items-center gap-2 text-[11px]">
               <span className="shrink-0 font-mono text-stone-500">{mapping.token}</span>
-              <span className={mapping.kind === 'character' ? 'text-cyan-200' : 'text-violet-200'}>
+              <span className={mapping.kind === 'character' ? 'text-cyan-200' : 'text-stone-300'}>
                 →
               </span>
               <span className={`truncate ${mapping.ready ? 'text-stone-300' : 'text-stone-500'}`}>

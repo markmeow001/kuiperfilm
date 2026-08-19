@@ -27,6 +27,9 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { AppIcon } from '@/components/ui/icons'
 import { useSkills } from '@/lib/query/hooks/useSkills'
+import { V2HomeRail } from '../V2HomeRail'
+import { PageHeader } from '@/components/v2/PageHeader'
+import studioStyles from '../StudioShell.module.css'
 
 interface V2NewProjectClientProps {
   locale: string
@@ -77,6 +80,7 @@ export function V2NewProjectClient({ locale }: V2NewProjectClientProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
+  const [wizardStep, setWizardStep] = useState<1 | 2 | 3>(1)
   // 2026-05-29 — per-project generation mode + opening pacing.
   const [generationMode, setGenerationMode] = useState<'r2v-narrative' | 't2i-storyboard'>('r2v-narrative')
   const [openingPacing, setOpeningPacing] = useState<'hook' | 'cinematic'>('hook')
@@ -267,34 +271,81 @@ export function V2NewProjectClient({ locale }: V2NewProjectClientProps) {
   // etc. Caller passes the ScriptCode key from SCRIPT_LABELS.
   const scriptLabel = (code: ScriptCode): string =>
     t(`upload.scriptLabels.${code}` as `upload.scriptLabels.${ScriptCode}`)
+  const wizardSteps = [
+    { number: 1 as const, title: t('wizard.basic'), hint: t('wizard.basicHint') },
+    { number: 2 as const, title: t('wizard.production'), hint: t('wizard.productionHint') },
+    { number: 3 as const, title: t('wizard.script'), hint: t('wizard.scriptHint') },
+  ]
 
   return (
-    <div className="grain min-h-screen bg-stone-950 text-stone-200">
-      <header className="border-b border-stone-800/60 px-12 py-5">
-        <Link
-          href={`/${locale}/v2`}
-          className="font-mono text-[14px] tracking-[0.2em] text-stone-500 transition-colors hover:text-amber-400"
-        >
-          {t('backToProjects')}
-        </Link>
+    <div
+      className={`${studioStyles.studioRoot} ${studioStyles.canvasAtmosphere} kuiper-dashboard kuiper-new-project min-h-screen pb-24 lg:pb-0 lg:pl-[76px] xl:pl-[272px]`}
+      data-studio-theme="dark"
+    >
+      <V2HomeRail locale={locale} />
+      <header className="kuiper-dashboard-topbar sticky top-0 z-30 border-b px-4 py-3 backdrop-blur-xl sm:px-6 lg:px-8">
+        <div className="mx-auto flex min-h-[52px] max-w-5xl items-center justify-between gap-4">
+          <Link
+            href={`/${locale}/v2`}
+            className="inline-flex min-h-11 items-center gap-2 text-[13px] font-semibold text-[var(--darkroom-muted)] transition-colors hover:text-[var(--process-cyan-strong)]"
+          >
+            <AppIcon name="arrowLeft" className="h-4 w-4" />
+            {t('backToProjects').replace(/^←\s*/, '')}
+          </Link>
+          <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--process-cyan-strong)]">
+            {wizardStep} / {wizardSteps.length}
+          </span>
+        </div>
       </header>
 
-      <main className="mx-auto max-w-2xl px-12 py-16">
-        <div className="mb-10">
-          <div className="font-mono text-[14px] tracking-[0.25em] text-amber-500/70">
-            {t('step')}
-          </div>
-          <h1 className="mt-2 font-serif-cn text-3xl font-light text-stone-100">
-            {t('title')}
-          </h1>
-          <p className="mt-1 font-fraunces text-sm italic text-stone-500">
-            {t('subtitle')}
-          </p>
-        </div>
+      <main className="kuiper-dashboard-main mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
+        <PageHeader
+          eyebrow={t('step')}
+          title={t('title')}
+          description={t('subtitle')}
+        />
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <ol className="mt-8 grid grid-cols-3 gap-2" aria-label={t('title')}>
+          {wizardSteps.map((step) => {
+            const active = step.number === wizardStep
+            const complete = step.number < wizardStep
+            return (
+              <li
+                key={step.number}
+                aria-current={active ? 'step' : undefined}
+                className={`min-w-0 rounded-xl border p-3 transition-colors ${
+                  active
+                    ? 'border-[var(--process-cyan)] bg-[var(--process-cyan-soft)]'
+                    : complete
+                      ? 'border-[color-mix(in_srgb,var(--process-cyan)_35%,transparent)] bg-[var(--production-surface)]'
+                      : 'border-[var(--production-border)] bg-[var(--production-muted)]'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${
+                    active
+                      ? 'bg-[var(--process-cyan)] text-[#071014]'
+                      : complete
+                        ? 'bg-[var(--process-cyan-deep)] text-white'
+                        : 'bg-[var(--darkroom-surface)] text-[var(--darkroom-muted)]'
+                  }`}>
+                    {complete ? '✓' : step.number}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-[13px] font-semibold text-[var(--production-ink)]">{step.title}</span>
+                    <span className="mt-0.5 hidden truncate text-[11px] text-[var(--production-ink-muted)] md:block">{step.hint}</span>
+                  </span>
+                </div>
+              </li>
+            )
+          })}
+        </ol>
+
+        <form onSubmit={handleSubmit} className="kuiper-dashboard-card mt-5 space-y-6 p-5 sm:p-7">
+          {wizardStep === 1 ? (
+            <div className="space-y-6">
           <div>
-            <label className="mb-2 block font-mono text-[14px] tracking-wider text-stone-500">
+            <label className="mb-2 block font-mono text-[14px] tracking-wider text-[var(--production-ink-muted)]">
               {t('form.nameLabel')}
             </label>
             <input
@@ -305,12 +356,12 @@ export function V2NewProjectClient({ locale }: V2NewProjectClientProps) {
               maxLength={100}
               required
               autoFocus
-              className="w-full rounded-sm border border-stone-800 bg-stone-900/40 px-4 py-3 font-serif-cn text-base text-stone-200 placeholder:text-stone-600 focus:border-amber-500/60 focus:outline-none"
+              className={`${studioStyles.inputSurface} w-full rounded-xl border px-4 py-3 font-serif-cn text-base placeholder:text-[#71818a]`}
             />
           </div>
 
           <div>
-            <label className="mb-2 block font-mono text-[14px] tracking-wider text-stone-500">
+            <label className="mb-2 block font-mono text-[14px] tracking-wider text-[var(--production-ink-muted)]">
               {t('form.descLabel')}
             </label>
             <textarea
@@ -319,22 +370,22 @@ export function V2NewProjectClient({ locale }: V2NewProjectClientProps) {
               placeholder={t('form.descPlaceholder')}
               maxLength={500}
               rows={4}
-              className="w-full resize-none rounded-sm border border-stone-800 bg-stone-900/40 px-4 py-3 font-serif-cn text-sm leading-relaxed text-stone-200 placeholder:text-stone-600 focus:border-amber-500/60 focus:outline-none"
+              className={`${studioStyles.inputSurface} w-full resize-none rounded-xl border px-4 py-3 font-serif-cn text-sm leading-relaxed placeholder:text-[#71818a]`}
             />
-            <div className="mt-1 text-right font-mono text-[14px] text-stone-700">
+            <div className="mt-1 text-right font-mono text-[14px] text-[var(--production-ink-muted)]">
               {t('form.descCounter', { count: description.length })}
             </div>
           </div>
 
           {/* Phase 12.5+ — workspace assignment. "" = personal scope */}
           <div>
-            <label className="mb-2 block font-mono text-[14px] tracking-wider text-stone-500">
+            <label className="mb-2 block font-mono text-[14px] tracking-wider text-[var(--production-ink-muted)]">
               {t('form.wsLabel')}
             </label>
             <select
               value={workspaceId}
               onChange={(e) => setWorkspaceId(e.target.value)}
-              className="w-full rounded-sm border border-stone-800 bg-stone-900/40 px-4 py-3 font-serif-cn text-sm text-stone-200 focus:border-amber-500/60 focus:outline-none"
+              className={`${studioStyles.inputSurface} w-full rounded-xl border px-4 py-3 font-serif-cn text-sm`}
             >
               <option value="">{t('form.wsPersonalOption')}</option>
               {workspaces.map((w) => (
@@ -343,17 +394,21 @@ export function V2NewProjectClient({ locale }: V2NewProjectClientProps) {
                 </option>
               ))}
             </select>
-            <p className="mt-1 font-fraunces text-[11px] italic text-stone-500">
+            <p className="mt-1 font-fraunces text-[11px] italic text-[var(--production-ink-muted)]">
               {t('form.wsHint')}
             </p>
           </div>
+            </div>
+          ) : null}
 
+          {wizardStep === 2 ? (
+            <div className="space-y-6">
           {/* 2026-05-29 — generation mode selector (R2V-narrative vs T2I-storyboard) */}
           <div>
-            <label className="mb-2 block font-mono text-[14px] tracking-wider text-stone-500">
+            <label className="mb-2 block font-mono text-[14px] tracking-wider text-[var(--production-ink-muted)]">
               {t('form.modeLabel')}
             </label>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               {([
                 { v: 'r2v-narrative' as const, title: t('form.modeR2vTitle'), desc: t('form.modeR2vDesc') },
                 { v: 't2i-storyboard' as const, title: t('form.modeT2iTitle'), desc: t('form.modeT2iDesc') },
@@ -362,16 +417,13 @@ export function V2NewProjectClient({ locale }: V2NewProjectClientProps) {
                   key={opt.v}
                   type="button"
                   onClick={() => setGenerationMode(opt.v)}
-                  className={`rounded-sm border px-3 py-2.5 text-left transition-colors ${
-                    generationMode === opt.v
-                      ? 'border-amber-500/60 bg-amber-500/10'
-                      : 'border-stone-800 bg-stone-900/40 hover:border-stone-700'
-                  }`}
+                  aria-pressed={generationMode === opt.v}
+                  className={`${studioStyles.selectableSurface} ${generationMode === opt.v ? studioStyles.selectableSurfaceActive : ''} rounded-xl border px-3 py-2.5 text-left transition-colors`}
                 >
-                  <div className={`font-mono text-[13px] tracking-wider ${generationMode === opt.v ? 'text-amber-300' : 'text-stone-300'}`}>
+                  <div className={`font-mono text-[13px] tracking-wider ${generationMode === opt.v ? 'text-[var(--process-cyan-strong)]' : 'text-[var(--production-ink)]'}`}>
                     {opt.title}
                   </div>
-                  <div className="mt-0.5 font-fraunces text-[11px] italic text-stone-500">{opt.desc}</div>
+                  <div className="mt-0.5 font-fraunces text-[11px] italic text-[var(--production-ink-muted)]">{opt.desc}</div>
                 </button>
               ))}
             </div>
@@ -379,10 +431,10 @@ export function V2NewProjectClient({ locale }: V2NewProjectClientProps) {
 
           {/* 2026-05-29 — opening pacing selector (hook vs cinematic) */}
           <div>
-            <label className="mb-2 block font-mono text-[14px] tracking-wider text-stone-500">
+            <label className="mb-2 block font-mono text-[14px] tracking-wider text-[var(--production-ink-muted)]">
               {t('form.pacingLabel')}
             </label>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               {([
                 { v: 'hook' as const, title: t('form.pacingHookTitle'), desc: t('form.pacingHookDesc') },
                 { v: 'cinematic' as const, title: t('form.pacingCinematicTitle'), desc: t('form.pacingCinematicDesc') },
@@ -391,16 +443,13 @@ export function V2NewProjectClient({ locale }: V2NewProjectClientProps) {
                   key={opt.v}
                   type="button"
                   onClick={() => setOpeningPacing(opt.v)}
-                  className={`rounded-sm border px-3 py-2.5 text-left transition-colors ${
-                    openingPacing === opt.v
-                      ? 'border-amber-500/60 bg-amber-500/10'
-                      : 'border-stone-800 bg-stone-900/40 hover:border-stone-700'
-                  }`}
+                  aria-pressed={openingPacing === opt.v}
+                  className={`${studioStyles.selectableSurface} ${openingPacing === opt.v ? studioStyles.selectableSurfaceActive : ''} rounded-xl border px-3 py-2.5 text-left transition-colors`}
                 >
-                  <div className={`font-mono text-[13px] tracking-wider ${openingPacing === opt.v ? 'text-amber-300' : 'text-stone-300'}`}>
+                  <div className={`font-mono text-[13px] tracking-wider ${openingPacing === opt.v ? 'text-[var(--process-cyan-strong)]' : 'text-[var(--production-ink)]'}`}>
                     {opt.title}
                   </div>
-                  <div className="mt-0.5 font-fraunces text-[11px] italic text-stone-500">{opt.desc}</div>
+                  <div className="mt-0.5 font-fraunces text-[11px] italic text-[var(--production-ink-muted)]">{opt.desc}</div>
                 </button>
               ))}
             </div>
@@ -415,10 +464,14 @@ export function V2NewProjectClient({ locale }: V2NewProjectClientProps) {
             originSkillId={originSkillId}
             onChange={setOriginSkillId}
           />
+            </div>
+          ) : null}
 
+          {wizardStep === 3 ? (
+            <div className="space-y-6">
           {/* Bulk-upload picker */}
           <div>
-            <label className="mb-2 block font-mono text-[14px] tracking-wider text-stone-500">
+            <label className="mb-2 block font-mono text-[14px] tracking-wider text-[var(--production-ink-muted)]">
               {t('upload.label')}
             </label>
             <input
@@ -432,26 +485,26 @@ export function V2NewProjectClient({ locale }: V2NewProjectClientProps) {
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="flex w-full items-center justify-center gap-2 rounded-sm border border-dashed border-amber-500/40 bg-amber-500/5 px-4 py-6 font-serif-cn text-sm text-amber-300 transition-all hover:bg-amber-500/10"
+                className={`${studioStyles.toolSurface} flex min-h-16 w-full items-center justify-center gap-2 rounded-xl border border-dashed px-4 py-6 font-serif-cn text-sm transition-colors hover:border-[var(--process-cyan)] hover:bg-[color-mix(in_srgb,var(--process-cyan-soft)_70%,var(--darkroom-raised))]`}
               >
                 <AppIcon name="upload" className="h-4 w-4" />
                 {t('upload.cta')}
               </button>
             ) : (
-              <div className="rounded-sm border border-amber-900/40 bg-stone-900/40 p-4">
+              <div className={`${studioStyles.raisedSurface} rounded-xl border p-4`}>
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
-                    <div className="truncate font-serif-cn text-sm text-stone-200">
+                    <div className="truncate font-serif-cn text-sm text-[var(--production-ink)]">
                       {pickedFile.name}
                     </div>
-                    <div className="mt-1 font-mono text-[12px] tracking-wider text-stone-500">
+                    <div className="mt-1 font-mono text-[12px] tracking-wider text-[var(--production-ink-muted)]">
                       {Math.round(pickedFile.size / 1024).toLocaleString()} KB
                     </div>
                   </div>
                   <button
                     type="button"
                     onClick={clearFile}
-                    className="shrink-0 rounded-sm p-1 text-stone-500 transition-colors hover:bg-stone-800 hover:text-stone-300"
+                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-[var(--production-ink-muted)] transition-colors hover:bg-[var(--darkroom-surface)] hover:text-[var(--production-ink)]"
                     aria-label={t('upload.removeAria')}
                   >
                     <AppIcon name="close" className="h-4 w-4" />
@@ -459,9 +512,9 @@ export function V2NewProjectClient({ locale }: V2NewProjectClientProps) {
                 </div>
 
                 {/* Extraction status */}
-                <div className="mt-3 border-t border-stone-800/60 pt-3">
+                <div className="mt-3 border-t border-[var(--production-border)] pt-3">
                   {extracting ? (
-                    <p className="font-mono text-[12px] tracking-wider text-amber-500/70">
+                    <p className="font-mono text-[12px] tracking-wider text-[var(--process-cyan-strong)]">
                       {t('upload.extracting')}
                     </p>
                   ) : extractError ? (
@@ -472,31 +525,31 @@ export function V2NewProjectClient({ locale }: V2NewProjectClientProps) {
                     <div>
                       <p className="font-mono text-[12px] tracking-wider text-emerald-500/80">
                         {episodeCount > 0 ? t('upload.detected', { count: episodeCount }) : t('upload.detectedZero')}
-                        <span className="ml-2 text-stone-500">· {modeLabel[extracted.mode]}</span>
+                        <span className="ml-2 text-[var(--production-ink-muted)]">· {modeLabel[extracted.mode]}</span>
                       </p>
 
                       {/* Language picker — only when multilingual. Filtered
                           content has been pre-computed server-side per
                           detected script, so switching is instant. */}
                       {extracted.meta.languages?.isMultilingual ? (
-                        <div className="mt-3 rounded-sm border border-amber-500/30 bg-amber-500/5 px-3 py-2">
-                          <p className="mb-2 font-serif-cn text-[12px] text-amber-200/90">
+                        <div className="mt-3 rounded-xl border border-[color-mix(in_srgb,var(--process-cyan)_35%,transparent)] bg-[var(--process-cyan-soft)] px-3 py-2">
+                          <p className="mb-2 font-serif-cn text-[12px] text-[var(--process-cyan-strong)]">
                             {t('upload.multilingualPrompt')}
                           </p>
                           <div className="flex flex-wrap gap-2">
                             {extracted.meta.languages.detected.map((code) => (
                               <label
                                 key={code}
-                                className={`flex cursor-pointer items-center gap-1.5 rounded-sm border px-2.5 py-1 font-serif-cn text-[12px] transition-colors ${
+                                className={`flex min-h-11 cursor-pointer items-center gap-1.5 rounded-xl border px-2.5 py-1 font-serif-cn text-[12px] transition-colors ${
                                   chosenLang === code
-                                    ? 'border-amber-500/70 bg-amber-500/15 text-amber-200'
-                                    : 'border-stone-700 text-stone-400 hover:border-stone-600'
+                                    ? 'border-[var(--process-cyan)] bg-[var(--process-cyan-soft)] text-[var(--process-cyan-strong)]'
+                                    : 'border-[var(--production-border)] text-[var(--production-ink-muted)] hover:border-[var(--process-cyan)]'
                                 }`}
                               >
                                 <input
                                   type="radio"
                                   name="script-pick"
-                                  className="h-3 w-3 accent-amber-500"
+                                  className="h-4 w-4 accent-[var(--process-cyan)]"
                                   checked={chosenLang === code}
                                   onChange={() => setChosenLang(code)}
                                 />
@@ -504,30 +557,30 @@ export function V2NewProjectClient({ locale }: V2NewProjectClientProps) {
                               </label>
                             ))}
                           </div>
-                          <p className="mt-2 font-mono text-[11px] text-stone-500">
+                          <p className="mt-2 font-mono text-[11px] text-[var(--production-ink-muted)]">
                             {t('upload.multilingualNote')}
                           </p>
                         </div>
                       ) : null}
 
                       {episodeCount > 0 ? (
-                        <ul className="mt-2 max-h-32 space-y-1 overflow-y-auto pr-2 font-serif-cn text-[12px] text-stone-400">
+                        <ul className="mt-2 max-h-32 space-y-1 overflow-y-auto pr-2 font-serif-cn text-[12px] text-[var(--production-ink-muted)]">
                           {extracted.episodes.slice(0, 8).map((ep) => (
                             <li key={ep.number} className="truncate">
-                              <span className="mr-2 font-mono text-amber-500/70">
+                              <span className="mr-2 font-mono text-[var(--process-cyan-strong)]">
                                 {t('upload.episodeShort', { n: ep.number })}
                               </span>
                               {ep.title}
                             </li>
                           ))}
                           {episodeCount > 8 ? (
-                            <li className="font-mono text-[11px] text-stone-600">
+                            <li className="font-mono text-[11px] text-[var(--production-ink-muted)]">
                               {t('upload.episodeShort', { n: `… +${episodeCount - 8}` })}
                             </li>
                           ) : null}
                         </ul>
                       ) : (
-                        <p className="mt-2 font-serif-cn text-xs text-stone-500">
+                        <p className="mt-2 font-serif-cn text-xs text-[var(--production-ink-muted)]">
                           {t('upload.noStructureHint')}
                         </p>
                       )}
@@ -538,14 +591,14 @@ export function V2NewProjectClient({ locale }: V2NewProjectClientProps) {
             )}
           </div>
 
-          <div className="rounded-sm border border-stone-800/60 bg-stone-900/20 p-4">
-            <div className="font-mono text-[14px] tracking-wider text-stone-500">
+          <div className={`${studioStyles.raisedSurface} rounded-xl border p-4`}>
+            <div className="font-mono text-[14px] tracking-wider text-[var(--process-cyan-strong)]">
               💡 TIP
             </div>
-            <p className="mt-2 font-serif-cn text-xs leading-relaxed text-stone-400">
+            <p className="mt-2 font-serif-cn text-xs leading-relaxed text-[var(--production-ink-muted)]">
               {t('footer.tipHeader')}
-              <span className="text-amber-400"> · {t('footer.tipBullet1')}</span>
-              <span className="text-amber-400"> · {t('footer.tipBullet2')}</span>
+              <span className="text-[var(--process-cyan-strong)]"> · {t('footer.tipBullet1')}</span>
+              <span className="text-[var(--process-cyan-strong)]"> · {t('footer.tipBullet2')}</span>
               <span> · {t('footer.tipBullet3')}</span>
             </p>
           </div>
@@ -563,26 +616,52 @@ export function V2NewProjectClient({ locale }: V2NewProjectClientProps) {
               ) : null}
             </div>
           ) : null}
+            </div>
+          ) : null}
 
-          <div className="flex items-center justify-end gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--production-border)] pt-5">
             <Link
               href={`/${locale}/v2`}
-              className="rounded-sm border border-stone-800 bg-stone-900/30 px-5 py-2.5 font-serif-cn text-sm text-stone-400 transition-colors hover:border-stone-700 hover:text-stone-200"
+              className="inline-flex min-h-11 items-center px-2 text-[13px] font-medium text-[var(--production-ink-muted)] hover:text-[var(--production-ink)]"
             >
               {t('footer.cancel')}
             </Link>
-            <button
-              type="submit"
-              disabled={submitting || extracting || !name.trim()}
-              className="flex items-center gap-2 rounded-sm bg-amber-500 px-6 py-2.5 font-serif-cn text-sm font-medium text-stone-950 transition-colors hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <AppIcon name="sparklesAlt" className="h-4 w-4" />
-              {submitting
-                ? t('footer.submitting')
-                : episodeCount > 0
-                  ? t('footer.submitWithImport', { count: episodeCount })
-                  : t('footer.submit')}
-            </button>
+            <div className="flex items-center gap-2">
+              {wizardStep > 1 ? (
+                <button
+                  type="button"
+                  onClick={() => setWizardStep((wizardStep - 1) as 1 | 2)}
+                  className="kuiper-dashboard-secondary inline-flex min-h-11 items-center gap-2 px-4 text-[13px] font-semibold"
+                >
+                  <AppIcon name="chevronLeft" className="h-4 w-4" />
+                  {t('wizard.back')}
+                </button>
+              ) : null}
+              {wizardStep < 3 ? (
+                <button
+                  type="button"
+                  disabled={wizardStep === 1 && !name.trim()}
+                  onClick={() => setWizardStep((wizardStep + 1) as 2 | 3)}
+                  className="kuiper-dashboard-primary inline-flex min-h-11 items-center gap-2 px-5 text-[13px] disabled:cursor-not-allowed disabled:opacity-45"
+                >
+                  {t('wizard.next')}
+                  <AppIcon name="chevronRight" className="h-4 w-4" />
+                </button>
+              ) : (
+                <button
+                  type="submit"
+                  disabled={submitting || extracting || !name.trim()}
+                  className="kuiper-dashboard-primary flex min-h-11 items-center gap-2 px-5 text-[13px] disabled:cursor-not-allowed disabled:opacity-45"
+                >
+                  <AppIcon name="sparklesAlt" className="h-4 w-4" />
+                  {submitting
+                    ? t('footer.submitting')
+                    : episodeCount > 0
+                      ? t('footer.submitWithImport', { count: episodeCount })
+                      : t('footer.submit')}
+                </button>
+              )}
+            </div>
           </div>
         </form>
       </main>
@@ -599,7 +678,7 @@ export function V2NewProjectClient({ locale }: V2NewProjectClientProps) {
 // Empty Skill library: only 自由創作 renders + a small hint nudging
 // users to /skills to install one (Phase 3.5 marketplace).
 //
-// Style matches the surrounding form (Session A's stone/amber theme).
+// Style matches the shared studio-dark production shell.
 
 interface SkillAnchorPickerProps {
   originSkillId: string | null
@@ -631,7 +710,7 @@ function SkillAnchorPicker({ originSkillId, onChange }: SkillAnchorPickerProps) 
 
   return (
     <div>
-      <label className="mb-2 block font-mono text-[14px] tracking-wider text-stone-500">
+      <label className="mb-2 block font-mono text-[14px] tracking-wider text-[var(--production-ink-muted)]">
         {t('skillLabel')}
       </label>
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -640,31 +719,28 @@ function SkillAnchorPicker({ originSkillId, onChange }: SkillAnchorPickerProps) 
             key={opt.id ?? 'free'}
             type="button"
             onClick={() => onChange(opt.id)}
-            className={`rounded-sm border px-3 py-2.5 text-left transition-colors ${
-              originSkillId === opt.id
-                ? 'border-amber-500/60 bg-amber-500/10'
-                : 'border-stone-800 bg-stone-900/40 hover:border-stone-700'
-            }`}
+            aria-pressed={originSkillId === opt.id}
+            className={`${studioStyles.selectableSurface} ${originSkillId === opt.id ? studioStyles.selectableSurfaceActive : ''} rounded-xl border px-3 py-2.5 text-left transition-colors`}
           >
             <div
               className={`font-mono text-[13px] tracking-wider ${
-                originSkillId === opt.id ? 'text-amber-300' : 'text-stone-300'
+                originSkillId === opt.id ? 'text-[var(--process-cyan-strong)]' : 'text-[var(--production-ink)]'
               }`}
             >
               {opt.name}
             </div>
-            <div className="mt-0.5 font-fraunces text-[11px] italic text-stone-500">
+            <div className="mt-0.5 font-fraunces text-[11px] italic text-[var(--production-ink-muted)]">
               {opt.desc}
             </div>
           </button>
         ))}
       </div>
       {installed.length === 0 && !skillsQuery.isLoading ? (
-        <p className="mt-2 font-fraunces text-[11px] italic text-stone-500">
+        <p className="mt-2 font-fraunces text-[11px] italic text-[var(--production-ink-muted)]">
           {t('skillEmptyHint')}
           <Link
             href="/skills"
-            className="text-amber-400/80 underline-offset-4 hover:underline"
+            className="text-[var(--process-cyan-strong)] underline-offset-4 hover:underline"
           >
             {t('skillEmptyHintLink')}
           </Link>

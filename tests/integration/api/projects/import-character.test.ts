@@ -47,6 +47,10 @@ const prismaMock = vi.hoisted(() => ({
   novelPromotionCharacter: {
     findUnique: vi.fn(),
   },
+  mediaObject: {
+    findMany: vi.fn(),
+    findUnique: vi.fn(),
+  },
   $transaction: vi.fn(),
 }))
 
@@ -63,6 +67,8 @@ describe('POST /api/projects/[projectId]/import-character', () => {
       userId: 'user-a',
     })
     prismaMock.novelPromotionProject.findUnique.mockResolvedValue({ id: 'np-1' })
+    prismaMock.mediaObject.findMany.mockResolvedValue([])
+    prismaMock.mediaObject.findUnique.mockResolvedValue(null)
 
     txMock.novelPromotionCharacter.create.mockResolvedValue({ id: 'npc-1' })
     txMock.characterAppearance.createMany.mockResolvedValue({ count: 0 })
@@ -184,7 +190,80 @@ describe('POST /api/projects/[projectId]/import-character', () => {
     expect(txMock.novelPromotionCharacter.create).not.toHaveBeenCalled()
   })
 
-  it('成功 + includeAppearances 預設 true -> 200, 寫入 NovelPromotionCharacter + 2 個 CharacterAppearance, sourceGlobalCharacterId 對', async () => {
+  it('[appearance contains a reserved VoiceLine output] -> [400 before transaction/copy]', async () => {
+    installAuthMocks()
+    mockAuthenticated('user-a')
+    prismaMock.globalCharacter.findUnique.mockResolvedValue({
+      id: 'gc-reserved',
+      userId: 'user-a',
+      name: 'Unsafe appearance',
+      aliases: null,
+      voiceId: null,
+      voiceType: null,
+      customVoiceUrl: null,
+      customVoiceMediaId: null,
+      profileData: null,
+      profileConfirmed: false,
+      appearances: [{
+        imageUrl: `voice/project-a/episode-a/line-a/${'a'.repeat(32)}-${'b'.repeat(64)}.wav`,
+        imageUrls: null,
+        imageMediaId: null,
+      }],
+    })
+
+    const mod = await import('@/app/api/projects/[projectId]/import-character/route')
+    const res = await mod.POST(buildMockRequest({
+      path: '/api/projects/proj-1/import-character',
+      method: 'POST',
+      body: { globalCharacterId: 'gc-reserved' },
+    }), { params: Promise.resolve({ projectId: 'proj-1' }) })
+
+    expect(res.status).toBe(400)
+    expect(prismaMock.$transaction).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    { label: 'voiceId', source: { voiceId: 'provider-voice-id' } },
+    { label: 'voiceType', source: { voiceType: 'qwen-designed' } },
+    { label: 'HTTP source', source: { customVoiceUrl: 'https://attacker.example/voice.wav' } },
+    { label: 'data URL', source: { customVoiceUrl: 'data:audio/wav;base64,ZmFrZQ==' } },
+    { label: 'foreign /m source', source: { customVoiceUrl: '/m/foreign-media' } },
+    { label: 'customVoiceMediaId', source: { customVoiceMediaId: 'media-unconsented' } },
+  ])('[owned GlobalCharacter with $label] -> [400 before transaction/create]', async ({ source }) => {
+    installAuthMocks()
+    mockAuthenticated('user-a')
+    prismaMock.globalCharacter.findUnique.mockResolvedValue({
+      id: 'gc-voice-source',
+      userId: 'user-a',
+      name: 'Unsafe voice source',
+      aliases: null,
+      voiceId: null,
+      voiceType: null,
+      customVoiceUrl: null,
+      customVoiceMediaId: null,
+      profileData: null,
+      profileConfirmed: false,
+      appearances: [],
+      ...source,
+    })
+
+    const mod = await import('@/app/api/projects/[projectId]/import-character/route')
+    const req = buildMockRequest({
+      path: '/api/projects/proj-1/import-character',
+      method: 'POST',
+      body: { globalCharacterId: 'gc-voice-source' },
+    })
+    const res = await mod.POST(req, { params: Promise.resolve({ projectId: 'proj-1' }) })
+
+    expect(res.status).toBe(400)
+    const json = await res.json() as { error?: { details?: { reason?: string } } }
+    expect(json.error?.details?.reason).toBe('VOICE_SOURCE_CONSENT_REQUIRED')
+    expect(prismaMock.$transaction).not.toHaveBeenCalled()
+    expect(txMock.novelPromotionCharacter.create).not.toHaveBeenCalled()
+    expect(txMock.characterAppearance.createMany).not.toHaveBeenCalled()
+  })
+
+  it('安全空 voice source + includeAppearances 預設 true -> 200 且四欄維持清空', async () => {
     installAuthMocks()
     mockAuthenticated('user-a')
 
@@ -193,10 +272,10 @@ describe('POST /api/projects/[projectId]/import-character', () => {
       userId: 'user-a',
       name: 'Hero',
       aliases: JSON.stringify(['英雄']),
-      voiceId: 'v1',
-      voiceType: 'qwen-designed',
+      voiceId: null,
+      voiceType: null,
       customVoiceUrl: null,
-      customVoiceMediaId: 'media-1',
+      customVoiceMediaId: null,
       profileData: null,
       profileConfirmed: true,
       appearances: [
@@ -257,8 +336,10 @@ describe('POST /api/projects/[projectId]/import-character', () => {
       novelPromotionProjectId: 'np-1',
       name: 'Hero',
       sourceGlobalCharacterId: 'gc-1',
-      voiceId: 'v1',
-      voiceType: 'qwen-designed',
+      voiceId: null,
+      voiceType: null,
+      customVoiceUrl: null,
+      customVoiceMediaId: null,
       profileConfirmed: true,
     }))
 

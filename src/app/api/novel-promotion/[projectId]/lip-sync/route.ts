@@ -9,6 +9,10 @@ import { buildDefaultTaskBillingInfo } from '@/lib/billing'
 import { hasPanelLipSyncOutput } from '@/lib/task/has-output'
 import { withTaskUiPayload } from '@/lib/task/ui-payload'
 import { composeModelKey, parseModelKeyStrict } from '@/lib/model-config-contract'
+import {
+  findNovelPromotionPanelByStoryboardIndexInProject,
+  findNovelPromotionVoiceLineInProject,
+} from '@/lib/novel-promotion/project-scope'
 
 const DEFAULT_LIPSYNC_MODEL_KEY = composeModelKey('fal', 'fal-ai/kling-video/lipsync/audio-to-video')
 
@@ -29,7 +33,13 @@ export const POST = apiHandler(async (
   const voiceLineId = body?.voiceLineId
   const requestedLipSyncModel = typeof body?.lipSyncModel === 'string' ? body.lipSyncModel.trim() : ''
 
-  if (!storyboardId || panelIndex === undefined || !voiceLineId) {
+  if (
+    typeof storyboardId !== 'string'
+    || !storyboardId
+    || panelIndex === undefined
+    || typeof voiceLineId !== 'string'
+    || !voiceLineId
+  ) {
     throw new ApiError('INVALID_PARAMS')
   }
   if (requestedLipSyncModel && !parseModelKeyStrict(requestedLipSyncModel)) {
@@ -37,6 +47,20 @@ export const POST = apiHandler(async (
       code: 'MODEL_KEY_INVALID',
       field: 'lipSyncModel',
     })
+  }
+
+  const panel = await findNovelPromotionPanelByStoryboardIndexInProject(
+    projectId,
+    storyboardId,
+    Number(panelIndex),
+  )
+  if (!panel) {
+    throw new ApiError('NOT_FOUND')
+  }
+
+  const voiceLine = await findNovelPromotionVoiceLineInProject(projectId, voiceLineId)
+  if (!voiceLine || voiceLine.episodeId !== panel.storyboard.episodeId) {
+    throw new ApiError('NOT_FOUND')
   }
 
   const pref = await prisma.userPreference.findUnique({
@@ -52,17 +76,9 @@ export const POST = apiHandler(async (
     })
   }
 
-  const panel = await prisma.novelPromotionPanel.findFirst({
-    where: { storyboardId, panelIndex: Number(panelIndex) },
-    select: { id: true },
-  })
-
-  if (!panel) {
-    throw new ApiError('NOT_FOUND')
-  }
-
   const payload = {
     ...body,
+    voiceLineId: voiceLine.id,
     lipSyncModel: resolvedLipSyncModel,
   }
 
@@ -71,13 +87,14 @@ export const POST = apiHandler(async (
     locale,
     requestId: getRequestId(request),
     projectId,
+    episodeId: panel.storyboard.episodeId,
     type: TASK_TYPE.LIP_SYNC,
     targetType: 'NovelPromotionPanel',
     targetId: panel.id,
     payload: withTaskUiPayload(payload, {
       hasOutputAtStart: await hasPanelLipSyncOutput(panel.id),
     }),
-    dedupeKey: `lip_sync:${panel.id}:${voiceLineId}`,
+    dedupeKey: `lip_sync:${panel.id}:${voiceLine.id}`,
     billingInfo: buildDefaultTaskBillingInfo(TASK_TYPE.LIP_SYNC, payload),
   })
 

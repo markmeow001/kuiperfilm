@@ -1,9 +1,8 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
-import { AppIcon } from '@/components/ui/icons'
+import { CreativeToolShell } from '@/components/v2/CreativeToolShell'
 import type { Locale } from '@/i18n/routing'
 import type { AiMaskSettings } from './AiMaskPanel'
 import { CompositeAssetPanel } from './CompositeAssetPanel'
@@ -36,7 +35,8 @@ import { useLiveCompositeProjects } from './useLiveCompositeProjects'
 import { useMaskTimeline } from './useMaskTimeline'
 import type { CompositeExportProgress, CompositeView, MaskAnalysisProgress, MaskEditTarget, MaskRaster, MaskTool, NormalizedPoint, VideoMetadata, VirtualCharacterLayer } from './live-composite-types'
 import type { LiveCompositeWorkflowStep } from './LiveCompositeWorkflowGuide'
-import type { LiveCompositeMode } from './LiveCompositeModeSelector'
+import { LiveCompositeModeSelector, type LiveCompositeMode } from './LiveCompositeModeSelector'
+import styles from './LiveCompositeShell.module.css'
 
 interface LiveCompositeClientProps {
   locale: Locale
@@ -917,204 +917,259 @@ export function LiveCompositeClient({ locale, userId }: LiveCompositeClientProps
   }
 
   return (
-    <main className="kuiper-studio-page flex h-dvh min-h-[680px] flex-col overflow-hidden">
-      <header className="flex min-h-16 shrink-0 items-center justify-between gap-4 overflow-x-auto border-b border-white/10 bg-[#0B0B0D]/95 px-4 py-2 sm:px-5">
-        <div className="flex items-center gap-4">
-          <Link href={`/${locale}/v2`} aria-label="回到專案列表" className="grid h-9 w-9 place-items-center rounded-lg text-stone-500 hover:bg-white/10 hover:text-white">
-            <AppIcon name="arrowLeft" className="h-4 w-4" />
-          </Link>
-          <div>
-            <div className="flex items-center gap-2 text-sm font-medium">
-              <AppIcon name="sparklesAlt" className="h-4 w-4 text-cyan-300" />
-              AI 實拍重製
-            </div>
-            <div className="mt-0.5 text-xs text-stone-600">
-              {workflowMode === 'depth-rebuild'
-                ? '深度引導全畫面重建 · 換角色、服裝與場景'
-                : '進階遮罩合成 · 保留原演員像素並精修邊緣'}
-            </div>
+    <CreativeToolShell
+      locale={locale}
+      eyebrow="創作工具"
+      title="AI 實拍重製"
+      description={
+        workflowMode === 'depth-rebuild'
+          ? '深度引導全畫面重建 · 換角色、服裝與場景'
+          : '進階遮罩合成 · 保留原演員像素並精修邊緣'
+      }
+      backHref={`/${locale}/v2`}
+      backLabel="返回製作首頁"
+      actions={
+        <LiveCompositeModeSelector
+          value={workflowMode}
+          onChange={changeWorkflowMode}
+          disabled={interactionDisabled}
+        />
+      }
+    >
+      <div
+        className={styles.workspace}
+        data-live-composite-workspace
+        data-live-composite-touch-scope
+      >
+        <div className={styles.utilityRow}>
+          <span
+            className={styles.sourceStatus}
+            data-live-composite-source-status
+            role="status"
+          >
+            {metadata
+              ? `已載入影片 · ${metadata.duration.toFixed(1)} 秒`
+              : '尚未載入影片'}
+          </span>
+          <div className={styles.projectUtility}>
+            {workflowMode === 'mask-composite' ? (
+              <ProjectPanel
+                projectName={projectName}
+                hasProject={Boolean(projectId)}
+                projects={projectStore.projects}
+                busyMessage={projectStore.busyMessage}
+                error={projectStore.error}
+                disabled={interactionDisabled}
+                onProjectNameChange={setProjectName}
+                onSave={() => void saveProject()}
+                onOpen={(id) => void openProject(id)}
+                onRefreshList={() => void projectStore.refreshProjects()}
+              />
+            ) : (
+              <span className={styles.persistenceNote}>
+                深度重建設定只保留在目前頁面，尚未存入合成專案
+              </span>
+            )}
           </div>
         </div>
-        <div className="flex shrink-0 items-center gap-3 text-xs text-stone-500">
-          <span>{metadata ? `已載入影片 · ${metadata.duration.toFixed(1)} 秒` : '尚未載入影片'}</span>
-          {workflowMode === 'mask-composite' ? (
-            <ProjectPanel projectName={projectName} hasProject={Boolean(projectId)} projects={projectStore.projects} busyMessage={projectStore.busyMessage} error={projectStore.error} disabled={interactionDisabled} onProjectNameChange={setProjectName} onSave={() => void saveProject()} onOpen={(id) => void openProject(id)} onRefreshList={() => void projectStore.refreshProjects()} />
-          ) : (
-            <span>深度重建設定只保留在目前頁面，尚未存入合成專案</span>
-          )}
-        </div>
-      </header>
 
-      {workflowMode === 'mask-composite' && metadata && workflowStep >= 3 ? (
-        <CompositeToolbar
-          tool={tool}
-          editTarget={editTarget}
-          view={view}
-          brushPercent={brushPercent}
-          overlayVisible={overlayVisible}
-          canUndo={activeTimeline.canUndo}
-          canRedo={activeTimeline.canRedo}
-          currentTime={currentTime}
-          disabled={isVideoExporting || occlusionBusy}
-          onToolChange={(nextTool) => {
-            setTool(nextTool)
-            setView(editTarget === 'person' ? 'mask' : 'composite')
-            setOverlayVisible(true)
-          }}
-          onEditTargetChange={(target) => {
-            setEditTarget(target)
-            setOcclusionPicking(false)
-            setView(target === 'person' ? 'mask' : 'composite')
-            setOverlayVisible(true)
-          }}
-          onViewChange={setView}
-          onBrushPercentChange={setBrushPercent}
-          onOverlayVisibleChange={setOverlayVisible}
-          onUndo={activeTimeline.undo}
-          onRedo={activeTimeline.redo}
-          onClear={activeTimeline.clearCurrent}
-        />
-      ) : (
-        <div className="border-b border-white/10 bg-stone-950/90 px-5 py-3 text-sm text-stone-400">
-          {workflowMode === 'depth-rebuild'
-            ? metadata
-              ? '原片已就緒：在左側免費產生深度影片，再指定新角色與場景。'
-              : '先從左側上傳 4–15 秒表演影片；角色圖可以同時先準備。'
-            : metadata
-              ? '下一步：在左側執行 AI 人物辨識，完成後才會顯示修邊工具。'
-              : '先從左側上傳一段實拍影片。'}
-        </div>
-      )}
-
-      <div className="flex min-h-0 flex-1">
-        <CompositeAssetPanel
-          mode={workflowMode}
-          onModeChange={changeWorkflowMode}
-          depthRebuild={(
-            <DepthRebuildControls
-              controller={depthRebuild}
-              metadata={metadata}
-              interactionDisabled={interactionDisabled}
-              onVideoSelect={selectVideo}
-            />
-          )}
-          metadata={metadata}
-          backgroundColor={backgroundColor}
-          hasBackgroundImage={Boolean(backgroundUrl)}
-          canExport={Boolean(metadata) && !isAnalyzing && !occlusionBusy}
-          currentTime={currentTime}
-          analysisProgress={analysisProgress}
-          exportProgress={exportProgress}
-          interactionDisabled={interactionDisabled}
-          virtualCharacter={virtualCharacter}
-          maskKeyframes={maskTimeline.keyframes}
-          occlusionPicking={occlusionPicking}
-          occlusionBusy={occlusionBusy}
-          occlusionMessage={occlusionMessage}
-          occlusionKeyframeCount={occlusionTimeline.keyframes.length}
-          onVideoSelect={selectVideo}
-          onBackgroundSelect={selectBackground}
-          onBackgroundColorChange={setBackgroundColor}
-          onVirtualCharacterSelect={selectVirtualCharacter}
-          onVirtualCharacterChange={updateVirtualCharacter}
-          onVirtualCharacterAutoMatch={() => {
-            try {
-              const patch = stageRef.current?.matchCharacterAppearance()
-              if (patch)
-                updateVirtualCharacter({
-                  appearance: {
-                    ...DEFAULT_CHARACTER_APPEARANCE,
-                    ...virtualCharacter?.appearance,
-                    ...patch,
-                  },
-                })
-            } catch (error) {
-              setExportError(error instanceof Error ? error.message : '畫面匹配失敗')
-            }
-          }}
-          motionBusy={motionBusy}
-          motionMessage={motionMessage}
-          onAnalyzeMotionCurrent={() => void analyzeCharacterMotion(false)}
-          onAnalyzeMotionClip={() => void analyzeCharacterMotion(true)}
-          onVirtualCharacterRemove={() => {
-            setVirtualCharacter(null)
-            setVirtualCharacterFile(null)
-          }}
-          onStartOcclusionPicking={startOcclusionPicking}
-          onCancelOcclusionPicking={() => setOcclusionPicking(false)}
-          onExportMask={exportMask}
-          onExportFrame={exportFrame}
-          onExportVideo={(includeAudio) => void exportVideo(includeAudio)}
-          onCancelVideoExport={cancelVideoExport}
-          onAnalyzeCurrent={analyzeCurrent}
-          onAnalyzeClip={analyzeClip}
-          onCancelAnalysis={cancelAnalysis}
-          canAnalyzeFace={canAnalyzeFace}
-          faceProgress={faceProgress}
-          faceTrack={faceTrack}
-          videoHasAudio={videoHasAudio}
-          onAnalyzeFace={() => void analyzeFacePerformance()}
-          onCancelFaceAnalysis={cancelFaceAnalysis}
-          onClearFaceTrack={() => {
-            setFaceTrack(null)
-            setFaceProgress(INITIAL_ANALYSIS_PROGRESS)
-          }}
-          lastExportLabel={lastExport?.label ?? null}
-          onSaveToLibrary={lastExport ? () => setLibraryDialogOpen(true) : undefined}
-          workflowStep={workflowStep}
-          completedWorkflowSteps={completedWorkflowSteps}
-          onWorkflowStepChange={changeWorkflowStep}
-        />
-        <div className="flex min-w-0 flex-1 flex-col">
-          <MaskStage
-            ref={stageRef}
-            videoUrl={videoUrl}
-            videoName={videoName}
-            backgroundUrl={backgroundUrl}
-            backgroundColor={backgroundColor}
-            metadata={metadata}
-            keyframes={maskTimeline.keyframes}
-            baseMask={maskTimeline.activeKeyframe?.baseMask}
-            strokes={maskTimeline.strokes}
-            occlusionKeyframes={occlusionTimeline.keyframes}
-            occlusionBaseMask={occlusionTimeline.activeKeyframe?.baseMask}
-            occlusionStrokes={occlusionTimeline.strokes}
-            editTarget={editTarget}
-            objectPickEnabled={occlusionPicking}
+        {workflowMode === 'mask-composite' && metadata && workflowStep >= 3 ? (
+          <CompositeToolbar
             tool={tool}
-            brushPercent={brushPercent}
+            editTarget={editTarget}
             view={view}
+            brushPercent={brushPercent}
             overlayVisible={overlayVisible}
-            virtualCharacter={virtualCharacter}
-            editingDisabled={isVideoExporting || occlusionBusy || depthRebuild.depthGuideStatus === 'generating'}
-            maskEditingEnabled={workflowMode === 'mask-composite'}
-            onMetadata={setMetadata}
-            onCommitStroke={(target, stroke) => {
-              if (target === 'occlusion') occlusionTimeline.commitStroke(stroke)
-              else maskTimeline.commitStroke(stroke)
+            canUndo={activeTimeline.canUndo}
+            canRedo={activeTimeline.canRedo}
+            currentTime={currentTime}
+            disabled={isVideoExporting || occlusionBusy}
+            onToolChange={(nextTool) => {
+              setTool(nextTool)
+              setView(editTarget === 'person' ? 'mask' : 'composite')
+              setOverlayVisible(true)
             }}
-            onPickOccluder={(point) => void pickOccluder(point)}
-            onTimeChange={setCurrentTime}
+            onEditTargetChange={(target) => {
+              setEditTarget(target)
+              setOcclusionPicking(false)
+              setView(target === 'person' ? 'mask' : 'composite')
+              setOverlayVisible(true)
+            }}
+            onViewChange={setView}
+            onBrushPercentChange={setBrushPercent}
+            onOverlayVisibleChange={setOverlayVisible}
+            onUndo={activeTimeline.undo}
+            onRedo={activeTimeline.redo}
+            onClear={activeTimeline.clearCurrent}
           />
-          {workflowMode === 'depth-rebuild' ? (
-            <DepthSignalRail
-              sourceUrl={videoUrl}
-              depthUrl={depthRebuild.depthGuide?.previewUrl ?? null}
-              resultUrl={depthRebuild.result?.url ?? null}
-              depthDownloadName={depthRebuild.depthGuide?.file.name}
-              depthFile={depthRebuild.depthGuide?.file ?? null}
+        ) : (
+          <div className={styles.guidanceStrip}>
+            {workflowMode === 'depth-rebuild'
+              ? metadata
+                ? '原片已就緒：在左側免費產生深度影片，再指定新角色與場景。'
+                : '先從左側上傳 4–15 秒表演影片；角色圖可以同時先準備。'
+              : metadata
+                ? '下一步：在左側執行 AI 人物辨識，完成後才會顯示修邊工具。'
+                : '先從左側上傳一段實拍影片。'}
+          </div>
+        )}
+
+        <div className={styles.workspaceBody}>
+          <CompositeAssetPanel
+            mode={workflowMode}
+            depthRebuild={
+              <DepthRebuildControls
+                controller={depthRebuild}
+                metadata={metadata}
+                interactionDisabled={interactionDisabled}
+                onVideoSelect={selectVideo}
+              />
+            }
+            metadata={metadata}
+            backgroundColor={backgroundColor}
+            hasBackgroundImage={Boolean(backgroundUrl)}
+            canExport={Boolean(metadata) && !isAnalyzing && !occlusionBusy}
+            currentTime={currentTime}
+            analysisProgress={analysisProgress}
+            exportProgress={exportProgress}
+            interactionDisabled={interactionDisabled}
+            virtualCharacter={virtualCharacter}
+            maskKeyframes={maskTimeline.keyframes}
+            occlusionPicking={occlusionPicking}
+            occlusionBusy={occlusionBusy}
+            occlusionMessage={occlusionMessage}
+            occlusionKeyframeCount={occlusionTimeline.keyframes.length}
+            onVideoSelect={selectVideo}
+            onBackgroundSelect={selectBackground}
+            onBackgroundColorChange={setBackgroundColor}
+            onVirtualCharacterSelect={selectVirtualCharacter}
+            onVirtualCharacterChange={updateVirtualCharacter}
+            onVirtualCharacterAutoMatch={() => {
+              try {
+                const patch = stageRef.current?.matchCharacterAppearance()
+                if (patch)
+                  updateVirtualCharacter({
+                    appearance: {
+                      ...DEFAULT_CHARACTER_APPEARANCE,
+                      ...virtualCharacter?.appearance,
+                      ...patch,
+                    },
+                  })
+              } catch (error) {
+                setExportError(
+                  error instanceof Error ? error.message : '畫面匹配失敗',
+                )
+              }
+            }}
+            motionBusy={motionBusy}
+            motionMessage={motionMessage}
+            onAnalyzeMotionCurrent={() => void analyzeCharacterMotion(false)}
+            onAnalyzeMotionClip={() => void analyzeCharacterMotion(true)}
+            onVirtualCharacterRemove={() => {
+              setVirtualCharacter(null)
+              setVirtualCharacterFile(null)
+            }}
+            onStartOcclusionPicking={startOcclusionPicking}
+            onCancelOcclusionPicking={() => setOcclusionPicking(false)}
+            onExportMask={exportMask}
+            onExportFrame={exportFrame}
+            onExportVideo={(includeAudio) => void exportVideo(includeAudio)}
+            onCancelVideoExport={cancelVideoExport}
+            onAnalyzeCurrent={analyzeCurrent}
+            onAnalyzeClip={analyzeClip}
+            onCancelAnalysis={cancelAnalysis}
+            canAnalyzeFace={canAnalyzeFace}
+            faceProgress={faceProgress}
+            faceTrack={faceTrack}
+            videoHasAudio={videoHasAudio}
+            onAnalyzeFace={() => void analyzeFacePerformance()}
+            onCancelFaceAnalysis={cancelFaceAnalysis}
+            onClearFaceTrack={() => {
+              setFaceTrack(null)
+              setFaceProgress(INITIAL_ANALYSIS_PROGRESS)
+            }}
+            lastExportLabel={lastExport?.label ?? null}
+            onSaveToLibrary={
+              lastExport ? () => setLibraryDialogOpen(true) : undefined
+            }
+            workflowStep={workflowStep}
+            completedWorkflowSteps={completedWorkflowSteps}
+            onWorkflowStepChange={changeWorkflowStep}
+          />
+          <div className={`${styles.stageColumn} flex min-w-0 flex-1 flex-col`}>
+            <MaskStage
+              ref={stageRef}
+              videoUrl={videoUrl}
+              videoName={videoName}
+              backgroundUrl={backgroundUrl}
+              backgroundColor={backgroundColor}
+              metadata={metadata}
+              keyframes={maskTimeline.keyframes}
+              baseMask={maskTimeline.activeKeyframe?.baseMask}
+              strokes={maskTimeline.strokes}
+              occlusionKeyframes={occlusionTimeline.keyframes}
+              occlusionBaseMask={occlusionTimeline.activeKeyframe?.baseMask}
+              occlusionStrokes={occlusionTimeline.strokes}
+              editTarget={editTarget}
+              objectPickEnabled={occlusionPicking}
+              tool={tool}
+              brushPercent={brushPercent}
+              view={view}
+              overlayVisible={overlayVisible}
+              virtualCharacter={virtualCharacter}
+              editingDisabled={
+                isVideoExporting ||
+                occlusionBusy ||
+                depthRebuild.depthGuideStatus === 'generating'
+              }
+              maskEditingEnabled={workflowMode === 'mask-composite'}
+              onMetadata={setMetadata}
+              onCommitStroke={(target, stroke) => {
+                if (target === 'occlusion')
+                  occlusionTimeline.commitStroke(stroke)
+                else maskTimeline.commitStroke(stroke)
+              }}
+              onPickOccluder={(point) => void pickOccluder(point)}
+              onTimeChange={setCurrentTime}
             />
-          ) : metadata && maskReady ? (
-            <MaskKeyframeRail duration={metadata.duration} currentTime={currentTime} keyframes={activeTimeline.keyframes} activeKeyframeId={activeTimeline.activeKeyframe?.id ?? null} hasExactKeyframe={Boolean(activeTimeline.exactKeyframe)} disabled={isVideoExporting || occlusionBusy} onAdd={activeTimeline.addKeyframe} onDelete={activeTimeline.deleteKeyframe} onApplyToStart={activeTimeline.applyToStart} onApplyToEnd={activeTimeline.applyToEnd} onSeek={(time) => stageRef.current?.seekTo(time)} />
-          ) : null}
+            {workflowMode === 'depth-rebuild' ? (
+              <DepthSignalRail
+                sourceUrl={videoUrl}
+                depthUrl={depthRebuild.depthGuide?.previewUrl ?? null}
+                resultUrl={depthRebuild.result?.url ?? null}
+                depthDownloadName={depthRebuild.depthGuide?.file.name}
+                depthFile={depthRebuild.depthGuide?.file ?? null}
+              />
+            ) : metadata && maskReady ? (
+              <MaskKeyframeRail
+                duration={metadata.duration}
+                currentTime={currentTime}
+                keyframes={activeTimeline.keyframes}
+                activeKeyframeId={activeTimeline.activeKeyframe?.id ?? null}
+                hasExactKeyframe={Boolean(activeTimeline.exactKeyframe)}
+                disabled={isVideoExporting || occlusionBusy}
+                onAdd={activeTimeline.addKeyframe}
+                onDelete={activeTimeline.deleteKeyframe}
+                onApplyToStart={activeTimeline.applyToStart}
+                onApplyToEnd={activeTimeline.applyToEnd}
+                onSeek={(time) => stageRef.current?.seekTo(time)}
+              />
+            ) : null}
+          </div>
         </div>
+        {exportError ? (
+          <div role="alert" className={styles.errorToast}>
+            {exportError}
+          </div>
+        ) : null}
+        {libraryDialogOpen && lastExport ? (
+          <SaveToLibraryDialog
+            asset={lastExport.asset}
+            locale={locale}
+            onClose={() => setLibraryDialogOpen(false)}
+          />
+        ) : null}
       </div>
-      {exportError ? (
-        <div role="alert" className="absolute bottom-5 right-5 rounded-lg border border-red-400/30 bg-red-950 px-4 py-2 text-sm text-red-200">
-          {exportError}
-        </div>
-      ) : null}
-      {libraryDialogOpen && lastExport ? <SaveToLibraryDialog asset={lastExport.asset} locale={locale} onClose={() => setLibraryDialogOpen(false)} /> : null}
-    </main>
+    </CreativeToolShell>
   )
 }

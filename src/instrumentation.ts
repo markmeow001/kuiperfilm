@@ -16,7 +16,6 @@ export async function register() {
   // would silently stop reconciling, which is loud enough that you'd
   // notice in 15 minutes.
   if (process.env.SKIP_INSTRUMENTATION === '1') {
-    // eslint-disable-next-line no-console
     console.log('[Instrumentation] SKIP_INSTRUMENTATION=1 — skipping DB/Redis startup work')
     return
   }
@@ -26,37 +25,29 @@ export async function register() {
     const { prisma } = await import('@/lib/prisma')
     const { logInfo: _ulogInfo, logError: _ulogError } = await import('@/lib/logging/core')
 
-    // Phase 1: 将 processing 任务打回 queued
-    try {
-      const resetResult = await prisma.task.updateMany({
-        where: {
-          status: 'processing',
-        },
-        data: {
-          status: 'queued',
-          startedAt: null,
-          heartbeatAt: null,
-          // 保留 externalId，让 worker 重启后能从中断处继续轮询
-          // 而不是重新提交给外部 API（Kling 等），避免重复扣费
-        },
-      })
-
-      if (resetResult.count > 0) {
-        _ulogInfo(`[Instrumentation] Reset ${resetResult.count} processing tasks to queued`)
-      }
-    } catch (error) {
-      _ulogError('[Instrumentation] Failed to reset processing tasks:', error)
-    }
-
-    // Phase 2: 将所有 queued 任务重新加入 BullMQ 队列
+    // Phase 1: 将已确认交接的 queued 任务重新加入 BullMQ 队列
     // 解决 Redis 重启后 DB 仍为 queued 但 BullMQ Job 丢失的孤儿任务问题
     try {
       const { addTaskJob } = await import('@/lib/task/queues')
+      const { failActiveTaskAndRollback } = await import('@/lib/task/service')
       const { locales } = await import('@/i18n/routing')
-      const { TASK_STATUS, TASK_TYPE } = await import('@/lib/task/types')
+      const { TASK_TYPE } = await import('@/lib/task/types')
       type TaskBillingInfo = import('@/lib/task/types').TaskBillingInfo
       type TaskJobData = import('@/lib/task/types').TaskJobData
       type TaskType = import('@/lib/task/types').TaskType
+      type ReplayTask = {
+        id: string
+        userId: string
+        projectId: string
+        episodeId: string | null
+        type: string
+        targetType: string
+        targetId: string
+        payload: unknown
+        billingInfo: unknown
+        priority: number
+        createdAt: Date
+      }
 
       const TASK_TYPE_SET: ReadonlySet<string> = new Set(Object.values(TASK_TYPE))
 
@@ -122,42 +113,67 @@ export async function register() {
       }
 
       const RE_ENQUEUE_BATCH_SIZE = 100
-      const queuedTasks = await prisma.task.findMany({
-        where: { status: 'queued' },
-        select: {
-          id: true,
-          userId: true,
-          projectId: true,
-          episodeId: true,
-          type: true,
-          targetType: true,
-          targetId: true,
-          payload: true,
-          billingInfo: true,
-          priority: true,
-        },
-        orderBy: { createdAt: 'asc' },
-        take: RE_ENQUEUE_BATCH_SIZE,
-      })
+      const replayCutoff = new Date()
+      let replayCursor: { createdAt: Date; id: string } | null = null
+      let enqueued = 0
+      let failed = 0
+      let scanned = 0
 
-      if (queuedTasks.length > 0) {
-        _ulogInfo(`[Instrumentation] Found ${queuedTasks.length} queued tasks, re-enqueueing into BullMQ`)
+      // Use a stable keyset cursor. Replayed tasks intentionally remain
+      // queued, so repeatedly taking the oldest page would otherwise starve
+      // every acknowledged task after the first 100 rows.
+      while (true) {
+        const queuedTasks: ReplayTask[] = await prisma.task.findMany({
+          where: {
+            status: 'queued',
+            // Only replay tasks whose original submitter completed the durable
+            // queue handoff marker. A process may crash after createTask (or
+            // while preparing a billing freeze); replaying that unprepared row
+            // could call a provider without a valid reservation. Ambiguous
+            // queue acknowledgements intentionally keep enqueuedAt null and are
+            // resolved by the tri-state watchdog instead.
+            enqueuedAt: { not: null },
+            createdAt: { lte: replayCutoff },
+            ...(replayCursor
+              ? {
+                  OR: [
+                    { createdAt: { gt: replayCursor.createdAt } },
+                    {
+                      createdAt: replayCursor.createdAt,
+                      id: { gt: replayCursor.id },
+                    },
+                  ],
+                }
+              : {}),
+          },
+          select: {
+            id: true,
+            userId: true,
+            projectId: true,
+            episodeId: true,
+            type: true,
+            targetType: true,
+            targetId: true,
+            payload: true,
+            billingInfo: true,
+            priority: true,
+            createdAt: true,
+          },
+          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+          take: RE_ENQUEUE_BATCH_SIZE,
+        })
+        if (queuedTasks.length === 0) break
 
-        let enqueued = 0
-        let failed = 0
-
+        scanned += queuedTasks.length
         for (const task of queuedTasks) {
           try {
             const taskType = toTaskType(task.type)
             if (!taskType) {
-              await prisma.task.update({
-                where: { id: task.id },
-                data: {
-                  status: TASK_STATUS.FAILED,
-                  errorCode: 'INVALID_TASK_TYPE',
-                  errorMessage: `invalid task type: ${String(task.type)}`,
-                  finishedAt: new Date(),
-                },
+              await failActiveTaskAndRollback({
+                taskId: task.id,
+                errorCode: 'INVALID_TASK_TYPE',
+                errorMessage: `invalid task type: ${String(task.type)}`,
+                clearDedupeKey: true,
               })
               failed++
               continue
@@ -165,14 +181,11 @@ export async function register() {
 
             const locale = resolveTaskLocaleFromPayload(task.payload)
             if (!locale) {
-              await prisma.task.update({
-                where: { id: task.id },
-                data: {
-                  status: TASK_STATUS.FAILED,
-                  errorCode: 'TASK_LOCALE_REQUIRED',
-                  errorMessage: 'task locale is missing',
-                  finishedAt: new Date(),
-                },
+              await failActiveTaskAndRollback({
+                taskId: task.id,
+                errorCode: 'TASK_LOCALE_REQUIRED',
+                errorMessage: 'task locale is missing',
+                clearDedupeKey: true,
               })
               failed++
               continue
@@ -204,18 +217,22 @@ export async function register() {
           }
         }
 
-        if (enqueued > 0) {
-          _ulogInfo(`[Instrumentation] Re-enqueued ${enqueued} orphaned tasks into BullMQ`)
-        }
-        if (failed > 0) {
-          _ulogError(`[Instrumentation] Failed to re-enqueue ${failed} tasks`)
-        }
+        const lastTask = queuedTasks[queuedTasks.length - 1]
+        replayCursor = { createdAt: lastTask.createdAt, id: lastTask.id }
+        if (queuedTasks.length < RE_ENQUEUE_BATCH_SIZE) break
+      }
+
+      if (enqueued > 0) {
+        _ulogInfo(`[Instrumentation] Re-enqueued ${enqueued}/${scanned} acknowledged queued tasks into BullMQ`)
+      }
+      if (failed > 0) {
+        _ulogError(`[Instrumentation] Failed to re-enqueue ${failed}/${scanned} tasks`)
       }
     } catch (error) {
       _ulogError('[Instrumentation] Failed to re-enqueue orphaned tasks:', error)
     }
 
-    // ─── Phase 3: 启动 Task Watchdog（DB ↔ BullMQ 持续对账）───
+    // ─── Phase 2: 启动 Task Watchdog（DB ↔ BullMQ 持续对账）───
     try {
       const { startTaskWatchdog } = await import('@/lib/task/reconcile')
       startTaskWatchdog()

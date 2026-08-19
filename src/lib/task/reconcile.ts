@@ -8,11 +8,24 @@
  *   3. startTaskWatchdog    — 定时巡检入口（在 instrumentation.ts 启动）
  */
 
+import type { Job } from 'bullmq'
+import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { createScopedLogger } from '@/lib/logging/core'
-import { TASK_STATUS, TASK_EVENT_TYPE } from './types'
+import { settleTaskBilling } from '@/lib/billing'
+import {
+    TASK_STATUS,
+    TASK_EVENT_TYPE,
+    type TaskBillingInfo,
+    type TaskJobData,
+} from './types'
 import { publishTaskEvent } from './publisher'
 import { rollbackTaskBillingForTask } from './service'
+import { recoverMissingVoiceLineJob } from './voice-line-job-recovery'
+import {
+    isPaidVoiceProviderTaskType,
+    isProtectedVoiceLineProviderHandoff,
+} from './voice-line-recovery-policy'
 import {
     imageQueue,
     videoQueue,
@@ -39,9 +52,18 @@ const TERMINAL_RECONCILE_GRACE_MS = 90_000
 /** missing 态短暂竞态保护窗口，避免 createTask→enqueue 之间被误判为孤儿任务 */
 const MISSING_RECONCILE_GRACE_MS = 30_000
 
+const BILLING_RECONCILE_BATCH_SIZE = 50
+const BILLING_SETTLEMENT_LEASE_MS = 5 * 60_000
+
 // ────────────────────── BullMQ Job 状态检查 ──────────────────────
 
-type JobState = 'alive' | 'terminal' | 'missing'
+type JobProbe =
+    | { state: 'alive' | 'missing' | 'unknown' }
+    | {
+        state: 'terminal'
+        job: Job<TaskJobData>
+        terminalState: 'completed' | 'failed'
+    }
 
 const ALL_QUEUES = [imageQueue, videoQueue, voiceQueue, textQueue]
 
@@ -51,23 +73,32 @@ const ALL_QUEUES = [imageQueue, videoQueue, voiceQueue, textQueue]
  * - terminal: Job 存在但已终态（completed / failed）
  * - missing:  Job 在所有队列中均不存在
  */
-async function getJobState(taskId: string): Promise<JobState> {
+async function getJobState(taskId: string): Promise<JobProbe> {
+    let probeFailed = false
+    let terminal: Extract<JobProbe, { state: 'terminal' }> | null = null
     for (const queue of ALL_QUEUES) {
         try {
             const job = await queue.getJob(taskId)
             if (!job) continue
             const state = await job.getState()
             if (state === 'completed' || state === 'failed') {
-                return 'terminal'
+                terminal ??= { state: 'terminal', job, terminalState: state }
+                continue
             }
             // waiting | active | delayed | waiting-children → 仍然活着
-            return 'alive'
+            return { state: 'alive' }
         } catch {
-            // 单个队列查询失败不影响其他队列
+            // Keep probing the remaining queues, but do not conclude that the
+            // job is missing when Redis/BullMQ could not answer reliably.
+            probeFailed = true
             continue
         }
     }
-    return 'missing'
+    // A terminal record is not sufficient when any other queue could not be
+    // probed: a same-id live job there would make manual retry a duplicate.
+    if (probeFailed) return { state: 'unknown' }
+    if (terminal) return terminal
+    return { state: 'missing' }
 }
 
 /**
@@ -75,8 +106,11 @@ async function getJobState(taskId: string): Promise<JobState> {
  * 供 createTask 去重时调用——如果 Job 已死，则不应复用旧的 active 任务。
  */
 export async function isJobAlive(taskId: string): Promise<boolean> {
-    const state = await getJobState(taskId)
-    return state === 'alive'
+    const probe = await getJobState(taskId)
+    if (probe.state === 'unknown') {
+        throw new Error('Unable to determine BullMQ job state')
+    }
+    return probe.state === 'alive'
 }
 
 // ────────────────────── 孤儿任务终止 ──────────────────────
@@ -93,29 +127,24 @@ async function failOrphanedTask(
         type: string
         targetType: string
         targetId: string
-        billingInfo: unknown
     },
     reason: string,
 ): Promise<boolean> {
-    const rollbackResult = await rollbackTaskBillingForTask({
-        taskId: task.id,
-        billingInfo: task.billingInfo,
-    })
-    const compensationFailed = rollbackResult.attempted && !rollbackResult.rolledBack
-    const errorCode = compensationFailed ? 'BILLING_COMPENSATION_FAILED' : 'RECONCILE_ORPHAN'
-    const errorMessage = compensationFailed
-        ? `${reason}; billing rollback failed`
-        : reason
-
+    // Claim the lifecycle terminal state first. A worker completing at the same
+    // time uses the same active -> terminal CAS, so only the winner may touch
+    // the billing reservation.
     const result = await prisma.task.updateMany({
         where: {
             id: task.id,
             status: { in: ACTIVE_STATUSES },
+            ...(isPaidVoiceProviderTaskType(task.type)
+                ? { OR: [{ externalId: null }, { externalId: '' }] }
+                : {}),
         },
         data: {
             status: TASK_STATUS.FAILED,
-            errorCode,
-            errorMessage,
+            errorCode: 'RECONCILE_ORPHAN',
+            errorMessage: reason,
             finishedAt: new Date(),
             heartbeatAt: null,
             dedupeKey: null,
@@ -123,6 +152,8 @@ async function failOrphanedTask(
     })
 
     if (result.count > 0) {
+        const rollbackResult = await rollbackTaskBillingForTask({ taskId: task.id })
+        const compensationFailed = rollbackResult.attempted && !rollbackResult.rolledBack
         // 发送 FAILED 事件，触发前端 SSE 更新 + 数据刷新
         await publishTaskEvent({
             taskId: task.id,
@@ -136,7 +167,7 @@ async function failOrphanedTask(
             payload: {
                 stage: 'reconciled',
                 stageLabel: '任务已自动恢复',
-                message: errorMessage,
+                message: reason,
                 compensationFailed,
             },
             persist: false,
@@ -166,7 +197,14 @@ export async function reconcileActiveTasks(): Promise<string[]> {
             type: true,
             targetType: true,
             targetId: true,
+            status: true,
+            externalId: true,
+            payload: true,
             billingInfo: true,
+            priority: true,
+            attempt: true,
+            maxAttempts: true,
+            heartbeatAt: true,
             updatedAt: true,
         },
         orderBy: { createdAt: 'asc' },
@@ -177,8 +215,24 @@ export async function reconcileActiveTasks(): Promise<string[]> {
 
     const reconciled: string[] = []
     for (const task of activeTasks) {
-        const jobState = await getJobState(task.id)
+        const jobProbe = await getJobState(task.id)
+        const jobState = jobProbe.state
         if (jobState === 'alive') continue
+        if (jobState === 'unknown') continue
+        if (
+            jobState === 'terminal'
+            && isProtectedVoiceLineProviderHandoff(task)
+        ) {
+            // An actual provider id is resume-only and can safely reuse this
+            // exact terminal BullMQ job. Submit claims, malformed ids, and
+            // inconsistent payloads are quarantined by the shared recovery
+            // validator without mutating/retrying the job.
+            await recoverMissingVoiceLineJob(task, {
+                job: jobProbe.job,
+                terminalState: jobProbe.terminalState,
+            })
+            continue
+        }
         if (
             jobState === 'terminal'
             && now - task.updatedAt.getTime() < TERMINAL_RECONCILE_GRACE_MS
@@ -190,6 +244,11 @@ export async function reconcileActiveTasks(): Promise<string[]> {
             && now - task.updatedAt.getTime() < MISSING_RECONCILE_GRACE_MS
         ) {
             continue
+        }
+
+        if (jobState === 'missing') {
+            const recovery = await recoverMissingVoiceLineJob(task)
+            if (recovery.protected) continue
         }
 
         const reason =
@@ -206,9 +265,126 @@ export async function reconcileActiveTasks(): Promise<string[]> {
     return reconciled
 }
 
+function parsePendingBillingInfo(raw: unknown): Extract<TaskBillingInfo, { billable: true }> | null {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
+    if ((raw as { billable?: unknown }).billable !== true) return null
+    const info = raw as Extract<TaskBillingInfo, { billable: true }>
+    return info.settlement?.state === 'pending' ? info : null
+}
+
+function toResultRecord(raw: unknown): Record<string, unknown> | undefined {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined
+    return raw as Record<string, unknown>
+}
+
+export async function reconcilePendingBillingSettlements(): Promise<string[]> {
+    const leaseExpiredBefore = new Date(Date.now() - BILLING_SETTLEMENT_LEASE_MS)
+    const tasks = await prisma.task.findMany({
+        where: {
+            status: TASK_STATUS.COMPLETED,
+            billingInfo: { path: '$.settlement.state', equals: 'pending' },
+            OR: [{ billedAt: null }, { billedAt: { lt: leaseExpiredBefore } }],
+        },
+        select: {
+            id: true,
+            userId: true,
+            projectId: true,
+            episodeId: true,
+            result: true,
+            billingInfo: true,
+            billedAt: true,
+        },
+        orderBy: { updatedAt: 'asc' },
+        take: BILLING_RECONCILE_BATCH_SIZE,
+    })
+    const recovered: string[] = []
+    const logger = createScopedLogger({ module: 'task.billing-reconcile' })
+    for (const task of tasks) {
+        const info = parsePendingBillingInfo(task.billingInfo)
+        if (!info) continue
+        const leaseAt = new Date()
+        const claimed = await prisma.task.updateMany({
+            where: {
+                id: task.id,
+                status: TASK_STATUS.COMPLETED,
+                billedAt: task.billedAt,
+                billingInfo: { path: '$.settlement.state', equals: 'pending' },
+            },
+            data: { billedAt: leaseAt },
+        })
+        if (claimed.count === 0) continue
+        try {
+            const settled = (await settleTaskBilling({
+                id: task.id,
+                projectId: task.projectId,
+                episodeId: task.episodeId,
+                userId: task.userId,
+                billingInfo: info,
+            }, {
+                result: toResultRecord(task.result),
+                textUsage: info.settlement?.textUsage || [],
+                preserveFreezeOnFailure: true,
+            })) as TaskBillingInfo
+            if (!settled?.billable || (settled.status !== 'settled' && settled.status !== 'skipped')) {
+                throw new Error('TASK_BILLING_SETTLEMENT_NOT_TERMINAL')
+            }
+            const settledInfo: TaskBillingInfo = {
+                ...settled,
+                settlement: {
+                    ...info.settlement!,
+                    state: 'settled' as const,
+                    lastAttemptAt: new Date().toISOString(),
+                },
+            }
+            const stored = await prisma.task.updateMany({
+                where: { id: task.id, status: TASK_STATUS.COMPLETED, billedAt: leaseAt },
+                data: { billingInfo: settledInfo as unknown as Prisma.InputJsonValue },
+            })
+            if (stored.count > 0) recovered.push(task.id)
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error)
+            const pendingInfo: TaskBillingInfo = {
+                ...info,
+                settlement: {
+                    ...info.settlement!,
+                    state: 'pending' as const,
+                    attempts: (info.settlement?.attempts || 0) + 1,
+                    lastAttemptAt: new Date().toISOString(),
+                    lastError: message.slice(0, 1000),
+                },
+            }
+            try {
+                await prisma.task.updateMany({
+                    where: { id: task.id, status: TASK_STATUS.COMPLETED, billedAt: leaseAt },
+                    data: {
+                        billingInfo: pendingInfo as unknown as Prisma.InputJsonValue,
+                        billedAt: null,
+                    },
+                })
+            } catch (persistError) {
+                logger.error({
+                    action: 'billing.recovery.persist_failed',
+                    message: 'failed to release billing settlement lease',
+                    taskId: task.id,
+                    error: persistError instanceof Error ? persistError.message : String(persistError),
+                })
+            }
+            logger.warn({
+                action: 'billing.recovery.pending',
+                message,
+                taskId: task.id,
+                retryable: true,
+            })
+        }
+    }
+    return recovered
+}
+
 // ────────────────────── Watchdog ──────────────────────
 
 let watchdogTimer: ReturnType<typeof setInterval> | null = null
+let voiceLinePublicationCursor: string | null = null
+let watchdogCycleRunning = false
 
 /**
  * 启动任务 watchdog 定时器。
@@ -226,6 +402,8 @@ export function startTaskWatchdog() {
     })
 
     watchdogTimer = setInterval(async () => {
+        if (watchdogCycleRunning) return
+        watchdogCycleRunning = true
         try {
             // 1. 清理心跳超时的 processing 任务（已有逻辑，此前未被调用）
             const { sweepStaleTasks } = await import('./service')
@@ -247,7 +425,7 @@ export function startTaskWatchdog() {
                         stageLabel: '任务超时已终止',
                         message: task.errorMessage,
                         errorCode: task.errorCode,
-                        compensationFailed: task.errorCode === 'BILLING_COMPENSATION_FAILED',
+                        compensationFailed: task.compensationFailed,
                     },
                     persist: false,
                 })
@@ -256,11 +434,31 @@ export function startTaskWatchdog() {
             // 2. 对账 DB vs BullMQ
             const reconciled = await reconcileActiveTasks()
 
-            const total = sweptProcessing.length + reconciled.length
+            // 3. Retry completed outputs whose billing settlement is pending.
+            const recoveredBilling = await reconcilePendingBillingSettlements()
+
+            // Reconcile at most one exact terminal VoiceLine marker per tick.
+            // Reaching the end clears the cursor so failed cleanups are
+            // revisited on a later pass without introducing another scheduler
+            // or a batch-delete capability.
+            const { reconcileNextTerminalVoiceLinePublication } = await import(
+                './voice-line-publication-recovery'
+            )
+            const voicePublication = await reconcileNextTerminalVoiceLinePublication({
+                ...(voiceLinePublicationCursor
+                    ? { afterTaskId: voiceLinePublicationCursor }
+                    : {}),
+            })
+            voiceLinePublicationCursor = voicePublication.nextCursor
+
+            const total = sweptProcessing.length
+                + reconciled.length
+                + recoveredBilling.length
+                + (voicePublication.state === 'empty' ? 0 : 1)
             if (total > 0) {
                 logger.info({
                     action: 'watchdog.cycle',
-                    message: `Watchdog: ${sweptProcessing.length} heartbeat-timeout, ${reconciled.length} orphan-reconciled`,
+                    message: `Watchdog: ${sweptProcessing.length} heartbeat-timeout, ${reconciled.length} orphan-reconciled, ${recoveredBilling.length} billing-settled, voice-publication=${voicePublication.state}`,
                 })
             }
         } catch (error) {
@@ -270,8 +468,10 @@ export function startTaskWatchdog() {
                 error:
                     error instanceof Error
                         ? { name: error.name, message: error.message, stack: error.stack }
-                        : { message: String(error) },
+                    : { message: String(error) },
             })
+        } finally {
+            watchdogCycleRunning = false
         }
     }, WATCHDOG_INTERVAL_MS)
 }

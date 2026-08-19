@@ -5,6 +5,11 @@ import { apiHandler, ApiError } from '@/lib/api-errors'
 import { attachMediaFieldsToProject } from '@/lib/media/attach'
 import { decodePanelCharacters } from '@/lib/novel-promotion/panel-characters-decode'
 import { getSignedUrl } from '@/lib/cos'
+import {
+    findNovelPromotionEpisodeInProject,
+    NovelPromotionProjectScopeError,
+    updateNovelPromotionStoryboardInProject,
+} from '@/lib/novel-promotion/project-scope'
 
 /**
  * GET /api/novel-promotion/[projectId]/storyboards
@@ -27,9 +32,17 @@ export const GET = apiHandler(async (
         throw new ApiError('INVALID_PARAMS')
     }
 
+    const ownedEpisode = await findNovelPromotionEpisodeInProject(projectId, episodeId)
+    if (!ownedEpisode) {
+        throw new ApiError('NOT_FOUND')
+    }
+
     // 获取剧集的分镜数据
     const storyboards = await prisma.novelPromotionStoryboard.findMany({
-        where: { episodeId },
+        where: {
+            episodeId,
+            episode: { novelPromotionProject: { projectId } },
+        },
         include: {
             clip: true,
             panels: { orderBy: { panelIndex: 'asc' } }
@@ -179,9 +192,14 @@ export const PATCH = apiHandler(async (
         throw new ApiError('INVALID_PARAMS')
     }
 
-    await prisma.novelPromotionStoryboard.update({
-        where: { id: storyboardId },
-        data: { lastError: null }})
+    try {
+        await updateNovelPromotionStoryboardInProject(projectId, storyboardId, { lastError: null })
+    } catch (error) {
+        if (error instanceof NovelPromotionProjectScopeError) {
+            throw new ApiError('NOT_FOUND')
+        }
+        throw error
+    }
 
     return NextResponse.json({ success: true })
 })

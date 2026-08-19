@@ -4,12 +4,16 @@ import type { Job } from 'bullmq'
 import { UnrecoverableError } from 'bullmq'
 import { prepareTaskBilling } from '@/lib/billing/service'
 import { buildDefaultTaskBillingInfo } from '@/lib/billing/task-policy'
-import { TaskTerminatedError } from '@/lib/task/errors'
+import { cancelTask } from '@/lib/task/service'
 import { withTaskLifecycle } from '@/lib/workers/shared'
 import { TASK_TYPE, type TaskBillingInfo, type TaskJobData } from '@/lib/task/types'
 import { prisma } from '../../helpers/prisma'
 import { resetBillingState } from '../../helpers/db-reset'
 import { createQueuedTask, createTestProject, createTestUser, seedBalance } from '../../helpers/billing-fixtures'
+
+const ATLAS_AUDIO_MODEL = 'atlascloud::bytedance/seed-audio-1.0'
+const PROVIDER_TEXT = '@audio1 hello'
+const PROVIDER_CHARACTERS = [...PROVIDER_TEXT].length
 
 vi.mock('@/lib/task/publisher', () => ({
   publishTaskEvent: vi.fn(async () => ({})),
@@ -22,7 +26,10 @@ async function createPreparedVoiceTask() {
   await seedBalance(user.id, 10)
 
   const taskId = randomUUID()
-  const raw = buildDefaultTaskBillingInfo(TASK_TYPE.VOICE_LINE, { maxSeconds: 5 })
+  const raw = buildDefaultTaskBillingInfo(TASK_TYPE.VOICE_LINE, {
+    audioModel: ATLAS_AUDIO_MODEL,
+    providerText: PROVIDER_TEXT,
+  })
   if (!raw || !raw.billable) {
     throw new Error('failed to build billing info fixture')
   }
@@ -80,7 +87,7 @@ describe('billing/worker lifecycle integration', () => {
   it('settles billing and marks task completed on success', async () => {
     const fixture = await createPreparedVoiceTask()
 
-    await withTaskLifecycle(fixture.job, async () => ({ actualDurationSeconds: 2 }))
+    await withTaskLifecycle(fixture.job, async () => ({ actualCharacters: PROVIDER_CHARACTERS }))
 
     const task = await prisma.task.findUnique({ where: { id: fixture.taskId } })
     expect(task?.status).toBe('completed')
@@ -119,18 +126,33 @@ describe('billing/worker lifecycle integration', () => {
     expect((billing as Extract<TaskBillingInfo, { billable: true }>).status).toBe('frozen')
   })
 
-  it('rolls back billing on cancellation path', async () => {
+  it('cancellation wins while the handler is in flight -> only cancellation rolls back billing', async () => {
     const fixture = await createPreparedVoiceTask()
+    let signalStarted!: () => void
+    let releaseHandler!: () => void
+    const started = new Promise<void>((resolve) => {
+      signalStarted = resolve
+    })
+    const handlerGate = new Promise<void>((resolve) => {
+      releaseHandler = resolve
+    })
 
-    await expect(
-      withTaskLifecycle(fixture.job, async () => {
-        throw new TaskTerminatedError(fixture.taskId)
-      }),
-    ).rejects.toBeInstanceOf(UnrecoverableError)
+    const workerRun = withTaskLifecycle(fixture.job, async () => {
+      signalStarted()
+      await handlerGate
+      return { actualCharacters: PROVIDER_CHARACTERS }
+    })
+
+    await started
+    const cancellation = await cancelTask(fixture.taskId)
+    releaseHandler()
+    await workerRun
 
     const task = await prisma.task.findUnique({ where: { id: fixture.taskId } })
     const billing = task?.billingInfo as TaskBillingInfo
+    expect(cancellation.cancelled).toBe(true)
+    expect(task?.status).toBe('failed')
+    expect(task?.errorCode).toBe('TASK_CANCELLED')
     expect((billing as Extract<TaskBillingInfo, { billable: true }>).status).toBe('rolled_back')
-    expect(task?.status).not.toBe('failed')
   })
 })

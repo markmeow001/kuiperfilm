@@ -81,10 +81,10 @@ export function GroupReferenceVideoSlot({
   if (referenceVideoUrl) {
     return (
       <div
-        className="flex items-center gap-2 whitespace-nowrap rounded-sm border border-violet-500/30 bg-violet-500/5 px-2 py-1"
+        className="flex items-center gap-2 whitespace-nowrap rounded-sm border border-[var(--process-cyan)]/30 bg-[var(--process-cyan-soft)] px-2 py-1"
         title={`動作參考視頻已綁定 — worker 會送進 R2V 模型 (≤${MAX_VIDEO_DURATION_SEC}s, ${ALLOWED_MIMES_DISPLAY})`}
       >
-        <AppIcon name="play" className="h-3 w-3 text-violet-300" />
+        <AppIcon name="play" className="h-3 w-3 text-[var(--process-cyan-strong)]" />
         <video
           src={referenceVideoUrl}
           controls
@@ -93,7 +93,7 @@ export function GroupReferenceVideoSlot({
           preload="metadata"
           className="h-12 w-20 rounded-sm object-cover"
         />
-        <span className="font-mono text-[11px] uppercase tracking-wider text-violet-300">
+        <span className="font-mono text-[11px] uppercase tracking-wider text-[var(--process-cyan-strong)]">
           動作參考
         </span>
         <button
@@ -119,7 +119,7 @@ export function GroupReferenceVideoSlot({
         type="button"
         onClick={() => fileInputRef.current?.click()}
         disabled={busy}
-        className="rounded-sm border border-border-soft bg-raised px-2 py-0.5 font-mono text-[12px] text-text-secondary transition-colors hover:border-violet-500/60 hover:text-violet-300 disabled:cursor-not-allowed disabled:opacity-40"
+        className="rounded-sm border border-border-soft bg-raised px-2 py-0.5 font-mono text-[12px] text-text-secondary transition-colors hover:border-[var(--process-cyan)]/60 hover:text-[var(--process-cyan-strong)] disabled:cursor-not-allowed disabled:opacity-40"
       >
         {upload.isPending ? '上傳中…' : '＋動作參考視頻'}
       </button>

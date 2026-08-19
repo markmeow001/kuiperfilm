@@ -48,9 +48,13 @@ import {
 } from '../utils'
 import { reportTaskProgress } from '../shared'
 import { buildMultiShotClipUpdate } from '@/lib/storyboard/multi-shot-clips'
+import {
+  requireNovelPromotionStoryboardInProject,
+  updateNovelPromotionStoryboardInProject,
+} from '@/lib/novel-promotion/project-scope'
 import { createScopedLogger } from '@/lib/logging/core'
 import { parseModelKeyStrict } from '@/lib/model-config-contract'
-import { resolveNovelData } from './image-task-handler-shared'
+import type { NovelProjectData } from './image-task-handler-shared'
 import {
   buildAudioDirective,
   buildSpeechDialogueBlock,
@@ -300,7 +304,7 @@ function shortBlurb(full: string): string {
  */
 function describeCharacterForPrompt(
   ref: CharacterRef,
-  projectData: Awaited<ReturnType<typeof resolveNovelData>>,
+  projectData: NovelProjectData,
   mode: ModeKey,
 ): string {
   if (mode === 'r2v') return ''
@@ -322,7 +326,7 @@ function describeCharacterForPrompt(
 
 function describeSceneForPrompt(
   ref: SceneRef,
-  projectData: Awaited<ReturnType<typeof resolveNovelData>>,
+  projectData: NovelProjectData,
   mode: ModeKey,
 ): string {
   if (mode === 'r2v') return ''
@@ -338,7 +342,7 @@ function describeSceneForPrompt(
 
 function describePropForPrompt(
   ref: PropRef,
-  projectData: Awaited<ReturnType<typeof resolveNovelData>>,
+  projectData: NovelProjectData,
   mode: ModeKey,
 ): string {
   if (mode === 'r2v') return ''
@@ -375,7 +379,7 @@ function buildAtlasCloudPrompt(
   characterRefs: CharacterRef[],
   sceneRefs: SceneRef[],
   propRefs: PropRef[],
-  projectData: Awaited<ReturnType<typeof resolveNovelData>>,
+  projectData: NovelProjectData,
   /** Ordered refs used as reference_images[] for r2v mode. */
   r2vRefOrder: R2vRefEntry[],
   /** Per-shot duration hint (seconds), aligned to `panels` order. When
@@ -470,6 +474,7 @@ export async function runMultiShotAtlasCloudComposite(params: {
   job: Job<TaskJobData>
   projectId: string
   validPanels: PanelLite[]
+  projectData: NovelProjectData
   videoModel: string
   sound: boolean | undefined
   aspectRatio: string | undefined
@@ -484,12 +489,6 @@ export async function runMultiShotAtlasCloudComposite(params: {
    *  Kling B-path and BobAPI seedance-path). When set, wins over
    *  project.visualStyleId in resolveProjectVisualStyle. */
   visualStyleId?: string
-  /** Per-call character appearance overrides ("swap costume" from the
-   *  bindings rail). characterId → appearanceId. Wins over the episode
-   *  binding so a user who switches William to 半裸 actually gets that
-   *  appearance's reference image. 2026-05-28 — was silently dropped on
-   *  this path (parity gap with seedance/ark/b paths). */
-  characterOverrides?: Array<{ characterId: string; appearanceId?: string }>
   /** Per-call location view overrides ("swap scene view" from the bindings
    *  rail). locationId → viewName. Wins over the panel's default view.
    *  2026-05-28 — wired for parity with seedance/ark paths (was a hardcoded
@@ -517,7 +516,7 @@ export async function runMultiShotAtlasCloudComposite(params: {
     props: Array<{ id: string; name: string; imageUrl: string }>
   }
 }> {
-  const { job, projectId, validPanels, videoModel } = params
+  const { job, projectId, validPanels, projectData, videoModel } = params
   const sound = params.sound ?? true
   const aspectRatio = params.aspectRatio ?? '16:9'
   const { userId } = job.data
@@ -538,8 +537,6 @@ export async function runMultiShotAtlasCloudComposite(params: {
 
   await reportTaskProgress(job, 12, { stage: 'atlascloud_composite_collect_refs' })
 
-  // Episode-level appearance bindings (same shape as BobAPI path).
-  const episodeBindings = new Map<string, string>()
   // Phase S — per-group motion/camera reference video. Selected in the
   // same findUnique to avoid an extra round-trip. Signed for fal/AtlasCloud
   // body consumption; null when user hasn't uploaded one.
@@ -548,32 +545,12 @@ export async function runMultiShotAtlasCloudComposite(params: {
   if (firstStoryboardId) {
     const sb = await prisma.novelPromotionStoryboard.findUnique({
       where: { id: firstStoryboardId },
-      select: { episodeId: true, referenceVideoUrl: true },
+      select: { referenceVideoUrl: true },
     })
-    if (sb?.episodeId) {
-      const rows = await prisma.episodeCharacter.findMany({
-        where: { episodeId: sb.episodeId, appearanceId: { not: null } },
-        select: { characterId: true, appearanceId: true },
-      })
-      for (const row of rows) {
-        if (row.appearanceId) episodeBindings.set(row.characterId, row.appearanceId)
-      }
-    }
     if (sb?.referenceVideoUrl) {
       groupReferenceVideoUrl = toSignedUrlIfCos(sb.referenceVideoUrl, 3600)
     }
   }
-
-  // Per-call character appearance overrides ("swap costume" from the
-  // bindings rail) win over the episode binding — same merge order as
-  // seedance-path. Without this the AtlasCloud path silently ignored the
-  // override and rendered the default appearance (2026-05-28 fix: user
-  // switched William to 半裸 but kept getting the full-suit default).
-  for (const o of params.characterOverrides ?? []) {
-    if (o.characterId && o.appearanceId) episodeBindings.set(o.characterId, o.appearanceId)
-  }
-
-  const projectData = await resolveNovelData(projectId)
   const usedPanels = validPanels.slice(0, MAX_REFERENCE_IMAGES)
 
   // ── REFS — collect ALL three types for every mode ──
@@ -591,7 +568,6 @@ export async function runMultiShotAtlasCloudComposite(params: {
   const characterRefs = collectCharacterRefs(
     usedPanels,
     projectData,
-    episodeBindings,
     undefined,
     params.rawPrompt,
   )
@@ -947,6 +923,8 @@ export async function runMultiShotAtlasCloudComposite(params: {
   await reportTaskProgress(job, 92, { stage: 'atlascloud_composite_persist' })
 
   const targetId = validPanels[0].storyboardId
+  await assertTaskActive(job, 'atlascloud_composite_persist')
+  await requireNovelPromotionStoryboardInProject(projectId, targetId)
   const cosKey = await uploadVideoSourceToCos(
     polled.url,
     `multi-shot-atlascloud/${targetId}`,
@@ -954,10 +932,11 @@ export async function runMultiShotAtlasCloudComposite(params: {
     polled.downloadHeaders,
   )
 
-  await prisma.novelPromotionStoryboard.update({
-    where: { id: targetId },
-    data: buildMultiShotClipUpdate([cosKey]),
-  })
+  await updateNovelPromotionStoryboardInProject(
+    projectId,
+    targetId,
+    buildMultiShotClipUpdate([cosKey]),
+  )
 
   await reportTaskProgress(job, 98, { stage: 'atlascloud_composite_done' })
 

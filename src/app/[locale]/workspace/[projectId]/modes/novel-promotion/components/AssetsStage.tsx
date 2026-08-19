@@ -8,7 +8,7 @@ import { useTranslations } from 'next-intl'
  * 重构说明 v2:
  * - 角色和场景操作函数已提取到 hooks/useCharacterActions 和 hooks/useLocationActions
  * - 批量生成逻辑已提取到 hooks/useBatchGeneration
- * - TTS/音色逻辑已提取到 hooks/useTTSGeneration
+ * - Project custom voice upload/design stays disabled until consent records land
  * - 弹窗状态已提取到 hooks/useAssetModals
  * - 档案管理已提取到 hooks/useProfileManagement
  * - UI已拆分为 CharacterSection, LocationSection, AssetToolbar, AssetModals 组件
@@ -29,7 +29,6 @@ import {
 import { useCharacterActions } from './assets/hooks/useCharacterActions'
 import { useLocationActions } from './assets/hooks/useLocationActions'
 import { useBatchGeneration } from './assets/hooks/useBatchGeneration'
-import { useTTSGeneration } from './assets/hooks/useTTSGeneration'
 import { useAssetModals } from './assets/hooks/useAssetModals'
 import { useProfileManagement } from './assets/hooks/useProfileManagement'
 import { useAssetsCopyFromHub } from './assets/hooks/useAssetsCopyFromHub'
@@ -175,17 +174,6 @@ export default function AssetsStage({
     showToast
   })
 
-  // TTS/音色
-  const {
-    voiceDesignCharacter,
-    handleVoiceChange,
-    handleOpenVoiceDesign,
-    handleVoiceDesignSave,
-    handleCloseVoiceDesign
-  } = useTTSGeneration({
-    projectId
-  })
-
   // 弹窗状态
   const {
     editingAppearance,
@@ -319,8 +307,6 @@ export default function AssetsStage({
         onUndo={handleUndoCharacter}
         onImageClick={setPreviewImage}
         onImageEdit={(charId, appIdx, imgIdx, name) => handleOpenCharacterImageEdit(charId, appIdx, imgIdx, name)}
-        onVoiceChange={(characterId, customVoiceUrl) => handleVoiceChange(characterId, 'custom', characterId, customVoiceUrl)}
-        onVoiceDesign={handleOpenVoiceDesign}
         onVoiceSelectFromHub={handleVoiceSelectFromHub}
         onCopyFromGlobal={handleCopyFromGlobal}
         getAppearances={getAppearances}
@@ -354,8 +340,6 @@ export default function AssetsStage({
         handleUpdateLocationDescription={handleUpdateLocationDescription}
         handleLocationImageEdit={handleLocationImageEdit}
         handleCharacterImageEdit={handleCharacterImageEdit}
-        handleCloseVoiceDesign={handleCloseVoiceDesign}
-        handleVoiceDesignSave={handleVoiceDesignSave}
         handleCloseCopyPicker={handleCloseCopyPicker}
         handleConfirmCopyFromGlobal={handleConfirmCopyFromGlobal}
         handleConfirmProfile={handleConfirmProfile}
@@ -374,7 +358,6 @@ export default function AssetsStage({
         editingLocation={editingLocation}
         showAddCharacter={showAddCharacter}
         showAddLocation={showAddLocation}
-        voiceDesignCharacter={voiceDesignCharacter}
         editingProfile={editingProfile}
         copyFromGlobalTarget={copyFromGlobalTarget}
         isGlobalCopyInFlight={isGlobalCopyInFlight}

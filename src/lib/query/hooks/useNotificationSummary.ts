@@ -55,29 +55,39 @@ export interface NotificationSummary {
 
 const POLL_INTERVAL_MS = 30_000
 
+export class NotificationSummaryRequestError extends Error {
+  readonly status: number
+
+  constructor(status: number) {
+    super(`Notification summary request failed with HTTP ${status}`)
+    this.name = 'NotificationSummaryRequestError'
+    this.status = status
+  }
+}
+
+export async function fetchNotificationSummary(): Promise<NotificationSummary> {
+  const res = await fetch('/api/notifications/summary', { credentials: 'include' })
+  if (!res.ok) {
+    throw new NotificationSummaryRequestError(res.status)
+  }
+  return res.json() as Promise<NotificationSummary>
+}
+
 export function useNotificationSummary() {
   return useQuery({
     queryKey: queryKeys.notifications.summary(),
-    queryFn: async (): Promise<NotificationSummary> => {
-      const res = await fetch('/api/notifications/summary', { credentials: 'include' })
-      if (!res.ok) {
-        // 401 / 403 → not logged in or no access; return empty summary
-        // rather than throwing, so the bell stays mounted without errors.
-        if (res.status === 401 || res.status === 403) {
-          return {
-            badgeCount: 0,
-            incomingRequests: [],
-            myRequests: [],
-            adminDeletions: [],
-          }
-        }
-        throw new Error(`HTTP ${res.status}`)
-      }
-      return res.json()
-    },
+    queryFn: fetchNotificationSummary,
     refetchInterval: POLL_INTERVAL_MS,
     refetchIntervalInBackground: false,
     staleTime: POLL_INTERVAL_MS / 2,
-    retry: 1,
+    retry: (failureCount, error) => {
+      if (
+        error instanceof NotificationSummaryRequestError
+        && (error.status === 401 || error.status === 403)
+      ) {
+        return false
+      }
+      return failureCount < 1
+    },
   })
 }

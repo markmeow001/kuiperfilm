@@ -1,0 +1,123 @@
+.canvasViewport {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--darkroom-canvas);
+}
+
+.headerAction {
+  min-width: 0;
+  min-height: 44px;
+  border: 1px solid var(--darkroom-border);
+  border-radius: 12px;
+  padding-inline: 14px;
+  color: var(--process-cyan-strong);
+  background: var(--darkroom-raised);
+  font-size: 13px;
+  font-weight: 650;
+  transition: border-color 120ms ease, background-color 120ms ease;
+}
+
+.headerAction:hover {
+  border-color: color-mix(in srgb, var(--process-cyan) 62%, transparent);
+  background: color-mix(in srgb, var(--process-cyan) 12%, var(--darkroom-raised));
+}
+
+.headerAction:focus-visible {
+  outline: 2px solid var(--process-cyan);
+  outline-offset: 2px;
+}
+
+.viewportControls,
+.primaryDock,
+.selectionToolbar,
+.sequenceStrip {
+  max-width: calc(100vw - 24px);
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: thin;
+  white-space: nowrap;
+}
+
+.primaryDock {
+  transform: translateX(-50%);
+}
+
+.viewportControls > button,
+.viewportControls > div,
+.primaryDock > button,
+.primaryDock > div,
+.selectionToolbar > button,
+.selectionToolbar > div,
+.selectionToolbar > span,
+.sequenceStrip > button,
+.sequenceStrip > div,
+.sequenceStrip > span {
+  flex: 0 0 auto;
+}
+
+.emptyStateLauncher {
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.emptyStateCard {
+  min-width: 0;
+  max-width: 100%;
+}
+
+@media (max-width: 768px) {
+  .viewportControls {
+    bottom: 76px !important;
+    left: 12px !important;
+  }
+
+  .primaryDock {
+    right: 12px !important;
+    bottom: 12px !important;
+    left: 12px !important;
+    transform: none !important;
+  }
+
+  .selectionToolbar {
+    top: 12px !important;
+  }
+
+  .viewportControls > button,
+  .primaryDock > button,
+  .selectionToolbar > button,
+  .sequenceStrip > button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
+@media (max-width: 390px) {
+  .viewportControls,
+  .primaryDock,
+  .selectionToolbar,
+  .sequenceStrip {
+    max-width: calc(100vw - 24px);
+  }
+
+  .primaryDock {
+    bottom: max(12px, env(safe-area-inset-bottom)) !important;
+  }
+
+  .emptyStateLauncher {
+    align-items: flex-start;
+    padding-top: 16px;
+    padding-right: 12px;
+    padding-bottom: 100px;
+    padding-left: 12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .headerAction {
+    transition-duration: 0.01ms;
+  }
+}

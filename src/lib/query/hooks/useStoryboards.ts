@@ -6,6 +6,14 @@ import { checkApiResponse } from '@/lib/error-handler'
 import { resolveTaskErrorMessage } from '@/lib/task/error-message'
 import { clearTaskTargetOverlay, upsertTaskTargetOverlay } from '../task-target-overlay'
 import type { MediaRef } from '@/types/project'
+import type {
+    StoryboardBatchVideoQuote,
+    StoryboardBatchVideoSubmission,
+} from '@/lib/novel-promotion/storyboard-batch-video-contract'
+import {
+    parseStoryboardBatchVideoQuote,
+    parseStoryboardBatchVideoSubmission,
+} from '@/lib/novel-promotion/storyboard-batch-video-contract'
 
 // ============ 类型定义 ============
 export interface PanelCandidate {
@@ -23,24 +31,25 @@ export interface PanelCharacterRef {
 
 export interface StoryboardPanel {
     id: string
-    shotId: string
-    stageIndex: number
-    shotIndex: number
+    storyboardId?: string
+    panelIndex: number
+    panelNumber?: number | null
     imageUrl: string | null
     media?: MediaRef | null
-    motionPrompt: string | null
-    voiceText: string | null
-    voiceUrl: string | null
-    voiceMedia?: MediaRef | null
+    videoPrompt?: string | null
+    srtSegment?: string | null
     videoUrl: string | null
+    lipSyncVideoUrl?: string | null
     videoGenerationMode?: 'normal' | 'firstlastframe' | null
     videoMedia?: MediaRef | null
+    lipSyncVideoMedia?: MediaRef | null
+    multiShotGroupId?: string | null
+    duration?: number | null
     imageTaskRunning?: boolean
     videoTaskRunning?: boolean
     lipSyncTaskRunning?: boolean
-    errorMessage: string | null
-    candidates: PanelCandidate[]
-    pendingCandidateCount: number
+    imageErrorMessage?: string | null
+    candidateImages?: string | null
     // Decoded server-side from the raw JSON column. See
     // /api/novel-promotion/[projectId]/storyboards/route.ts.
     characters?: PanelCharacterRef[]
@@ -49,12 +58,52 @@ export interface StoryboardPanel {
 
 export interface StoryboardGroup {
     id: string
-    stageIndex: number
+    episodeId?: string
+    clipId?: string
+    referenceVideoUrl?: string | null
     panels: StoryboardPanel[]
 }
 
 export interface StoryboardData {
-    groups: StoryboardGroup[]
+    storyboards: StoryboardGroup[]
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+/**
+ * Runtime guard for the project-scoped storyboard endpoint.
+ *
+ * The envelope is intentionally not normalised into the obsolete `groups`
+ * shape. A malformed response must fail the query rather than rendering a
+ * believable empty timeline.
+ */
+export function parseStoryboardData(payload: unknown): StoryboardData {
+    if (!isRecord(payload) || !Array.isArray(payload.storyboards)) {
+        throw new Error('Invalid storyboard response')
+    }
+
+    for (const storyboard of payload.storyboards) {
+        if (
+            !isRecord(storyboard) ||
+            typeof storyboard.id !== 'string' ||
+            !Array.isArray(storyboard.panels)
+        ) {
+            throw new Error('Invalid storyboard response')
+        }
+        for (const panel of storyboard.panels) {
+            if (
+                !isRecord(panel) ||
+                typeof panel.id !== 'string' ||
+                typeof panel.panelIndex !== 'number'
+            ) {
+                throw new Error('Invalid storyboard response')
+            }
+        }
+    }
+
+    return { storyboards: payload.storyboards as StoryboardGroup[] }
 }
 
 type VideoGenerationOptionValue = string | number | boolean
@@ -63,6 +112,40 @@ type VideoGenerationOptions = Record<string, VideoGenerationOptionValue>
 interface BatchVideoGenerationParams {
     videoModel: string
     generationOptions?: VideoGenerationOptions
+}
+
+export type StoryboardBatchVideoParams = BatchVideoGenerationParams
+
+type StoryboardBatchVideoSubmitParams = BatchVideoGenerationParams & {
+    batchRunId: string
+    quoteFingerprint: string
+}
+
+async function readStoryboardBatchVideoError(response: Response): Promise<Error> {
+    let message = `Batch video request failed: HTTP ${response.status}`
+    try {
+        const payload = await response.json() as {
+            error?: { message?: unknown }
+            message?: unknown
+        }
+        const candidate = payload.error?.message ?? payload.message
+        if (typeof candidate === 'string' && candidate.trim()) message = candidate.trim()
+    } catch {
+        // The HTTP status remains an explicit error when the body is not JSON.
+    }
+    return Object.assign(new Error(message), { status: response.status })
+}
+
+function buildBatchVideoBody(
+    episodeId: string,
+    params: BatchVideoGenerationParams,
+): Record<string, unknown> {
+    return {
+        all: true,
+        episodeId,
+        videoModel: params.videoModel,
+        ...(params.generationOptions ? { generationOptions: params.generationOptions } : {}),
+    }
 }
 
 // ============ 查询 Hooks ============
@@ -89,14 +172,14 @@ export function useStoryboards(
 ) {
     return useQuery({
         queryKey: queryKeys.storyboards.all(episodeId || ''),
-        queryFn: async () => {
+        queryFn: async (): Promise<StoryboardData> => {
             if (!projectId || !episodeId) throw new Error('Project ID and Episode ID are required')
             const res = await fetch(
                 `/api/novel-promotion/${projectId}/storyboards?episodeId=${encodeURIComponent(episodeId)}`,
             )
             if (!res.ok) throw new Error('Failed to fetch storyboards')
-            const data = await res.json()
-            return data as StoryboardData
+            const data: unknown = await res.json()
+            return parseStoryboardData(data)
         },
         enabled: !!projectId && !!episodeId,
     })
@@ -264,48 +347,79 @@ export function useGenerateVideo(projectId: string | null, episodeId: string | n
  * 后端为每个需要生成的 panel 创建独立的 Panel 级任务，
  * 与单个生成走完全相同的 SSE → overlay → UI 流程。
  */
-export function useBatchGenerateVideos(projectId: string | null, episodeId: string | null) {
-    const queryClient = useQueryClient()
-
+export function useEstimateStoryboardBatchVideos(
+    projectId: string | null,
+    episodeId: string | null,
+) {
     return useMutation({
-        mutationFn: async (params: BatchVideoGenerationParams) => {
+        mutationFn: async (params: StoryboardBatchVideoParams): Promise<StoryboardBatchVideoQuote> => {
             if (!projectId) throw new Error('Project ID is required')
             if (!episodeId) throw new Error('Episode ID is required')
-
-            const requestBody: {
-                all: boolean
-                episodeId: string
-                videoModel: string
-                generationOptions?: VideoGenerationOptions
-            } = {
-                all: true,
-                episodeId,
-                videoModel: params.videoModel,
-            }
-            if (params.generationOptions && typeof params.generationOptions === 'object') {
-                requestBody.generationOptions = params.generationOptions
-            }
-
-            const res = await fetch(`/api/novel-promotion/${projectId}/generate-video`, {
+            const response = await fetch(`/api/novel-promotion/${projectId}/generate-video`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(requestBody),
+                cache: 'no-store',
+                body: JSON.stringify({
+                    ...buildBatchVideoBody(episodeId, params),
+                    intent: 'estimate',
+                }),
             })
-            // 🔥 使用统一错误处理
-            await checkApiResponse(res)
-            return res.json()
+            if (!response.ok) throw await readStoryboardBatchVideoError(response)
+            return parseStoryboardBatchVideoQuote(await response.json())
+        },
+    })
+}
+
+export function useSubmitStoryboardBatchVideos(
+    projectId: string | null,
+    episodeId: string | null,
+) {
+    const queryClient = useQueryClient()
+    return useMutation({
+        mutationFn: async (params: StoryboardBatchVideoSubmitParams): Promise<StoryboardBatchVideoSubmission> => {
+            if (!projectId) throw new Error('Project ID is required')
+            if (!episodeId) throw new Error('Episode ID is required')
+            const response = await fetch(`/api/novel-promotion/${projectId}/generate-video`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                cache: 'no-store',
+                body: JSON.stringify({
+                    ...buildBatchVideoBody(episodeId, params),
+                    intent: 'submit',
+                    batchRunId: params.batchRunId,
+                    quoteFingerprint: params.quoteFingerprint,
+                }),
+            })
+            if (!response.ok) throw await readStoryboardBatchVideoError(response)
+            return parseStoryboardBatchVideoSubmission(await response.json())
         },
         onMutate: async () => {
             if (!projectId) return
-            await queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all(projectId), exact: false })
+            await queryClient.invalidateQueries({
+                queryKey: queryKeys.tasks.all(projectId),
+                exact: false,
+            })
         },
         onSettled: () => {
-            // 🔥 刷新缓存获取最新状态
-            if (episodeId && projectId) {
-                queryClient.invalidateQueries({ queryKey: queryKeys.episodeData(projectId, episodeId) })
-            }
+            if (!projectId || !episodeId) return
+            void queryClient.invalidateQueries({
+                queryKey: queryKeys.tasks.all(projectId),
+                exact: false,
+            })
+            void queryClient.invalidateQueries({
+                queryKey: queryKeys.generationJobs.all(),
+            })
+            void queryClient.invalidateQueries({
+                queryKey: queryKeys.episodeData(projectId, episodeId),
+            })
         },
     })
+}
+
+export function useBatchGenerateVideos(projectId: string | null, episodeId: string | null) {
+    // Legacy workspace callers are intentionally quote-only. A batch may only
+    // create tasks after the authenticated estimate is shown and confirmed.
+    return useEstimateStoryboardBatchVideos(projectId, episodeId)
 }
 
 /**

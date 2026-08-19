@@ -50,6 +50,10 @@ import { buildDialogueDrivenDurations, estimatePanelSpeechSeconds } from './spee
 import { buildMultiKlingSplitPlan, MultiKlingChunkerError, type MultiKlingChunk } from './multi-kling-chunker'
 import { buildMultiShotClipUpdate } from '@/lib/storyboard/multi-shot-clips'
 import {
+  requireNovelPromotionStoryboardInProject,
+  updateNovelPromotionStoryboardInProject,
+} from '@/lib/novel-promotion/project-scope'
+import {
   getOrCreateTencentVodElement,
   getOrRegisterStyleReferenceElement,
 } from '@/lib/tencent-vod/element-register'
@@ -960,21 +964,6 @@ export async function runMultiShotBPath(params: {
    */
   promptStyle?: 'auto-seedance' | 'panel-numbered'
   /**
-   * Pin specific character appearances (override the auto-collector's
-   * pick of `appearances[0]` or the EpisodeCharacter binding). Lets a
-   * UI ship a "switch costume" affordance per multi-shot call.
-   *
-   * Each entry { characterId, appearanceId? }:
-   *   - If appearanceId given, force-use that appearance row.
-   *   - If appearanceId omitted, force-include the character but let
-   *     the auto-collector still pick the appearance.
-   *
-   * Characters NOT in this list still get auto-collected from
-   * panel.characters references — overrides only adjust what was
-   * already going to be included, they do not curate the subject set.
-   */
-  characterOverrides?: Array<{ characterId: string; appearanceId?: string }>
-  /**
    * Pin specific location image views. Each entry { locationId,
    * viewName? }:
    *   - viewName selects a particular image in location.images[]
@@ -1075,7 +1064,6 @@ export async function runMultiShotBPath(params: {
     aspectRatio,
     panelDurations,
     rawPrompt,
-    characterOverrides,
     locationOverrides,
     firstFrameImageUrl,
     lastFrameImageUrl,
@@ -1084,12 +1072,6 @@ export async function runMultiShotBPath(params: {
   } = params
   const isFirstFrameLockMode =
     typeof firstFrameImageUrl === 'string' && firstFrameImageUrl.length > 0
-  const charOverrideById = new Map<string, string | undefined>()
-  for (const o of characterOverrides ?? []) {
-    if (typeof o.characterId === 'string' && o.characterId) {
-      charOverrideById.set(o.characterId, o.appearanceId)
-    }
-  }
   const locOverrideById = new Map<string, string | undefined>()
   for (const o of locationOverrides ?? []) {
     if (typeof o.locationId === 'string' && o.locationId) {
@@ -1233,35 +1215,10 @@ export async function runMultiShotBPath(params: {
     })
   }
 
-  // Phase 11.4 / multi-appearance: pre-load EpisodeCharacter bindings
-  // for the storyboard's episode so per-character costume overrides
-  // apply to multi-shot generation too. All selected panels live under
-  // the same storyboard, which lives under one episode.
-  const episodeBindings = new Map<string, string>()
-  const firstStoryboardId = validPanels[0]?.storyboardId
-  if (firstStoryboardId) {
-    const sb = await prisma.novelPromotionStoryboard.findUnique({
-      where: { id: firstStoryboardId },
-      select: { episodeId: true },
-    })
-    if (sb?.episodeId) {
-      const rows = await prisma.episodeCharacter.findMany({
-        where: { episodeId: sb.episodeId, appearanceId: { not: null } },
-        select: { characterId: true, appearanceId: true },
-      })
-      for (const row of rows) {
-        if (row.appearanceId) episodeBindings.set(row.characterId, row.appearanceId)
-      }
-    }
-  }
-
   // Collect unique characters in panel order, resolve their appearance
   // image, and remember the full entity tuple for the response payload.
-  // Resolution priority for appearance:
-  //   1. characterOverrides[characterId].appearanceId (caller pin)
-  //   2. EpisodeCharacter binding (cross-episode costume change)
-  //   3. ref.appearance match against changeReason (legacy contract)
-  //   4. appearances[0] (fallback)
+  // `projectData` is canonical: each referenced character has exactly the
+  // one appearance authorised by the selected episode.
   type CharacterBinding = {
     id: string
     name: string
@@ -1279,40 +1236,7 @@ export async function runMultiShotBPath(params: {
       const character = findCharacterByName(projectData.characters || [], ref.name)
       if (!character) continue
       if (seenCharIds.has(character.id)) continue
-      const appearances = character.appearances || []
-
-      // 2026-05-13 — resolution priority (user clarification):
-      //   1. UI per-call override (charOverrideById)
-      //   2. panel.characters[i].appearance — LLM picked per-shot
-      //      (flashback vs current, costume change, etc.)
-      //   3. EpisodeCharacter binding — episode-level fallback for
-      //      shots where LLM didn't explicitly choose
-      //   4. appearances[0] — global default
-      //
-      // The earlier order (episode > panel hint) treated EpisodeCharacter
-      // as a forced override. User reported that broke per-shot
-      // appearance variability — script said "王玄 (present-day)" but
-      // the whole episode rendered as "王玄Y" because the binding was
-      // sticky.
-      let appearance = appearances[0]
-      const overrideAppearanceId = charOverrideById.get(character.id)
-      const boundAppearanceId = episodeBindings.get(character.id)
-      if (overrideAppearanceId) {
-        const ov = appearances.find((a) => a.id === overrideAppearanceId)
-        if (ov) appearance = ov
-      } else if (ref.appearance) {
-        const matched = appearances.find(
-          (a) => (a.changeReason || '').toLowerCase() === ref.appearance!.toLowerCase(),
-        )
-        if (matched) appearance = matched
-        else if (boundAppearanceId) {
-          const bound = appearances.find((a) => a.id === boundAppearanceId)
-          if (bound) appearance = bound
-        }
-      } else if (boundAppearanceId) {
-        const bound = appearances.find((a) => a.id === boundAppearanceId)
-        if (bound) appearance = bound
-      }
+      const appearance = character.appearances?.[0]
       if (!appearance) continue
       const imageUrls = parseImageUrls(appearance.imageUrls, 'characterAppearance.imageUrls')
       const selectedIndex = appearance.selectedIndex
@@ -1359,17 +1283,7 @@ export async function runMultiShotBPath(params: {
     for (const name of candidates) {
       const character = findCharacterByName(projectData.characters || [], name)
       if (!character || seenCharIds.has(character.id)) continue
-      const appearances = character.appearances || []
-      let appearance = appearances[0]
-      const overrideAppearanceId = charOverrideById.get(character.id)
-      const boundAppearanceId = episodeBindings.get(character.id)
-      if (overrideAppearanceId) {
-        const ov = appearances.find((a) => a.id === overrideAppearanceId)
-        if (ov) appearance = ov
-      } else if (boundAppearanceId) {
-        const bound = appearances.find((a) => a.id === boundAppearanceId)
-        if (bound) appearance = bound
-      }
+      const appearance = character.appearances?.[0]
       if (!appearance) continue
       const imageUrls = parseImageUrls(appearance.imageUrls, 'characterAppearance.imageUrls')
       const selectedIndex = appearance.selectedIndex
@@ -1412,17 +1326,7 @@ export async function runMultiShotBPath(params: {
       const aliases = character.name.split('/').map((s) => s.trim()).filter(Boolean)
       const hit = aliases.some((alias) => descSource.includes(alias))
       if (!hit) continue
-      const appearances = character.appearances || []
-      let appearance = appearances[0]
-      const overrideAppearanceId = charOverrideById.get(character.id)
-      const boundAppearanceId = episodeBindings.get(character.id)
-      if (overrideAppearanceId) {
-        const ov = appearances.find((a) => a.id === overrideAppearanceId)
-        if (ov) appearance = ov
-      } else if (boundAppearanceId) {
-        const bound = appearances.find((a) => a.id === boundAppearanceId)
-        if (bound) appearance = bound
-      }
+      const appearance = character.appearances?.[0]
       if (!appearance) continue
       const imageUrls = parseImageUrls(appearance.imageUrls, 'characterAppearance.imageUrls')
       const selectedIndex = appearance.selectedIndex
@@ -1996,6 +1900,7 @@ export async function runMultiShotBPath(params: {
     })
 
     await assertTaskActive(job, 'persist_multi_shot_video_b_path_first_frame')
+    await requireNovelPromotionStoryboardInProject(job.data.projectId, storyboardId)
     const cosKey = await uploadVideoSourceToCos(
       polled.url,
       isFirstLastFrame ? 'multi-shot-video-b-first-last' : 'multi-shot-video-b-first-frame',
@@ -2004,10 +1909,7 @@ export async function runMultiShotBPath(params: {
 
     await reportTaskProgress(job, 95, { stage: 'persist' })
     const update = buildMultiShotClipUpdate([cosKey])
-    await prisma.novelPromotionStoryboard.update({
-      where: { id: storyboardId },
-      data: update,
-    })
+    await updateNovelPromotionStoryboardInProject(job.data.projectId, storyboardId, update)
 
     return {
       storyboardId,
@@ -2197,6 +2099,7 @@ export async function runMultiShotBPath(params: {
       })
 
       await assertTaskActive(job, `persist_multi_shot_video_b_path_chunk_${i + 1}`)
+      await requireNovelPromotionStoryboardInProject(job.data.projectId, storyboardId)
       const cosKey = await uploadVideoSourceToCos(
         polled.url,
         `multi-shot-video-b-chunk-${i + 1}`,
@@ -2207,10 +2110,7 @@ export async function runMultiShotBPath(params: {
 
     await reportTaskProgress(job, 95, { stage: 'persist' })
     const update = buildMultiShotClipUpdate(cosKeys)
-    await prisma.novelPromotionStoryboard.update({
-      where: { id: storyboardId },
-      data: update,
-    })
+    await updateNovelPromotionStoryboardInProject(job.data.projectId, storyboardId, update)
 
     return {
       storyboardId,
@@ -2604,15 +2504,17 @@ export async function runMultiShotBPath(params: {
   await assertTaskActive(job, 'persist_multi_shot_video_b_path')
 
   const storyboardId = validPanels[0].storyboardId
+  await requireNovelPromotionStoryboardInProject(job.data.projectId, storyboardId)
   const cosKey = await uploadVideoSourceToCos(polled.url, 'multi-shot-video-b', storyboardId)
   await reportTaskProgress(job, 95, { stage: 'persist' })
 
   // Single-clip path still populates multiShotClipUrls with a 1-element
   // array so consumers always see a uniform shape.
-  await prisma.novelPromotionStoryboard.update({
-    where: { id: storyboardId },
-    data: buildMultiShotClipUpdate([cosKey]),
-  })
+  await updateNovelPromotionStoryboardInProject(
+    job.data.projectId,
+    storyboardId,
+    buildMultiShotClipUpdate([cosKey]),
+  )
 
   return {
     storyboardId,

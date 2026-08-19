@@ -11,67 +11,21 @@ import { decodeImageUrlsFromDb, encodeImageUrls } from '@/lib/contracts/image-ur
 import { resolveStorageKeyFromMediaValue } from '@/lib/media/service'
 import { requireProjectAuthLight, isErrorResponse } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
-
-interface CharacterAppearanceRecord {
-    id: string
-    imageUrl: string | null
-    imageUrls: string | null
-    previousImageUrl: string | null
-    previousImageUrls: string | null
-    description: string | null
-    descriptions: unknown
-    previousDescription: string | null
-    previousDescriptions: unknown
-}
-
-interface LocationImageRecord {
-    id: string
-    imageUrl: string | null
-    previousImageUrl: string | null
-    description: string | null
-    previousDescription: string | null
-}
-
-interface LocationRecord {
-    images?: LocationImageRecord[]
-}
-
-interface PanelRecord {
-    id: string
-    imageUrl: string | null
-    previousImageUrl: string | null
-}
-
-interface UndoRegenerateTx {
-    characterAppearance: {
-        update(args: Record<string, unknown>): Promise<unknown>
-    }
-    locationImage: {
-        update(args: Record<string, unknown>): Promise<unknown>
-    }
-}
-
-interface UndoRegenerateDb extends UndoRegenerateTx {
-    characterAppearance: {
-        findUnique(args: Record<string, unknown>): Promise<CharacterAppearanceRecord | null>
-        update(args: Record<string, unknown>): Promise<unknown>
-    }
-    novelPromotionLocation: {
-        findUnique(args: Record<string, unknown>): Promise<LocationRecord | null>
-    }
-    novelPromotionPanel: {
-        findUnique(args: Record<string, unknown>): Promise<PanelRecord | null>
-        update(args: Record<string, unknown>): Promise<unknown>
-    }
-    $transaction<T>(fn: (tx: UndoRegenerateTx) => Promise<T>): Promise<T>
-}
+import {
+    findCharacterAppearanceInProject,
+    findNovelPromotionLocationInProject,
+    findNovelPromotionPanelInProject,
+    novelPromotionLocationImageInProjectWhere,
+    NovelPromotionProjectScopeError,
+    updateCharacterAppearanceInProject,
+    updateNovelPromotionPanelInProject,
+} from '@/lib/novel-promotion/project-scope'
 
 export const POST = apiHandler(async (
     request: NextRequest,
     context: { params: Promise<{ projectId: string }> }
 ) => {
     const { projectId } = await context.params
-    const db = prisma as unknown as UndoRegenerateDb
 
     // 🔐 统一权限验证
     const authResult = await requireProjectAuthLight(projectId)
@@ -96,24 +50,24 @@ export const POST = apiHandler(async (
             _ulogError(`[undo-regenerate] 收到无效的 appearanceId: ${appearanceId} (类型: ${typeof appearanceId})`)
             throw new ApiError('INVALID_PARAMS')
         }
-        return await undoCharacterRegenerate(db, appearanceId)
+        return await undoCharacterRegenerate(projectId, id, appearanceId)
     } else if (type === 'location') {
-        return await undoLocationRegenerate(db, id)
+        return await undoLocationRegenerate(projectId, id)
     } else if (type === 'panel') {
-        return await undoPanelRegenerate(db, id)
+        return await undoPanelRegenerate(projectId, id)
     }
 
     throw new ApiError('INVALID_PARAMS')
 })
 
-async function undoCharacterRegenerate(db: UndoRegenerateDb, appearanceId: string) {
-    // 使用 UUID 直接查询形象
-    const appearance = await db.characterAppearance.findUnique({
-        where: { id: appearanceId },
-        include: { character: true }
-    })
+async function undoCharacterRegenerate(
+    projectId: string,
+    characterId: string,
+    appearanceId: string,
+) {
+    const appearance = await findCharacterAppearanceInProject(projectId, appearanceId)
 
-    if (!appearance) {
+    if (!appearance || appearance.characterId !== characterId) {
         throw new ApiError('NOT_FOUND')
     }
 
@@ -124,38 +78,28 @@ async function undoCharacterRegenerate(db: UndoRegenerateDb, appearanceId: strin
         throw new ApiError('INVALID_PARAMS')
     }
 
-    // 删除当前图片
     const currentImageUrls = decodeImageUrlsFromDb(appearance.imageUrls, 'characterAppearance.imageUrls')
-    for (const key of currentImageUrls) {
-        if (key) {
-            try {
-                const storageKey = await resolveStorageKeyFromMediaValue(key)
-                if (storageKey) await deleteCOSObject(storageKey)
-            } catch { }
-        }
-    }
-
     const restoredImageUrls = previousImageUrls.length > 0
         ? previousImageUrls
         : (appearance.previousImageUrl ? [appearance.previousImageUrl] : [])
 
-    await db.$transaction(async (tx) => {
-        await tx.characterAppearance.update({
-            where: { id: appearance.id },
-            data: {
-                imageUrl: appearance.previousImageUrl || restoredImageUrls[0] || null,
-                imageUrls: encodeImageUrls(restoredImageUrls),
-                previousImageUrl: null,
-                previousImageUrls: encodeImageUrls([]),
-                selectedIndex: null,
-                // 🔥 同时恢复描述词
-                description: appearance.previousDescription ?? appearance.description,
-                descriptions: appearance.previousDescriptions ?? appearance.descriptions,
-                previousDescription: null,
-                previousDescriptions: null
-            }
+    try {
+        await updateCharacterAppearanceInProject(projectId, appearance.id, {
+            imageUrl: appearance.previousImageUrl || restoredImageUrls[0] || null,
+            imageUrls: encodeImageUrls(restoredImageUrls),
+            previousImageUrl: null,
+            previousImageUrls: encodeImageUrls([]),
+            selectedIndex: null,
+            description: appearance.previousDescription ?? appearance.description,
+            descriptions: appearance.previousDescriptions ?? appearance.descriptions,
+            previousDescription: null,
+            previousDescriptions: null,
         })
-    })
+    } catch (error) {
+        rethrowProjectScopeAsNotFound(error)
+    }
+
+    await deleteSupersededImages(currentImageUrls, new Set(restoredImageUrls))
 
     return NextResponse.json({
         success: true,
@@ -163,12 +107,8 @@ async function undoCharacterRegenerate(db: UndoRegenerateDb, appearanceId: strin
     })
 }
 
-async function undoLocationRegenerate(db: UndoRegenerateDb, locationId: string) {
-    // 获取场景和图片
-    const location = await db.novelPromotionLocation.findUnique({
-        where: { id: locationId },
-        include: { images: { orderBy: { imageIndex: 'asc' } } }
-    })
+async function undoLocationRegenerate(projectId: string, locationId: string) {
+    const location = await findNovelPromotionLocationInProject(projectId, locationId)
 
     if (!location) {
         throw new ApiError('NOT_FOUND')
@@ -180,31 +120,34 @@ async function undoLocationRegenerate(db: UndoRegenerateDb, locationId: string) 
         throw new ApiError('INVALID_PARAMS')
     }
 
-    // 删除当前图片并恢复上一版本
-    await db.$transaction(async (tx) => {
-        for (const img of location.images || []) {
-            if (img.previousImageUrl) {
-                // 删除当前图片
-                if (img.imageUrl) {
-                    try {
-                        const storageKey = await resolveStorageKeyFromMediaValue(img.imageUrl)
-                        if (storageKey) await deleteCOSObject(storageKey)
-                    } catch { }
-                }
-                // 恢复上一版本（图片 + 描述词）
-                await tx.locationImage.update({
-                    where: { id: img.id },
+    const restoredImages = location.images.filter((image) => image.previousImageUrl)
+    try {
+        await prisma.$transaction(async (tx) => {
+            for (const img of restoredImages) {
+                const result = await tx.locationImage.updateMany({
+                    where: novelPromotionLocationImageInProjectWhere(projectId, img.id),
                     data: {
                         imageUrl: img.previousImageUrl,
                         previousImageUrl: null,
-                        // 🔥 同时恢复描述词
                         description: img.previousDescription ?? img.description,
-                        previousDescription: null
-                    }
+                        previousDescription: null,
+                    },
                 })
+                if (result.count !== 1) {
+                    throw new NovelPromotionProjectScopeError('location-image', img.id, projectId)
+                }
             }
+        })
+    } catch (error) {
+        rethrowProjectScopeAsNotFound(error)
+    }
+
+    for (const img of restoredImages) {
+        const restoredImageUrl = img.previousImageUrl
+        if (restoredImageUrl && img.imageUrl && img.imageUrl !== restoredImageUrl) {
+            await deleteSupersededImages([img.imageUrl], new Set([restoredImageUrl]))
         }
-    })
+    }
 
     return NextResponse.json({
         success: true,
@@ -215,11 +158,8 @@ async function undoLocationRegenerate(db: UndoRegenerateDb, locationId: string) 
 /**
  * 撤回 Panel 镜头图片到上一版本
  */
-async function undoPanelRegenerate(db: UndoRegenerateDb, panelId: string) {
-    // 获取镜头
-    const panel = await db.novelPromotionPanel.findUnique({
-        where: { id: panelId }
-    })
+async function undoPanelRegenerate(projectId: string, panelId: string) {
+    const panel = await findNovelPromotionPanelInProject(projectId, panelId)
 
     if (!panel) {
         throw new ApiError('NOT_FOUND')
@@ -230,26 +170,43 @@ async function undoPanelRegenerate(db: UndoRegenerateDb, panelId: string) {
         throw new ApiError('INVALID_PARAMS')
     }
 
-    // 删除当前图片（如果存在）
-    if (panel.imageUrl) {
-        try {
-            const storageKey = await resolveStorageKeyFromMediaValue(panel.imageUrl)
-            if (storageKey) await deleteCOSObject(storageKey)
-        } catch { }
-    }
-
     // 恢复上一版本
-    await db.novelPromotionPanel.update({
-        where: { id: panelId },
-        data: {
+    try {
+        await updateNovelPromotionPanelInProject(projectId, panel.id, {
             imageUrl: panel.previousImageUrl,
             previousImageUrl: null,
-            candidateImages: null  // 清空候选图片
-        }
-    })
+            candidateImages: null,
+        })
+    } catch (error) {
+        rethrowProjectScopeAsNotFound(error)
+    }
+
+    if (panel.imageUrl && panel.imageUrl !== panel.previousImageUrl) {
+        await deleteSupersededImages([panel.imageUrl], new Set([panel.previousImageUrl]))
+    }
 
     return NextResponse.json({
         success: true,
         message: '镜头图片已撤回到上一版本'
     })
+}
+
+function rethrowProjectScopeAsNotFound(error: unknown): never {
+    if (error instanceof NovelPromotionProjectScopeError) {
+        throw new ApiError('NOT_FOUND')
+    }
+    throw error
+}
+
+async function deleteSupersededImages(
+    imageValues: readonly string[],
+    restoredValues: ReadonlySet<string>,
+) {
+    for (const value of imageValues) {
+        if (!value || restoredValues.has(value)) continue
+        try {
+            const storageKey = await resolveStorageKeyFromMediaValue(value)
+            if (storageKey) await deleteCOSObject(storageKey)
+        } catch { }
+    }
 }

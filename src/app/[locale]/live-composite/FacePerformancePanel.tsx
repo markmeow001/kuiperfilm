@@ -44,21 +44,21 @@ export function FacePerformancePanel({ canAnalyze, progress, track, onAnalyze, o
         type="button"
         disabled={!canAnalyze || busy}
         onClick={onAnalyze}
-        className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg bg-teal-400 px-2 py-2 text-xs font-medium text-stone-950 hover:bg-teal-300 disabled:opacity-30"
+        className="mt-3 flex min-h-11 w-full items-center justify-center gap-1.5 rounded-lg bg-cyan-300 px-2 py-2 text-xs font-medium text-stone-950 transition-colors hover:bg-cyan-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70 disabled:opacity-30"
       >
         <AppIcon name="sparkles" className="h-3.5 w-3.5" />分析臉部表演
       </button>
 
       {busy ? (
-        <div className="mt-3 rounded-lg border border-teal-400/20 bg-teal-400/[0.06] p-3">
-          <div className="flex items-center justify-between text-xs text-teal-200">
+        <div className="mt-3 rounded-lg border border-cyan-300/20 bg-cyan-300/[0.06] p-3">
+          <div className="flex items-center justify-between text-xs text-cyan-100">
             <span>{progress.message}</span>
             <span className="font-mono">{percentage}%</span>
           </div>
           <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-black/40">
-            <div className="h-full rounded-full bg-teal-400 transition-[width]" style={{ width: `${percentage}%` }} />
+            <div className="h-full rounded-full bg-cyan-300 transition-[width]" style={{ width: `${percentage}%` }} />
           </div>
-          <button type="button" onClick={onCancel} className="mt-2 text-xs text-stone-500 hover:text-white">取消臉部分析</button>
+          <button type="button" onClick={onCancel} className="mt-2 min-h-11 rounded-md px-2 text-xs text-stone-400 hover:bg-white/[0.05] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70">取消臉部分析</button>
         </div>
       ) : progress.message ? (
         <p role={progress.status === 'failed' ? 'alert' : 'status'} className={`mt-3 text-xs leading-5 ${progress.status === 'failed' ? 'text-red-300' : 'text-stone-500'}`}>
@@ -92,7 +92,7 @@ export function FacePerformancePanel({ canAnalyze, progress, track, onAnalyze, o
               <span className="font-mono text-stone-300">{smilePeak.time.toFixed(2)}s（{smilePeak.value.toFixed(2)}）</span>
             </div>
           ) : null}
-          <button type="button" disabled={!canAnalyze} onClick={onClear} className="text-stone-600 hover:text-red-300 disabled:opacity-40">清除臉部表演資料</button>
+          <button type="button" disabled={!canAnalyze} onClick={onClear} className="min-h-11 rounded-md px-2 text-stone-500 hover:bg-red-300/[0.06] hover:text-red-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70 disabled:opacity-40">清除臉部表演資料</button>
         </div>
       ) : null}
     </section>

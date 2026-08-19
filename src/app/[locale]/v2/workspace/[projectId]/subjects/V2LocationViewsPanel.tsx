@@ -16,6 +16,7 @@
  */
 
 import { useState } from 'react'
+import { useTranslations } from 'next-intl'
 import { AppIcon } from '@/components/ui/icons'
 
 interface LocationImageRow {
@@ -51,6 +52,7 @@ export function V2LocationViewsPanel({
   isDeleting,
   onZoomImage,
 }: V2LocationViewsPanelProps) {
+  const t = useTranslations('v2Subjects.locationViews')
   // imageIndex=0 is the main view rendered above by the parent modal.
   const subViews = images.filter((img) => img.imageIndex >= 1)
 
@@ -69,51 +71,58 @@ export function V2LocationViewsPanel({
   }
 
   async function handleDelete(imageIndex: number, viewName: string | null) {
-    if (!window.confirm(`確定刪除「${viewName ?? `視角 ${imageIndex}`}」?\n圖片與描述會一起移除,無法復原。`)) {
+    const displayName = viewName ?? t('viewFallback', { index: imageIndex })
+    if (!window.confirm(t('deleteConfirm', { view: displayName }))) {
       return
     }
     await onDeleteView(imageIndex)
   }
 
   return (
-    <div className="border-t border-border-soft/60 pt-5">
+    <div className="border-t border-[var(--production-border)] pt-5">
       <div className="mb-3 flex items-center justify-between">
         <div>
-          <div className="font-fraunces text-xs italic text-primary-500/80">場景多視角</div>
-          <div className="mt-0.5 font-mono text-[14px] tracking-wider text-text-tertiary">
-            分鏡 panel.location 寫「{locationName}#視角名」即可切換
+          <div className="font-mono text-[12px] uppercase tracking-[0.18em] text-[var(--process-cyan-strong)]">
+            {t('title')}
+          </div>
+          <div className="mt-1 text-[13px] text-[var(--production-ink-muted)]">
+            {t('usage', { locationName })}
           </div>
         </div>
         <button
           type="button"
           onClick={() => setShowForm((s) => !s)}
-          className="rounded-sm border border-border-strong px-3 py-1.5 font-serif-cn text-xs text-text-secondary transition-colors hover:bg-overlay"
+          className="min-h-11 rounded-xl border border-[var(--production-border)] px-3 text-xs font-semibold text-[var(--production-ink-muted)] transition-colors hover:border-[var(--process-cyan)]/45 hover:bg-[var(--process-cyan-soft)] hover:text-[var(--production-ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--production-focus)]"
         >
-          {showForm ? '取消' : '+ 新增視角'}
+          {showForm ? t('cancel') : t('addView')}
         </button>
       </div>
 
       {showForm ? (
-        <form onSubmit={handleSubmit} className="mb-4 space-y-3 rounded-sm border border-border-soft/80 bg-raised/40 p-4">
+        <form onSubmit={handleSubmit} className="mb-4 space-y-3 rounded-xl border border-[var(--production-border)] bg-[var(--production-muted)] p-4">
           <label className="block">
-            <div className="mb-1.5 font-mono text-[14px] tracking-wider text-text-tertiary">視角名稱(短)</div>
+            <div className="mb-1.5 text-[13px] font-medium text-[var(--production-ink-muted)]">
+              {t('nameLabel')}
+            </div>
             <input
               value={newViewName}
               onChange={(e) => setNewViewName(e.target.value)}
-              className="w-full rounded-sm border border-border-soft bg-raised px-3 py-2 font-body text-sm text-text-primary outline-none focus:border-primary-500/50"
-              placeholder="例:窗邊 / 正門 / 夜晚 / 從玄關望進來"
+              className="min-h-11 w-full rounded-xl border border-[var(--production-border)] bg-[var(--production-surface)] px-3 text-sm text-[var(--production-ink)] outline-none placeholder:text-[var(--production-ink-muted)] focus-visible:border-[var(--process-cyan)] focus-visible:ring-2 focus-visible:ring-[var(--production-focus)]"
+              placeholder={t('namePlaceholder')}
               autoFocus
               required
             />
           </label>
           <label className="block">
-            <div className="mb-1.5 font-mono text-[14px] tracking-wider text-text-tertiary">視角描述(可選,給 AI 出圖用)</div>
+            <div className="mb-1.5 text-[13px] font-medium text-[var(--production-ink-muted)]">
+              {t('descriptionLabel')}
+            </div>
             <textarea
               value={newDescription}
               onChange={(e) => setNewDescription(e.target.value)}
               rows={3}
-              className="w-full rounded-sm border border-border-soft bg-raised px-3 py-2 font-body text-sm text-text-primary outline-none focus:border-primary-500/50"
-              placeholder="從哪個方位看?重點構圖元素是什麼?例如「從沙發後方看向落地窗,前景是茶几,陽光從右側打進來」。空白會用主視角描述繼承。"
+              className="w-full rounded-xl border border-[var(--production-border)] bg-[var(--production-surface)] px-3 py-2 text-sm text-[var(--production-ink)] outline-none placeholder:text-[var(--production-ink-muted)] focus-visible:border-[var(--process-cyan)] focus-visible:ring-2 focus-visible:ring-[var(--production-focus)]"
+              placeholder={t('descriptionPlaceholder')}
             />
           </label>
           <div className="flex justify-end gap-2">
@@ -124,77 +133,91 @@ export function V2LocationViewsPanel({
                 setNewViewName('')
                 setNewDescription('')
               }}
-              className="rounded-sm border border-border-strong px-3 py-1.5 font-serif-cn text-xs text-text-secondary transition-colors hover:bg-overlay"
+              className="min-h-11 rounded-xl border border-[var(--production-border)] px-3 text-xs font-semibold text-[var(--production-ink-muted)] transition-colors hover:bg-[var(--production-surface)] hover:text-[var(--production-ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--production-focus)]"
             >
-              取消
+              {t('cancel')}
             </button>
             <button
               type="submit"
               disabled={isCreating || !newViewName.trim()}
-              className="rounded-sm border border-primary-500/40 bg-primary-500/10 px-4 py-1.5 font-serif-cn text-xs text-primary-300 transition-colors hover:bg-primary-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+              className="min-h-11 rounded-xl border border-[var(--process-cyan)]/45 bg-[var(--process-cyan-soft)] px-4 text-xs font-semibold text-[var(--process-cyan-strong)] transition-colors hover:border-[var(--process-cyan)] hover:bg-[var(--process-cyan-soft)] disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--production-focus)]"
             >
-              {isCreating ? '建立中…' : '建立並生圖'}
+              {isCreating ? t('creating') : t('createAndGenerate')}
             </button>
           </div>
         </form>
       ) : null}
 
       {subViews.length === 0 ? (
-        <div className="rounded-sm border border-dashed border-border-soft/60 px-4 py-6 text-center font-fraunces text-xs italic text-text-tertiary">
-          {showForm ? '填寫上方欄位以新增第一個視角' : '尚無額外視角 — 主視角已足以涵蓋大多數情境;角度落差大時新增'}
+        <div className="rounded-xl border border-dashed border-[var(--production-border)] px-4 py-6 text-center text-xs text-[var(--production-ink-muted)]">
+          {showForm ? t('emptyForm') : t('empty')}
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {subViews.map((img) => {
             const regen = isRegenerating(img.imageIndex)
+            const imageUrl = img.imageUrl ?? null
+            const thumbnailContent = (
+              <>
+                {imageUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={imageUrl} alt={img.viewName ?? t('viewFallback', { index: img.imageIndex })} className="h-full w-full object-cover" />
+                ) : (
+                  <span className="flex h-full w-full items-center justify-center">
+                    <AppIcon name="image" className="h-5 w-5 text-[var(--production-ink-muted)]" />
+                  </span>
+                )}
+                {regen ? (
+                  <span className="absolute inset-0 flex items-center justify-center bg-canvas/70 backdrop-blur-sm">
+                    <AppIcon name="sparklesAlt" className="h-4 w-4 animate-pulse text-[var(--process-cyan-strong)]" />
+                  </span>
+                ) : null}
+              </>
+            )
             return (
               <div
                 key={img.id}
-                className="group flex gap-3 rounded-sm border border-border-soft/60 bg-raised/30 p-3"
+                className="group flex gap-3 rounded-xl border border-[var(--production-border)] bg-[var(--production-muted)] p-3"
               >
-                <div
-                  className={`relative h-20 w-32 flex-shrink-0 overflow-hidden rounded-sm border border-border-soft bg-gradient-to-br from-overlay to-raised ${
-                    img.imageUrl ? 'cursor-zoom-in' : ''
-                  }`}
-                  onClick={() => img.imageUrl && onZoomImage(img.imageUrl)}
-                >
-                  {img.imageUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={img.imageUrl} alt={img.viewName ?? `視角 ${img.imageIndex}`} className="h-full w-full object-cover" />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center">
-                      <AppIcon name="image" className="h-5 w-5 text-text-tertiary" />
-                    </div>
-                  )}
-                  {regen ? (
-                    <div className="absolute inset-0 flex items-center justify-center bg-canvas/70 backdrop-blur-sm">
-                      <AppIcon name="sparklesAlt" className="h-4 w-4 animate-pulse text-primary-400" />
-                    </div>
-                  ) : null}
-                </div>
-                <div className="flex flex-1 flex-col">
-                  <div className="font-serif-cn text-sm text-text-primary">
-                    {img.viewName ?? `視角 ${img.imageIndex}`}
+                {imageUrl ? (
+                  <button
+                    type="button"
+                    onClick={() => onZoomImage(imageUrl)}
+                    aria-label={t('previewAria', {
+                      view: img.viewName ?? t('viewFallback', { index: img.imageIndex }),
+                    })}
+                    className="relative min-h-11 h-20 w-32 flex-shrink-0 cursor-zoom-in overflow-hidden rounded-xl border border-[var(--production-border)] bg-[var(--production-surface)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--production-focus)]"
+                  >
+                    {thumbnailContent}
+                  </button>
+                ) : (
+                  <div className="relative h-20 w-32 flex-shrink-0 overflow-hidden rounded-xl border border-[var(--production-border)] bg-[var(--production-surface)]">
+                    {thumbnailContent}
                   </div>
-                  <div className="mt-1 line-clamp-2 font-body text-[11px] text-text-tertiary">
-                    {img.description ?? <span className="italic">繼承主視角描述</span>}
+                )}
+                <div className="flex flex-1 flex-col">
+                  <div className="text-sm font-medium text-[var(--production-ink)]">
+                    {img.viewName ?? t('viewFallback', { index: img.imageIndex })}
+                  </div>
+                  <div className="mt-1 line-clamp-2 text-[11px] text-[var(--production-ink-muted)]">
+                    {img.description ?? <span className="italic">{t('inheritedDescription')}</span>}
                   </div>
                   <div className="mt-auto flex gap-2 pt-2">
                     <button
                       type="button"
                       onClick={() => onRegenerateView(img.imageIndex)}
                       disabled={regen}
-                      className="rounded-sm border border-primary-500/40 px-2 py-1 font-mono text-[14px] tracking-wider text-primary-300 transition-colors hover:bg-primary-500/10 disabled:opacity-40"
+                      className="min-h-11 rounded-xl border border-[var(--process-cyan)]/45 px-3 font-mono text-[12px] tracking-wider text-[var(--process-cyan-strong)] transition-colors hover:bg-[var(--process-cyan-soft)] disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--production-focus)]"
                     >
-                      {regen ? '生圖中…' : img.imageUrl ? '重生' : '生成'}
+                      {regen ? t('generating') : img.imageUrl ? t('regenerate') : t('generate')}
                     </button>
                     <button
                       type="button"
                       onClick={() => handleDelete(img.imageIndex, img.viewName ?? null)}
                       disabled={isDeleting}
-                      className="rounded-sm border border-border-strong px-2 py-1 font-mono text-[14px] tracking-wider text-text-secondary transition-colors hover:bg-overlay hover:text-rose-300 disabled:opacity-40"
+                      className="min-h-11 rounded-xl border border-red-400/30 px-3 font-mono text-[12px] tracking-wider text-red-200 transition-colors hover:bg-red-400/10 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--production-focus)]"
                     >
-                      刪除
+                      {t('delete')}
                     </button>
                   </div>
                 </div>

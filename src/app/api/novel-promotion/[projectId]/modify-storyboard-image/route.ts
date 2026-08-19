@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireProjectAuthLight, isErrorResponse } from '@/lib/api-auth'
 import { apiHandler, ApiError, getRequestId } from '@/lib/api-errors'
-import { prisma } from '@/lib/prisma'
 import { submitTask } from '@/lib/task/submitter'
 import { resolveRequiredTaskLocale } from '@/lib/task/resolve-locale'
 import { TASK_TYPE } from '@/lib/task/types'
@@ -10,6 +9,7 @@ import { hasPanelImageOutput } from '@/lib/task/has-output'
 import { withTaskUiPayload } from '@/lib/task/ui-payload'
 import { getProjectModelConfig, buildImageBillingPayload } from '@/lib/config-service'
 import { sanitizeImageInputsForTaskPayload } from '@/lib/media/outbound-image'
+import { findNovelPromotionPanelByStoryboardIndexInProject } from '@/lib/novel-promotion/project-scope'
 
 function toObject(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
@@ -36,28 +36,27 @@ export const POST = apiHandler(async (
     throw new ApiError('INVALID_PARAMS')
   }
 
-  const panel = await prisma.novelPromotionPanel.findFirst({
-    where: {
-      storyboardId,
-      panelIndex
-    },
-    select: {
-      id: true
-    }
-  })
+  const panel = await findNovelPromotionPanelByStoryboardIndexInProject(
+    projectId,
+    storyboardId,
+    panelIndex,
+  )
   if (!panel) {
     throw new ApiError('NOT_FOUND')
   }
 
-  const extraImageAudit = sanitizeImageInputsForTaskPayload(
+  const extraImageAudit = await sanitizeImageInputsForTaskPayload(
     Array.isArray(body?.extraImageUrls) ? body.extraImageUrls : [],
   )
   const selectedAssetsRaw = Array.isArray(body?.selectedAssets) ? body.selectedAssets : []
   const selectedAssetIssues: Array<Record<string, unknown>> = []
-  const normalizedSelectedAssets = selectedAssetsRaw.map((asset: unknown, assetIndex: number) => {
+  const normalizedSelectedAssets = await Promise.all(selectedAssetsRaw.map(async (
+    asset: unknown,
+    assetIndex: number,
+  ) => {
     if (!asset || typeof asset !== 'object') return asset
     const imageUrl = (asset as Record<string, unknown>).imageUrl
-    const audit = sanitizeImageInputsForTaskPayload([imageUrl])
+    const audit = await sanitizeImageInputsForTaskPayload([imageUrl])
     for (const issue of audit.issues) {
       selectedAssetIssues.push({
         assetIndex,
@@ -70,7 +69,7 @@ export const POST = apiHandler(async (
       ...toObject(asset),
       imageUrl: normalizedUrl
     }
-  })
+  }))
 
   const rejectedRelativePathCount = [
     ...extraImageAudit.issues,
@@ -84,6 +83,8 @@ export const POST = apiHandler(async (
     ...body,
     type: 'storyboard',
     panelId: panel.id,
+    storyboardId: panel.storyboardId,
+    episodeId: panel.storyboard.episodeId,
     panelIndex,
     extraImageUrls: extraImageAudit.normalized,
     selectedAssets: normalizedSelectedAssets,
@@ -117,6 +118,7 @@ export const POST = apiHandler(async (
     locale,
     requestId: getRequestId(request),
     projectId,
+    episodeId: panel.storyboard.episodeId,
     type: TASK_TYPE.MODIFY_ASSET_IMAGE,
     targetType: 'NovelPromotionPanel',
     targetId: panel.id,

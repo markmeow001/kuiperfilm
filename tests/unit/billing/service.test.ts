@@ -16,8 +16,15 @@ const modeMock = vi.hoisted(() => ({
   getBillingMode: vi.fn(),
 }))
 
+const prismaMock = vi.hoisted(() => ({
+  userPreference: {
+    findUnique: vi.fn(),
+  },
+}))
+
 vi.mock('@/lib/billing/ledger', () => ledgerMock)
 vi.mock('@/lib/billing/mode', () => modeMock)
+vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }))
 
 import { BillingOperationError, InsufficientBalanceError } from '@/lib/billing/errors'
 import {
@@ -29,6 +36,8 @@ import {
   withVoiceBilling,
 } from '@/lib/billing/service'
 
+const ATLAS_AUDIO_MODEL = 'atlascloud::bytedance/seed-audio-1.0'
+
 describe('billing/service', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -39,6 +48,7 @@ describe('billing/service', () => {
     ledgerMock.increasePendingFreezeAmount.mockResolvedValue(true)
     ledgerMock.recordShadowUsage.mockResolvedValue(true)
     ledgerMock.rollbackFreeze.mockResolvedValue(true)
+    prismaMock.userPreference.findUnique.mockResolvedValue(null)
   })
 
   it('returns raw execution result in OFF mode', async () => {
@@ -112,40 +122,38 @@ describe('billing/service', () => {
     expect(ledgerMock.rollbackFreeze).toHaveBeenCalledWith('freeze_rollback')
   })
 
-  it('expands freeze and charges actual voice usage when actual exceeds quoted', async () => {
+  it('provider character count differs from submitted text -> rejects and rolls back instead of re-pricing', async () => {
     modeMock.getBillingMode.mockResolvedValue('ENFORCE')
     ledgerMock.freezeBalance.mockResolvedValue('freeze_voice')
 
-    await withVoiceBilling(
+    await expect(withVoiceBilling(
       'u1',
-      5,
+      ATLAS_AUDIO_MODEL,
+      'Atlas',
       { projectId: 'p1', action: 'voice_gen' },
-      async () => ({ actualDurationSeconds: 50 }),
-    )
+      async () => ({ actualCharacters: 50 }),
+    )).rejects.toMatchObject({ code: 'BILLING_INVALID_USAGE_QUANTITY' })
 
-    const confirmCall = ledgerMock.confirmChargeWithRecord.mock.calls.at(-1)
-    expect(confirmCall).toBeTruthy()
-    const chargedAmount = confirmCall?.[2]?.chargedAmount as number
-    expect(ledgerMock.increasePendingFreezeAmount).toHaveBeenCalledTimes(1)
-    expect(chargedAmount).toBeCloseTo(calcVoice(50), 8)
+    expect(ledgerMock.increasePendingFreezeAmount).not.toHaveBeenCalled()
+    expect(ledgerMock.confirmChargeWithRecord).not.toHaveBeenCalled()
+    expect(ledgerMock.rollbackFreeze).toHaveBeenCalledWith('freeze_voice')
   })
 
-  it('fails and rolls back when overage freeze expansion cannot be covered', async () => {
+  it('matching provider character count settles without any overage freeze', async () => {
     modeMock.getBillingMode.mockResolvedValue('ENFORCE')
-    ledgerMock.freezeBalance.mockResolvedValue('freeze_voice_low_balance')
-    ledgerMock.increasePendingFreezeAmount.mockResolvedValue(false)
-    ledgerMock.getBalance.mockResolvedValue({ balance: 0.001 })
+    ledgerMock.freezeBalance.mockResolvedValue('freeze_voice_exact')
 
-    await expect(
-      withVoiceBilling(
-        'u1',
-        5,
-        { projectId: 'p1', action: 'voice_gen' },
-        async () => ({ actualDurationSeconds: 50 }),
-      ),
-    ).rejects.toBeInstanceOf(InsufficientBalanceError)
+    await withVoiceBilling(
+      'u1',
+      ATLAS_AUDIO_MODEL,
+      'Atlas',
+      { projectId: 'p1', action: 'voice_gen' },
+      async () => ({ actualCharacters: 5 }),
+    )
 
-    expect(ledgerMock.rollbackFreeze).toHaveBeenCalledWith('freeze_voice_low_balance')
+    expect(ledgerMock.increasePendingFreezeAmount).not.toHaveBeenCalled()
+    expect(ledgerMock.confirmChargeWithRecord).toHaveBeenCalledTimes(1)
+    expect(ledgerMock.rollbackFreeze).not.toHaveBeenCalled()
   })
 
   it('rejects duplicate sync billing key when freeze is already confirmed', async () => {
@@ -220,10 +228,10 @@ describe('billing/service', () => {
         source: 'task',
         taskType: 'voice_line',
         apiType: 'voice',
-        model: 'index-tts2',
+        model: ATLAS_AUDIO_MODEL,
         quantity: 5,
-        unit: 'second',
-        maxFrozenCost: calcVoice(5),
+        unit: 'character',
+        maxFrozenCost: calcVoice(ATLAS_AUDIO_MODEL, 5),
         action: 'voice_line_generate',
         metadata: { foo: 'bar' },
         ...overrides,
@@ -453,19 +461,141 @@ describe('billing/service', () => {
       })
     })
 
-    it('settleTaskBilling expands freeze when actual exceeds quoted', async () => {
-      ledgerMock.confirmChargeWithRecord.mockResolvedValueOnce(true)
-      const settled = await settleTaskBilling({
-        id: 'task_enforce_overage',
+    it('preserves the freeze when deferred task settlement fails', async () => {
+      ledgerMock.confirmChargeWithRecord.mockRejectedValueOnce(new Error('billing temporarily unavailable'))
+
+      await expect(settleTaskBilling({
+        id: 'task_recoverable_settlement',
         userId: 'u1',
         projectId: 'p1',
-        billingInfo: buildTaskInfo({ modeSnapshot: 'ENFORCE', freezeId: 'freeze_overage', quantity: 5 }),
+        billingInfo: buildTaskInfo({
+          modeSnapshot: 'ENFORCE',
+          freezeId: 'freeze_recoverable',
+          billingKey: 'task_recoverable_settlement',
+        }),
+      }, {
+        preserveFreezeOnFailure: true,
+      })).rejects.toThrow('billing temporarily unavailable')
+
+      expect(ledgerMock.rollbackFreeze).not.toHaveBeenCalled()
+    })
+
+    it('settleTaskBilling keeps the frozen price snapshot when submitted characters match', async () => {
+      const frozenQuote = 0.123456
+      const settled = await settleTaskBilling({
+        id: 'task_voice_price_snapshot',
+        userId: 'u1',
+        projectId: 'p1',
+        billingInfo: buildTaskInfo({
+          modeSnapshot: 'ENFORCE',
+          freezeId: 'freeze_price_snapshot',
+          quantity: 5,
+          maxFrozenCost: frozenQuote,
+          pricingVersion: 'prior-catalog-version',
+        }),
+      }, {
+        result: { actualCharacters: 5 },
+      })
+
+      expect(ledgerMock.increasePendingFreezeAmount).not.toHaveBeenCalled()
+      expect(ledgerMock.confirmChargeWithRecord).toHaveBeenCalled()
+      expect((settled as Extract<TaskBillingInfo, { billable: true }>).chargedCost).toBeCloseTo(frozenQuote, 8)
+      expect(ledgerMock.confirmChargeWithRecord.mock.calls.at(-1)?.[1]).toMatchObject({
+        apiType: 'voice',
+        model: ATLAS_AUDIO_MODEL,
+        quantity: 5,
+        unit: 'character',
+        metadata: expect.objectContaining({ pricingVersion: 'prior-catalog-version' }),
+      })
+    })
+
+    it('voice settlement duration-only output -> keeps the frozen character quantity', async () => {
+      const settled = await settleTaskBilling({
+        id: 'task_voice_duration_ignored',
+        userId: 'u1',
+        projectId: 'p1',
+        billingInfo: buildTaskInfo({ modeSnapshot: 'ENFORCE', freezeId: 'freeze_duration_ignored' }),
       }, {
         result: { actualDurationSeconds: 50 },
       })
-      expect(ledgerMock.increasePendingFreezeAmount).toHaveBeenCalledTimes(1)
-      expect(ledgerMock.confirmChargeWithRecord).toHaveBeenCalled()
-      expect((settled as Extract<TaskBillingInfo, { billable: true }>).chargedCost).toBeCloseTo(calcVoice(50), 8)
+
+      expect(ledgerMock.increasePendingFreezeAmount).not.toHaveBeenCalled()
+      expect((settled as Extract<TaskBillingInfo, { billable: true }>).chargedCost).toBeCloseTo(
+        calcVoice(ATLAS_AUDIO_MODEL, 5),
+        8,
+      )
+      expect(ledgerMock.confirmChargeWithRecord.mock.calls.at(-1)?.[1]).toMatchObject({
+        quantity: 5,
+        unit: 'character',
+      })
+    })
+
+    it('legacy paid FAL voice settlement -> confirms its frozen quote without re-pricing as Atlas characters', async () => {
+      const settled = await settleTaskBilling({
+        id: 'task_legacy_fal_paid',
+        userId: 'u1',
+        projectId: 'p1',
+        billingInfo: buildTaskInfo({
+          modeSnapshot: 'ENFORCE',
+          freezeId: 'freeze_legacy_fal_paid',
+          model: 'index-tts2',
+          quantity: 12,
+          unit: 'second',
+          maxFrozenCost: 0.0144,
+          pricingVersion: '2026-02-19',
+        }),
+      }, {
+        result: { actualDurationSeconds: 12 },
+      })
+
+      expect(ledgerMock.increasePendingFreezeAmount).not.toHaveBeenCalled()
+      expect(ledgerMock.confirmChargeWithRecord.mock.calls.at(-1)?.[1]).toMatchObject({
+        apiType: 'voice',
+        model: 'index-tts2',
+        quantity: 12,
+        unit: 'second',
+        metadata: expect.objectContaining({
+          quotedCost: 0.0144,
+          actualCost: 0.0144,
+          pricingVersion: '2026-02-19',
+        }),
+      })
+      expect((settled as Extract<TaskBillingInfo, { billable: true }>).chargedCost)
+        .toBeCloseTo(0.0144, 8)
+    })
+
+    it('voice settlement malformed actualCharacters -> fails instead of charging a guessed quantity', async () => {
+      await expect(settleTaskBilling({
+        id: 'task_voice_invalid_characters',
+        userId: 'u1',
+        projectId: 'p1',
+        billingInfo: buildTaskInfo({ modeSnapshot: 'ENFORCE', freezeId: 'freeze_invalid_characters' }),
+      }, {
+        result: { actualCharacters: 1.5 },
+      })).rejects.toMatchObject({
+        code: 'BILLING_INVALID_USAGE_QUANTITY',
+      })
+
+      expect(ledgerMock.confirmChargeWithRecord).not.toHaveBeenCalled()
+    })
+
+    it('task voice character mismatch -> fails before settlement mutation', async () => {
+      await expect(settleTaskBilling({
+        id: 'task_voice_character_mismatch',
+        userId: 'u1',
+        projectId: 'p1',
+        billingInfo: buildTaskInfo({
+          modeSnapshot: 'ENFORCE',
+          freezeId: 'freeze_character_mismatch',
+          quantity: 5,
+        }),
+      }, {
+        result: { actualCharacters: 50 },
+        preserveFreezeOnFailure: true,
+      })).rejects.toMatchObject({ code: 'BILLING_INVALID_USAGE_QUANTITY' })
+
+      expect(ledgerMock.increasePendingFreezeAmount).not.toHaveBeenCalled()
+      expect(ledgerMock.confirmChargeWithRecord).not.toHaveBeenCalled()
     })
 
     it('settleTaskBilling keeps quoted charge when text usage has no token counts', async () => {
@@ -513,6 +643,13 @@ describe('billing/service', () => {
         billingInfo: buildTaskInfo({ modeSnapshot: 'ENFORCE', freezeId: 'freeze_rb_fail' }),
       })
       expect((rollbackFailed as Extract<TaskBillingInfo, { billable: true }>).status).toBe('failed')
+
+      ledgerMock.rollbackFreeze.mockResolvedValueOnce(false)
+      const rollbackReturnedFalse = await rollbackTaskBilling({
+        id: 'task_rb_false',
+        billingInfo: buildTaskInfo({ modeSnapshot: 'ENFORCE', freezeId: 'freeze_rb_false' }),
+      })
+      expect((rollbackReturnedFalse as Extract<TaskBillingInfo, { billable: true }>).status).toBe('failed')
     })
   })
 })

@@ -45,7 +45,7 @@ export const POST = apiHandler(async (request: NextRequest) => {
     throw new ApiError('INVALID_PARAMS')
   }
 
-  const extraImageAudit = sanitizeImageInputsForTaskPayload(
+  const extraImageAudit = await sanitizeImageInputsForTaskPayload(
     Array.isArray(body?.extraImageUrls) ? body.extraImageUrls : [],
   )
   const rejectedRelativePathCount = extraImageAudit.issues.filter(

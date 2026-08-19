@@ -39,9 +39,6 @@ interface CharacterCardProps {
   primaryAppearanceSelected?: boolean
   projectId: string
   onConfirmSelection?: (characterId: string, appearanceId: string) => void  // 确认选择
-  // 音色相关
-  onVoiceChange?: (characterId: string, customVoiceUrl?: string) => void
-  onVoiceDesign?: (characterId: string, characterName: string) => void  // AI 声音设计
   onVoiceSelectFromHub?: (characterId: string) => void  // 从资产中心选择音色
 }
 
@@ -64,8 +61,6 @@ export default function CharacterCard({
   primaryAppearanceSelected = false,
   projectId,
   onConfirmSelection,
-  onVoiceChange,
-  onVoiceDesign,
   onVoiceSelectFromHub
 }: CharacterCardProps) {
   // 🔥 使用 mutation
@@ -247,11 +242,6 @@ export default function CharacterCard({
     const selectionVoiceSettings = (
       <VoiceSettings
         characterId={character.id}
-        characterName={character.name}
-        customVoiceUrl={character.customVoiceUrl}
-        projectId={projectId}
-        onVoiceChange={onVoiceChange}
-        onVoiceDesign={onVoiceDesign}
         onSelectFromHub={onVoiceSelectFromHub}
       />
     )
@@ -415,11 +405,6 @@ export default function CharacterCard({
   const compactVoiceSettings = (
     <VoiceSettings
       characterId={character.id}
-      characterName={character.name}
-      customVoiceUrl={character.customVoiceUrl}
-      projectId={projectId}
-      onVoiceChange={onVoiceChange}
-      onVoiceDesign={onVoiceDesign}
       onSelectFromHub={onVoiceSelectFromHub}
       compact={true}
     />

@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { AppIcon } from '@/components/ui/icons'
 import type { CompositeExportProgress } from './live-composite-types'
+import styles from './LiveCompositeShell.module.css'
 
 interface CompositeExportPanelProps {
   canExport: boolean
@@ -43,7 +44,10 @@ export function CompositeExportPanel({
           <AppIcon name="image" className="h-4 w-4" />下載目前合成影格
         </button>
 
-        <label className="flex items-center gap-2 px-1 py-1 text-xs text-stone-400">
+        <label
+          className={`${styles.specialControlHitArea} flex items-center gap-2 px-1 text-xs text-stone-400`}
+          data-live-composite-control-hit-area
+        >
           <input
             type="checkbox"
             checked={includeAudio}

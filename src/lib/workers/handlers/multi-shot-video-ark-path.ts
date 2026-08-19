@@ -45,9 +45,13 @@ import {
 } from '../utils'
 import { reportTaskProgress } from '../shared'
 import { buildMultiShotClipUpdate } from '@/lib/storyboard/multi-shot-clips'
+import {
+  requireNovelPromotionStoryboardInProject,
+  updateNovelPromotionStoryboardInProject,
+} from '@/lib/novel-promotion/project-scope'
 import { createScopedLogger } from '@/lib/logging/core'
 import { parseModelKeyStrict } from '@/lib/model-config-contract'
-import { resolveNovelData } from './image-task-handler-shared'
+import type { NovelProjectData } from './image-task-handler-shared'
 import {
   resolveProjectVisualStyle,
   buildVisualStylePrefix,
@@ -233,10 +237,10 @@ export async function runMultiShotArkComposite(params: {
   job: Job<TaskJobData>
   projectId: string
   validPanels: PanelLite[]
+  projectData: NovelProjectData
   videoModel: string
   sound: boolean | undefined
   aspectRatio: string | undefined
-  characterOverrides?: Array<{ characterId: string; appearanceId?: string }>
   locationOverrides?: Array<{ locationId: string; viewName?: string }>
   rawPrompt?: string
   panelDurations?: number[]
@@ -265,7 +269,7 @@ export async function runMultiShotArkComposite(params: {
     scenes: Array<{ id: string; name: string; imageUrl: string }>
   }
 }> {
-  const { job, projectId, validPanels } = params
+  const { job, projectId, validPanels, projectData } = params
   const sound = params.sound ?? true
   const aspectRatio = params.aspectRatio ?? '16:9'
   const { userId } = job.data
@@ -281,45 +285,23 @@ export async function runMultiShotArkComposite(params: {
 
   await reportTaskProgress(job, 12, { stage: 'ark_composite_collect_refs' })
 
-  // Per-call override maps mirror b-path / seedance-path shape.
-  const charOverrideById = new Map<string, string>()
-  for (const o of params.characterOverrides ?? []) {
-    if (o.characterId && o.appearanceId) charOverrideById.set(o.characterId, o.appearanceId)
-  }
   const locOverrideById = new Map<string, string>()
   for (const o of params.locationOverrides ?? []) {
     if (o.locationId && o.viewName) locOverrideById.set(o.locationId, o.viewName)
   }
 
-  // Episode-level appearance bindings (all panels in a group share an
-  // episode via storyboard).
-  const episodeBindings = new Map<string, string>()
   // Phase S — per-group motion/camera reference video.
   let groupReferenceVideoUrl: string | null = null
   const firstStoryboardId = validPanels[0]?.storyboardId
   if (firstStoryboardId) {
     const sb = await prisma.novelPromotionStoryboard.findUnique({
       where: { id: firstStoryboardId },
-      select: { episodeId: true, referenceVideoUrl: true },
+      select: { referenceVideoUrl: true },
     })
-    if (sb?.episodeId) {
-      const rows = await prisma.episodeCharacter.findMany({
-        where: { episodeId: sb.episodeId, appearanceId: { not: null } },
-        select: { characterId: true, appearanceId: true },
-      })
-      for (const row of rows) {
-        if (row.appearanceId) episodeBindings.set(row.characterId, row.appearanceId)
-      }
-    }
     if (sb?.referenceVideoUrl) {
       groupReferenceVideoUrl = toSignedUrlIfCos(sb.referenceVideoUrl, 3600)
     }
   }
-  for (const [charId, appearanceId] of charOverrideById) {
-    episodeBindings.set(charId, appearanceId)
-  }
-
-  const projectData = await resolveNovelData(projectId)
   const usedPanels = validPanels.slice(0, MAX_REFERENCE_IMAGES)
   // Mine the hand-edited rawPrompt for character names too, so a name
   // written only in the narrative still resolves to a reference asset
@@ -327,7 +309,6 @@ export async function runMultiShotArkComposite(params: {
   const characterRefs = collectCharacterRefs(
     usedPanels,
     projectData,
-    episodeBindings,
     params.rawPrompt,
   )
   const sceneRefs = collectSceneRefs(usedPanels, projectData, locOverrideById)
@@ -551,6 +532,8 @@ export async function runMultiShotArkComposite(params: {
   // bearer headers, unlike BobAPI's vshare OSS chain — so pass
   // downloadHeaders=undefined.
   const targetId = validPanels[0].storyboardId
+  await assertTaskActive(job, 'ark_composite_persist')
+  await requireNovelPromotionStoryboardInProject(projectId, targetId)
   const cosKey = await uploadVideoSourceToCos(
     polled.url,
     `multi-shot-ark/${targetId}`,
@@ -558,10 +541,11 @@ export async function runMultiShotArkComposite(params: {
     polled.downloadHeaders,
   )
 
-  await prisma.novelPromotionStoryboard.update({
-    where: { id: targetId },
-    data: buildMultiShotClipUpdate([cosKey]),
-  })
+  await updateNovelPromotionStoryboardInProject(
+    projectId,
+    targetId,
+    buildMultiShotClipUpdate([cosKey]),
+  )
 
   await reportTaskProgress(job, 98, { stage: 'ark_composite_done' })
 

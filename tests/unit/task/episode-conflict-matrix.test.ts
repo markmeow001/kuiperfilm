@@ -31,6 +31,10 @@ describe('EPISODE_STORYBOARD_MUTATION_TYPES (F-QA-2 root cause)', () => {
     expect(EPISODE_STORYBOARD_MUTATION_TYPES.has(TASK_TYPE.INSERT_PANEL)).toBe(true)
   })
 
+  it('includes auto_group_multi_shot (rewrites grouping fields across every episode panel)', () => {
+    expect(EPISODE_STORYBOARD_MUTATION_TYPES.has(TASK_TYPE.AUTO_GROUP_MULTI_SHOT)).toBe(true)
+  })
+
   it('excludes per-panel image/video tasks (they update individual fields like imageUrl, not the graph)', () => {
     expect(EPISODE_STORYBOARD_MUTATION_TYPES.has(TASK_TYPE.IMAGE_PANEL)).toBe(false)
     expect(EPISODE_STORYBOARD_MUTATION_TYPES.has(TASK_TYPE.VIDEO_PANEL)).toBe(false)
@@ -64,33 +68,45 @@ describe('episodeConflictGroupForType', () => {
 })
 
 describe('conflictingTaskTypesForType', () => {
-  it('script_to_storyboard_run conflicts with the other 3 group members, not itself', () => {
+  it('script_to_storyboard_run conflicts with the other graph writers, not itself', () => {
     const conflicts = conflictingTaskTypesForType(TASK_TYPE.SCRIPT_TO_STORYBOARD_RUN)
     expect(conflicts).toContain(TASK_TYPE.CLIPS_BUILD)
     expect(conflicts).toContain(TASK_TYPE.REGENERATE_STORYBOARD_TEXT)
     expect(conflicts).toContain(TASK_TYPE.INSERT_PANEL)
+    expect(conflicts).toContain(TASK_TYPE.AUTO_GROUP_MULTI_SHOT)
     expect(conflicts).not.toContain(TASK_TYPE.SCRIPT_TO_STORYBOARD_RUN)
   })
 
-  it('clips_build conflicts with the other 3 group members (symmetric)', () => {
+  it('clips_build conflicts with the other graph writers (symmetric)', () => {
     const conflicts = conflictingTaskTypesForType(TASK_TYPE.CLIPS_BUILD)
     expect(conflicts).toContain(TASK_TYPE.SCRIPT_TO_STORYBOARD_RUN)
     expect(conflicts).toContain(TASK_TYPE.REGENERATE_STORYBOARD_TEXT)
     expect(conflicts).toContain(TASK_TYPE.INSERT_PANEL)
+    expect(conflicts).toContain(TASK_TYPE.AUTO_GROUP_MULTI_SHOT)
   })
 
-  it('regenerate_storyboard_text conflicts with the other 3 group members', () => {
+  it('regenerate_storyboard_text conflicts with the other graph writers', () => {
     const conflicts = conflictingTaskTypesForType(TASK_TYPE.REGENERATE_STORYBOARD_TEXT)
     expect(conflicts).toContain(TASK_TYPE.SCRIPT_TO_STORYBOARD_RUN)
     expect(conflicts).toContain(TASK_TYPE.CLIPS_BUILD)
     expect(conflicts).toContain(TASK_TYPE.INSERT_PANEL)
+    expect(conflicts).toContain(TASK_TYPE.AUTO_GROUP_MULTI_SHOT)
   })
 
-  it('insert_panel conflicts with the other 3 group members', () => {
+  it('insert_panel conflicts with the other graph writers', () => {
     const conflicts = conflictingTaskTypesForType(TASK_TYPE.INSERT_PANEL)
     expect(conflicts).toContain(TASK_TYPE.SCRIPT_TO_STORYBOARD_RUN)
     expect(conflicts).toContain(TASK_TYPE.CLIPS_BUILD)
     expect(conflicts).toContain(TASK_TYPE.REGENERATE_STORYBOARD_TEXT)
+    expect(conflicts).toContain(TASK_TYPE.AUTO_GROUP_MULTI_SHOT)
+  })
+
+  it('auto_group_multi_shot conflicts with every other graph writer', () => {
+    const conflicts = conflictingTaskTypesForType(TASK_TYPE.AUTO_GROUP_MULTI_SHOT)
+    expect(conflicts).toContain(TASK_TYPE.SCRIPT_TO_STORYBOARD_RUN)
+    expect(conflicts).toContain(TASK_TYPE.CLIPS_BUILD)
+    expect(conflicts).toContain(TASK_TYPE.REGENERATE_STORYBOARD_TEXT)
+    expect(conflicts).toContain(TASK_TYPE.INSERT_PANEL)
   })
 
   it('returns empty array for tasks outside any group', () => {

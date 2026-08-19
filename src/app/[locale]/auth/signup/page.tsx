@@ -1,15 +1,17 @@
 'use client'
 
 /**
- * /auth/signup — restyled to match V2 cinematic palette.
- * Functional behaviour identical to the previous glass version.
+ * /auth/signup — unified night-studio account entry point.
+ * Authentication behaviour remains identical to the previous version.
  * Still supports the share-link prefill: ?invite=<code>
  */
 
 import { useEffect, useState } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useParams, useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { useTranslations } from 'next-intl'
+import { resolvePostAuthPath, withCallbackUrl } from '@/lib/auth/post-auth-url'
+import { ProductionBrand } from '@/components/v2/ProductionBrand'
 
 export default function SignUp() {
   const [name, setName] = useState("")
@@ -20,8 +22,15 @@ export default function SignUp() {
   const [error, setError] = useState("")
   const [success, setSuccess] = useState("")
   const router = useRouter()
+  const params = useParams<{ locale: string }>()
   const searchParams = useSearchParams()
   const t = useTranslations('auth')
+  const locale = params?.locale ?? 'zh'
+  const rawCallbackUrl = searchParams?.get('callbackUrl')
+  const safeCallbackUrl = rawCallbackUrl
+    ? resolvePostAuthPath(rawCallbackUrl, '') || null
+    : null
+  const signInHref = withCallbackUrl(`/${locale}/auth/signin`, safeCallbackUrl)
 
   // Allow share-link flow: /auth/signup?invite=ABC123 prefills the code.
   useEffect(() => {
@@ -71,7 +80,7 @@ export default function SignUp() {
       if (response.ok) {
         setSuccess(t('signupSuccess'))
         setTimeout(() => {
-          router.push("/auth/signin")
+          router.push(signInHref)
         }, 2000)
       } else {
         setError(data.message || t('signupFailed'))
@@ -84,34 +93,27 @@ export default function SignUp() {
   }
 
   return (
-    <div className="font-body grain min-h-screen bg-stone-950 text-stone-200">
-      <header className="border-b border-amber-900/15 px-8 py-5">
-        <Link href="/" className="flex items-baseline gap-1.5">
-          <span className="font-display text-2xl font-semibold italic tracking-tight text-amber-400">
-            Kuiper
-          </span>
-          <span className="font-serif-cn text-base font-medium text-stone-100">影界</span>
-          <span className="ml-3 font-mono text-[10px] tracking-[0.3em] text-stone-500">
-            AI · MANHUA · STUDIO
-          </span>
-        </Link>
+    <div className="font-body min-h-screen overflow-x-hidden bg-[#070B0F] text-[#F2F6F7] [--primary-400:#55AFC0]">
+      <header className="relative z-20 border-b border-[#263642] bg-[#0D141B]/95 px-4 py-4 sm:px-8 sm:py-5">
+        <ProductionBrand locale={locale} href={`/${locale}`} tone="dark" />
       </header>
 
       <div className="pointer-events-none fixed inset-0 z-0">
-        <div className="absolute inset-0 bg-[radial-gradient(900px_500px_at_50%_-10%,rgba(245,158,11,0.07),transparent)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(850px_520px_at_50%_-10%,rgba(85,175,192,0.12),transparent_68%)]" />
+        <div className="absolute inset-0 opacity-30 [background-image:linear-gradient(rgba(85,175,192,0.045)_1px,transparent_1px),linear-gradient(90deg,rgba(85,175,192,0.045)_1px,transparent_1px)] [background-size:48px_48px]" />
       </div>
 
-      <main className="relative z-10 flex min-h-[calc(100vh-89px)] items-center justify-center px-4 py-12">
+      <main className="relative z-10 flex min-h-[calc(100vh-77px)] items-center justify-center px-4 py-8 sm:min-h-[calc(100vh-85px)] sm:py-12">
         <div className="w-full max-w-md">
-          <div className="rounded-sm border border-amber-900/30 bg-stone-900/60 p-8 shadow-2xl backdrop-blur-sm">
+          <div className="rounded-xl border border-[#263642] bg-[#111B24]/95 p-6 shadow-[0_28px_90px_rgba(0,0,0,0.42)] backdrop-blur-sm sm:p-8">
             <div className="mb-8 text-center">
-              <div className="mb-2 font-mono text-[10px] tracking-[0.3em] text-amber-600/80">
-                CHAPTER · SIGN UP
+              <div className="mb-2 font-mono text-[11px] tracking-[0.28em] text-[#55AFC0]">
+                STUDIO REGISTRATION
               </div>
-              <h1 className="font-serif-cn text-3xl font-medium tracking-wide text-stone-100">
+              <h1 className="font-serif-cn text-3xl font-medium tracking-wide text-[#F2F6F7]">
                 {t('createAccount')}
               </h1>
-              <p className="mt-2 font-fraunces text-sm italic text-stone-500">
+              <p className="mt-2 font-fraunces text-sm italic text-[#A7B3BC]">
                 {t('joinPlatform')}
               </p>
             </div>
@@ -120,7 +122,7 @@ export default function SignUp() {
               <div>
                 <label
                   htmlFor="inviteCode"
-                  className="mb-2 block font-mono text-[10px] uppercase tracking-wider text-stone-500"
+                  className="mb-2 block font-mono text-[11px] uppercase tracking-wider text-[#A7B3BC]"
                 >
                   {t('inviteCode')}
                 </label>
@@ -131,7 +133,9 @@ export default function SignUp() {
                   onChange={(e) => setInviteCode(e.target.value)}
                   required
                   autoComplete="off"
-                  className="w-full rounded-sm border border-stone-800 bg-stone-950 px-4 py-3 font-mono text-base tracking-widest text-stone-100 transition-colors placeholder:text-stone-600 focus:border-amber-500/60 focus:outline-none"
+                  autoCapitalize="characters"
+                  spellCheck={false}
+                  className="min-h-12 w-full rounded-lg border border-[#263642] bg-[#0D141B] px-4 py-3 font-mono text-base tracking-widest text-[#F2F6F7] transition-colors placeholder:text-[#657581] focus:border-[#55AFC0] focus:outline-none focus:ring-2 focus:ring-[#55AFC0]/25"
                   placeholder={t('inviteCodePlaceholder')}
                 />
               </div>
@@ -139,7 +143,7 @@ export default function SignUp() {
               <div>
                 <label
                   htmlFor="name"
-                  className="mb-2 block font-mono text-[10px] uppercase tracking-wider text-stone-500"
+                  className="mb-2 block font-mono text-[11px] uppercase tracking-wider text-[#A7B3BC]"
                 >
                   {t('phoneNumber')}
                 </label>
@@ -149,7 +153,11 @@ export default function SignUp() {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   required
-                  className="w-full rounded-sm border border-stone-800 bg-stone-950 px-4 py-3 font-serif-cn text-base text-stone-100 transition-colors placeholder:text-stone-600 focus:border-amber-500/60 focus:outline-none"
+                  autoComplete="username"
+                  inputMode="text"
+                  autoCapitalize="off"
+                  spellCheck={false}
+                  className="min-h-12 w-full rounded-lg border border-[#263642] bg-[#0D141B] px-4 py-3 font-serif-cn text-base text-[#F2F6F7] transition-colors placeholder:text-[#657581] focus:border-[#55AFC0] focus:outline-none focus:ring-2 focus:ring-[#55AFC0]/25"
                   placeholder={t('phoneNumberPlaceholder')}
                 />
               </div>
@@ -157,7 +165,7 @@ export default function SignUp() {
               <div>
                 <label
                   htmlFor="password"
-                  className="mb-2 block font-mono text-[10px] uppercase tracking-wider text-stone-500"
+                  className="mb-2 block font-mono text-[11px] uppercase tracking-wider text-[#A7B3BC]"
                 >
                   {t('password')}
                 </label>
@@ -167,7 +175,8 @@ export default function SignUp() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  className="w-full rounded-sm border border-stone-800 bg-stone-950 px-4 py-3 font-mono text-base text-stone-100 transition-colors placeholder:text-stone-600 focus:border-amber-500/60 focus:outline-none"
+                  autoComplete="new-password"
+                  className="min-h-12 w-full rounded-lg border border-[#263642] bg-[#0D141B] px-4 py-3 font-mono text-base text-[#F2F6F7] transition-colors placeholder:text-[#657581] focus:border-[#55AFC0] focus:outline-none focus:ring-2 focus:ring-[#55AFC0]/25"
                   placeholder={t('passwordMinPlaceholder')}
                 />
               </div>
@@ -175,7 +184,7 @@ export default function SignUp() {
               <div>
                 <label
                   htmlFor="confirmPassword"
-                  className="mb-2 block font-mono text-[10px] uppercase tracking-wider text-stone-500"
+                  className="mb-2 block font-mono text-[11px] uppercase tracking-wider text-[#A7B3BC]"
                 >
                   {t('confirmPassword')}
                 </label>
@@ -185,19 +194,20 @@ export default function SignUp() {
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   required
-                  className="w-full rounded-sm border border-stone-800 bg-stone-950 px-4 py-3 font-mono text-base text-stone-100 transition-colors placeholder:text-stone-600 focus:border-amber-500/60 focus:outline-none"
+                  autoComplete="new-password"
+                  className="min-h-12 w-full rounded-lg border border-[#263642] bg-[#0D141B] px-4 py-3 font-mono text-base text-[#F2F6F7] transition-colors placeholder:text-[#657581] focus:border-[#55AFC0] focus:outline-none focus:ring-2 focus:ring-[#55AFC0]/25"
                   placeholder={t('confirmPasswordPlaceholder')}
                 />
               </div>
 
               {error ? (
-                <div className="rounded-sm border border-rose-500/30 bg-rose-500/10 px-4 py-3 font-serif-cn text-sm text-rose-300">
+                <div role="alert" aria-live="assertive" className="rounded-lg border border-[#7F3F4B] bg-[#2A171D] px-4 py-3 font-serif-cn text-sm text-[#FFB4BE]">
                   {error}
                 </div>
               ) : null}
 
               {success ? (
-                <div className="rounded-sm border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 font-serif-cn text-sm text-emerald-300">
+                <div role="status" aria-live="polite" className="rounded-lg border border-[#35685A] bg-[#12271F] px-4 py-3 font-serif-cn text-sm text-[#A8E5CF]">
                   {success}
                 </div>
               ) : null}
@@ -205,17 +215,17 @@ export default function SignUp() {
               <button
                 type="submit"
                 disabled={loading}
-                className="flex w-full items-center justify-center gap-2 rounded-sm bg-amber-500 py-3 font-serif-cn text-base font-medium text-stone-950 transition-all hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-[#3E73B9] px-4 py-3 font-serif-cn text-base font-medium text-white transition-colors hover:bg-[#4B82C8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#55AFC0] focus-visible:ring-offset-2 focus-visible:ring-offset-[#111B24] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {loading ? t('signupButtonLoading') : t('signupButton')}
               </button>
             </form>
 
-            <div className="mt-6 text-center font-fraunces text-sm italic text-stone-500">
+            <div className="mt-6 text-center font-fraunces text-sm italic text-[#A7B3BC]">
               {t('hasAccount')}{" "}
               <Link
-                href="/auth/signin"
-                className="font-medium text-amber-400 transition-colors hover:text-amber-300"
+                href={signInHref}
+                className="inline-flex min-h-11 items-center rounded-md px-1 font-medium text-[#6FC7D5] transition-colors hover:text-[#8AD7E2] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#55AFC0]"
               >
                 {t('signinNow')}
               </Link>
@@ -223,10 +233,10 @@ export default function SignUp() {
 
             <div className="mt-3 text-center">
               <Link
-                href="/"
-                className="font-mono text-[10px] tracking-wider text-stone-600 transition-colors hover:text-amber-400"
+                href={`/${locale}`}
+                className="inline-flex min-h-11 items-center rounded-md px-2 font-mono text-[11px] tracking-wider text-[#7F909C] transition-colors hover:text-[#6FC7D5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#55AFC0]"
               >
-                ← {t('backToHome')}
+                {t('backToHome')}
               </Link>
             </div>
           </div>

@@ -1,6 +1,16 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { NextIntlClientProvider } from 'next-intl'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import zhPlayground from '../../../messages/zh/playground.json'
 import { DiscussionStudio } from '@/app/[locale]/playground/DiscussionStudio'
+
+function renderDiscussion() {
+  return render(
+    <NextIntlClientProvider locale="zh" messages={{ playground: zhPlayground }}>
+      <DiscussionStudio />
+    </NextIntlClientProvider>,
+  )
+}
 
 describe('DiscussionStudio', () => {
   afterEach(() => {
@@ -14,7 +24,7 @@ describe('DiscussionStudio', () => {
       }), { status: 200, headers: { 'Content-Type': 'application/json' } })
     ))
     vi.stubGlobal('fetch', fetchMock)
-    render(<DiscussionStudio />)
+    renderDiscussion()
 
     expect(screen.getByRole('option', { name: 'Venice: Uncensored' })).toBeInTheDocument()
     expect(screen.getByRole('option', { name: 'Sao10K · Euryale 70B' })).toBeInTheDocument()
@@ -39,7 +49,7 @@ describe('DiscussionStudio', () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
       error: { message: 'OpenRouter 暫時無法使用' },
     }), { status: 503, headers: { 'Content-Type': 'application/json' } })))
-    render(<DiscussionStudio />)
+    renderDiscussion()
 
     fireEvent.change(screen.getByPlaceholderText(/貼上劇本片段/), {
       target: { value: '這場戲的衝突夠強嗎？' },

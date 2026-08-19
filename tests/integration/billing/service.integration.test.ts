@@ -8,6 +8,14 @@ import { prisma } from '../../helpers/prisma'
 import { resetBillingState } from '../../helpers/db-reset'
 import { createTestProject, createTestUser, seedBalance } from '../../helpers/billing-fixtures'
 
+const ATLAS_AUDIO_MODEL = 'atlascloud::bytedance/seed-audio-1.0'
+const PROVIDER_TEXT = '@audio1 hello'
+const PROVIDER_CHARACTERS = [...PROVIDER_TEXT].length
+
+function voicePayload() {
+  return { audioModel: ATLAS_AUDIO_MODEL, providerText: PROVIDER_TEXT }
+}
+
 function expectBillableInfo(info: TaskBillingInfo | null | undefined): Extract<TaskBillingInfo, { billable: true }> {
   expect(info?.billable).toBe(true)
   if (!info || !info.billable) {
@@ -27,7 +35,7 @@ describe('billing/service integration', () => {
     const project = await createTestProject(user.id)
     await seedBalance(user.id, 10)
 
-    const info = buildDefaultTaskBillingInfo(TASK_TYPE.VOICE_LINE, { maxSeconds: 5 })!
+    const info = buildDefaultTaskBillingInfo(TASK_TYPE.VOICE_LINE, voicePayload())!
     const result = await prepareTaskBilling({
       id: randomUUID(),
       userId: user.id,
@@ -45,7 +53,7 @@ describe('billing/service integration', () => {
     const project = await createTestProject(user.id)
     await seedBalance(user.id, 10)
 
-    const info = buildDefaultTaskBillingInfo(TASK_TYPE.VOICE_LINE, { maxSeconds: 5 })!
+    const info = buildDefaultTaskBillingInfo(TASK_TYPE.VOICE_LINE, voicePayload())!
     const taskId = randomUUID()
     const prepared = expectBillableInfo(await prepareTaskBilling({
       id: taskId,
@@ -62,7 +70,7 @@ describe('billing/service integration', () => {
       projectId: project.id,
       billingInfo: prepared,
     }, {
-      result: { actualDurationSeconds: 2 },
+      result: { actualCharacters: PROVIDER_CHARACTERS },
     }))
 
     expect(settled.status).toBe('settled')
@@ -80,7 +88,7 @@ describe('billing/service integration', () => {
     const project = await createTestProject(user.id)
     await seedBalance(user.id, 10)
 
-    const info = buildDefaultTaskBillingInfo(TASK_TYPE.VOICE_LINE, { maxSeconds: 5 })!
+    const info = buildDefaultTaskBillingInfo(TASK_TYPE.VOICE_LINE, voicePayload())!
     const taskId = randomUUID()
     const prepared = expectBillableInfo(await prepareTaskBilling({
       id: taskId,
@@ -98,14 +106,14 @@ describe('billing/service integration', () => {
       projectId: project.id,
       billingInfo: prepared,
     }, {
-      result: { actualDurationSeconds: 2 },
+      result: { actualCharacters: PROVIDER_CHARACTERS },
     }))
 
     expect(settled.status).toBe('settled')
-    expect(settled.chargedCost).toBeCloseTo(calcVoice(2), 8)
+    expect(settled.chargedCost).toBeCloseTo(calcVoice(ATLAS_AUDIO_MODEL, PROVIDER_CHARACTERS), 8)
 
     const balance = await prisma.userBalance.findUnique({ where: { userId: user.id } })
-    expect(balance?.totalSpent).toBeCloseTo(calcVoice(2), 8)
+    expect(balance?.totalSpent).toBeCloseTo(calcVoice(ATLAS_AUDIO_MODEL, PROVIDER_CHARACTERS), 8)
     expect(balance?.frozenAmount).toBeCloseTo(0, 8)
   })
 
@@ -115,7 +123,7 @@ describe('billing/service integration', () => {
     const project = await createTestProject(user.id)
     await seedBalance(user.id, 10)
 
-    const info = buildDefaultTaskBillingInfo(TASK_TYPE.VOICE_LINE, { maxSeconds: 5 })!
+    const info = buildDefaultTaskBillingInfo(TASK_TYPE.VOICE_LINE, voicePayload())!
     const taskId = randomUUID()
     const prepared = expectBillableInfo(await prepareTaskBilling({
       id: taskId,

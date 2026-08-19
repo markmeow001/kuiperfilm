@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { queryKeys } from '../keys'
 import { resolveTaskResponse } from '@/lib/task/client'
 import {
@@ -19,6 +19,97 @@ import type {
     ModifyStoryboardImagePayload,
     CreatePanelVariantPayload,
 } from './storyboard-panel-mutations-utils'
+import type { ManualStoryboardInitialPanel } from '@/lib/novel-promotion/manual-storyboard-create'
+
+interface ManualPanelEditResponse {
+    success: true
+    replayed?: boolean
+    panel?: {
+        id: string
+        storyboardId: string
+        panelIndex: number
+        panelNumber: number | null
+    }
+}
+
+function invalidateStoryboardPanelEdit(
+    queryClient: QueryClient,
+    projectId: string,
+    episodeId: string,
+) {
+    void queryClient.invalidateQueries({
+        queryKey: queryKeys.storyboards.all(episodeId),
+    })
+    invalidateQueryTemplates(queryClient, [queryKeys.projectAssets.all(projectId)])
+}
+
+export function useInsertManualProjectPanel(projectId: string, episodeId: string | null) {
+    const queryClient = useQueryClient()
+    return useMutation({
+        mutationFn: async (payload: {
+            idempotencyKey: string
+            anchorPanelId: string
+            position: 'before' | 'after'
+            panel: ManualStoryboardInitialPanel
+        }) => {
+            if (!episodeId) throw new Error('Episode ID is required')
+            return await requestJsonWithError<ManualPanelEditResponse>(
+                `/api/novel-promotion/${projectId}/episodes/${episodeId}/panels`,
+                {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                },
+                'insert panel failed',
+            )
+        },
+        onSuccess: () => {
+            if (episodeId) invalidateStoryboardPanelEdit(queryClient, projectId, episodeId)
+        },
+    })
+}
+
+export function useMoveManualProjectPanel(projectId: string, episodeId: string | null) {
+    const queryClient = useQueryClient()
+    return useMutation({
+        mutationFn: async (payload: { panelId: string; direction: 'earlier' | 'later' }) => {
+            if (!episodeId) throw new Error('Episode ID is required')
+            return await requestJsonWithError<ManualPanelEditResponse>(
+                `/api/novel-promotion/${projectId}/episodes/${episodeId}/panels`,
+                {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                },
+                'move panel failed',
+            )
+        },
+        onSuccess: () => {
+            if (episodeId) invalidateStoryboardPanelEdit(queryClient, projectId, episodeId)
+        },
+    })
+}
+
+export function useDeleteManualProjectPanel(projectId: string, episodeId: string | null) {
+    const queryClient = useQueryClient()
+    return useMutation({
+        mutationFn: async ({ panelId }: { panelId: string }) => {
+            if (!episodeId) throw new Error('Episode ID is required')
+            return await requestJsonWithError<{ success: true }>(
+                `/api/novel-promotion/${projectId}/episodes/${episodeId}/panels`,
+                {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ panelId }),
+                },
+                'delete panel failed',
+            )
+        },
+        onSuccess: () => {
+            if (episodeId) invalidateStoryboardPanelEdit(queryClient, projectId, episodeId)
+        },
+    })
+}
 
 export function useRegenerateProjectPanelImage(projectId: string) {
     const queryClient = useQueryClient()
@@ -199,7 +290,17 @@ export function useRegenerateProjectStoryboardText(projectId: string) {
 export function useCreateProjectStoryboardGroup(projectId: string) {
     const queryClient = useQueryClient()
     return useMutation({
-        mutationFn: async (payload: { episodeId: string; insertIndex: number }) => {
+        mutationFn: async (payload: {
+            episodeId: string
+            insertIndex: number
+            idempotencyKey?: string
+            initialPanel?: {
+                description: string
+                characterNames: string[]
+                locationName: string | null
+                durationSeconds: number
+            }
+        }) => {
             return await requestJsonWithError(`/api/novel-promotion/${projectId}/storyboard-group`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },

@@ -32,7 +32,10 @@ const prismaMock = vi.hoisted(() => ({
   canvasAsset: { findFirst: vi.fn(), findMany: vi.fn(), create: vi.fn() },
 }))
 const submitterMock = vi.hoisted(() => ({ submitTask: vi.fn() }))
-const mediaMock = vi.hoisted(() => ({ ensureMediaObjectFromStorageKey: vi.fn() }))
+const mediaMock = vi.hoisted(() => ({
+  ensureMediaObjectFromStorageKey: vi.fn(),
+  classifyVoiceLineTaskOutputReference: vi.fn(async () => 'other' as const),
+}))
 const apiConfigMock = vi.hoisted(() => ({ resolveModelSelection: vi.fn() }))
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }))

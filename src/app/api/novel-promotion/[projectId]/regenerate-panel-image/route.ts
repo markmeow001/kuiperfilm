@@ -10,6 +10,7 @@ import { withTaskUiPayload } from '@/lib/task/ui-payload'
 import { getProjectModelConfig } from '@/lib/config-service'
 import { resolveProjectModelCapabilityGenerationOptions } from '@/lib/config-service'
 import { resolveModelSelection } from '@/lib/api-config'
+import { findNovelPromotionPanelInProject } from '@/lib/novel-promotion/project-scope'
 
 const DEFAULT_CANDIDATE_COUNT = 1
 
@@ -31,6 +32,11 @@ export const POST = apiHandler(async (
 
   if (!panelId) {
     throw new ApiError('INVALID_PARAMS')
+  }
+
+  const ownedPanel = await findNovelPromotionPanelInProject(projectId, panelId)
+  if (!ownedPanel) {
+    throw new ApiError('NOT_FOUND')
   }
 
   const projectModelConfig = await getProjectModelConfig(projectId, session.user.id)
@@ -58,20 +64,21 @@ export const POST = apiHandler(async (
     imageModel: projectModelConfig.storyboardModel,
     ...(Object.keys(capabilityOptions).length > 0 ? { generationOptions: capabilityOptions } : {})}
 
-  const hasOutputAtStart = await hasPanelImageOutput(panelId)
+  const hasOutputAtStart = await hasPanelImageOutput(ownedPanel.id)
 
   const result = await submitTask({
     userId: session.user.id,
     locale,
     requestId: getRequestId(request),
     projectId,
+    episodeId: ownedPanel.storyboard.episodeId,
     type: TASK_TYPE.IMAGE_PANEL,
     targetType: 'NovelPromotionPanel',
-    targetId: panelId,
+    targetId: ownedPanel.id,
     payload: withTaskUiPayload(billingPayload, {
       intent: 'regenerate',
       hasOutputAtStart}),
-    dedupeKey: `image_panel:${panelId}:${candidateCount}`,
+    dedupeKey: `image_panel:${ownedPanel.id}:${candidateCount}`,
     billingInfo: buildDefaultTaskBillingInfo(TASK_TYPE.IMAGE_PANEL, billingPayload)})
 
   return NextResponse.json(result)

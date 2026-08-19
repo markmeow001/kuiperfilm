@@ -8,7 +8,8 @@
  * collapsible 參考文字 row so the left column stays short.
  */
 
-import { useMemo, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
+import { useTranslations } from 'next-intl'
 import {
   VIDEO_PROMPT_COMPRESSION_TARGET,
   VIDEO_PROMPT_HARD_LIMIT,
@@ -70,6 +71,7 @@ interface PromptComposerProps {
 }
 
 export function PromptComposer({ ctrl, candidates, boundNames, onSubmitShortcut }: PromptComposerProps) {
+  const t = useTranslations('playground.video')
   const { prompt, setPrompt, promptRef, refText, setRefText, isBusy, outputType } = ctrl
   const highlightRef = useRef<HTMLDivElement | null>(null)
   const [atMenuOpen, setAtMenuOpen] = useState(false)
@@ -137,11 +139,9 @@ export function PromptComposer({ ctrl, candidates, boundNames, onSubmitShortcut 
     if (highlightRef.current) highlightRef.current.scrollTop = e.currentTarget.scrollTop
   }
 
-  const placeholder = useMemo(() => (
-    candidates.length > 0
-      ? '描述影片場景與動作… 打 @ 引用綁定的主體 / 素材'
-      : '描述你想生成的影片場景與動作…'
-  ), [candidates.length])
+  const placeholder = candidates.length > 0
+    ? t('promptWithBindingsPlaceholder')
+    : t('promptPlaceholder')
 
   return (
     <div className="mb-4">
@@ -187,10 +187,15 @@ export function PromptComposer({ ctrl, candidates, boundNames, onSubmitShortcut 
         ) : null}
       </div>
 
-      <div className="mt-1 flex justify-end font-mono text-[11px] text-stone-600">
+      <div className="mt-1 flex justify-end font-mono text-[11px] text-text-tertiary">
         {outputType === 'video'
-          ? `${prompt.length}/${VIDEO_PROMPT_HARD_LIMIT} · 超過 ${VIDEO_PROMPT_SOFT_LIMIT} 將壓縮至約 ${VIDEO_PROMPT_COMPRESSION_TARGET}`
-          : `${prompt.length}/4000`}
+          ? t('compressionHint', {
+            current: prompt.length,
+            hard: VIDEO_PROMPT_HARD_LIMIT,
+            soft: VIDEO_PROMPT_SOFT_LIMIT,
+            target: VIDEO_PROMPT_COMPRESSION_TARGET,
+          })
+          : t('characterCount', { current: prompt.length, max: 4000 })}
       </div>
 
       {/* 參考文字 — collapsed into a fold so the column stays short. */}
@@ -201,17 +206,17 @@ export function PromptComposer({ ctrl, candidates, boundNames, onSubmitShortcut 
             value={refText}
             onChange={(e) => setRefText(e.target.value)}
             disabled={isBusy}
-            placeholder="風格 / 旁白 / 隱喻 等補充…"
-            className="w-full rounded-xl border border-white/[0.09] bg-white/[0.04] px-3 py-2 text-[13px] text-text-secondary outline-none placeholder:text-text-tertiary focus:border-primary-500/40"
+            placeholder={t('referenceTextPlaceholder')}
+            className="min-h-11 w-full rounded-xl border border-white/[0.09] bg-white/[0.04] px-3 py-2 text-[13px] text-text-secondary outline-none placeholder:text-text-tertiary focus:border-primary-500/40"
           />
         </div>
       ) : (
         <button
           type="button"
           onClick={() => setRefTextOpen(true)}
-          className="mt-1 font-mono text-[11px] text-stone-600 hover:text-stone-400"
+          className="mt-1 font-mono text-[11px] text-text-tertiary hover:text-text-secondary"
         >
-          ＋ 參考文字（選填）
+          ＋ {t('referenceTextOptional')}
         </button>
       )}
     </div>

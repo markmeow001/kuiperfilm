@@ -11,6 +11,7 @@
  */
 
 import { useEffect, useState } from 'react'
+import { useTranslations } from 'next-intl'
 import { AppIcon } from '@/components/ui/icons'
 
 interface LocationImageLike {
@@ -38,6 +39,7 @@ export function GroupSceneAddPickerModal({
   candidates,
   onSelect,
 }: GroupSceneAddPickerModalProps) {
+  const t = useTranslations('v2Storyboard.groupScenePicker')
   const [query, setQuery] = useState<string>('')
 
   useEffect(() => {
@@ -63,44 +65,48 @@ export function GroupSceneAddPickerModal({
       onClick={onClose}
     >
       <div
-        className="kuiper-modal-surface w-full max-w-2xl"
+        role="dialog"
+        aria-modal="true"
+        aria-label={t('title')}
+        className="kuiper-modal-surface w-full max-w-2xl border border-[var(--production-border)] bg-[var(--production-surface)] text-[var(--production-ink)]"
         onClick={(e) => e.stopPropagation()}
       >
-        <header className="flex items-center justify-between border-b border-emerald-900/20 bg-canvas/40 px-5 py-3">
+        <header className="flex items-center justify-between border-b border-[var(--production-border)] bg-[var(--production-muted)] px-5 py-3">
           <div>
-            <div className="font-mono text-[14px] uppercase tracking-wider text-emerald-500/70">
-              加场景
+            <div className="font-mono text-[12px] uppercase tracking-[0.18em] text-[var(--process-cyan-strong)]">
+              {t('title')}
             </div>
-            <div className="mt-0.5 font-serif-cn text-[14px] text-text-secondary">
-              从专案场景库中选一个加进这组
+            <div className="mt-1 text-[14px] text-[var(--production-ink-muted)]">
+              {t('description')}
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="text-text-tertiary transition-colors hover:text-text-primary"
+            aria-label={t('close')}
+            className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl text-[var(--production-ink-muted)] transition-colors hover:bg-[var(--production-muted)] hover:text-[var(--production-ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--production-focus)]"
           >
             <AppIcon name="close" className="h-5 w-5" />
           </button>
         </header>
 
-        <div className="border-b border-border-soft/60 bg-canvas/30 px-5 py-2.5">
+        <div className="border-b border-[var(--production-border)] bg-[var(--production-surface)] px-5 py-3">
           <input
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="搜索场景..."
+            placeholder={t('searchPlaceholder')}
             autoFocus
-            className="w-full rounded-sm border border-border-soft bg-raised px-3 py-1.5 font-serif-cn text-[14px] text-text-primary outline-none placeholder:text-text-tertiary focus:border-emerald-500/40"
+            className="min-h-11 w-full rounded-xl border border-[var(--production-border)] bg-[var(--production-muted)] px-3 text-[14px] text-[var(--production-ink)] outline-none placeholder:text-[var(--production-ink-muted)] focus-visible:border-[var(--process-cyan)] focus-visible:ring-2 focus-visible:ring-[var(--production-focus)]"
           />
         </div>
 
         <div className="max-h-[60vh] overflow-y-auto px-5 py-3">
           {filtered.length === 0 ? (
-            <p className="py-6 text-center font-serif-cn text-sm italic text-text-tertiary">
+            <p className="py-6 text-center text-sm text-[var(--production-ink-muted)]">
               {candidates.length === 0
-                ? '该专案所有场景已加入这组'
-                : '没有匹配的场景'}
+                ? t('emptyAll')
+                : t('emptyNoMatch')}
             </p>
           ) : (
             <ul className="space-y-1.5">
@@ -115,9 +121,10 @@ export function GroupSceneAddPickerModal({
                     <button
                       type="button"
                       onClick={() => onSelect(l.id)}
-                      className="flex w-full items-center gap-3 rounded-sm border border-transparent bg-canvas/30 px-3 py-2 transition-colors hover:border-emerald-500/40 hover:bg-emerald-500/10"
+                      aria-label={t('addAria', { name: l.name })}
+                      className="flex min-h-11 w-full items-center gap-3 rounded-xl border border-transparent bg-[var(--production-muted)] px-3 py-2 transition-colors hover:border-[var(--process-cyan)]/45 hover:bg-[var(--process-cyan-soft)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--production-focus)]"
                     >
-                      <div className="relative h-9 w-14 flex-shrink-0 overflow-hidden rounded-sm bg-overlay">
+                      <div className="relative h-9 w-14 flex-shrink-0 overflow-hidden rounded-lg bg-[var(--production-surface)]">
                         {avatar ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img
@@ -128,15 +135,15 @@ export function GroupSceneAddPickerModal({
                         ) : (
                           <AppIcon
                             name="image"
-                            className="m-auto h-4 w-4 text-text-tertiary"
+                            className="m-auto h-4 w-4 text-[var(--production-ink-muted)]"
                           />
                         )}
                       </div>
-                      <span className="flex-1 text-left font-serif-cn text-[14px] text-text-primary">
+                      <span className="flex-1 text-left text-[14px] text-[var(--production-ink)]">
                         {l.name}
                       </span>
-                      <span className="font-mono text-[12px] uppercase tracking-wider text-emerald-500/60">
-                        + 加入
+                      <span aria-hidden="true" className="font-mono text-[12px] uppercase tracking-wider text-[var(--process-cyan-strong)]">
+                        + {t('add')}
                       </span>
                     </button>
                   </li>

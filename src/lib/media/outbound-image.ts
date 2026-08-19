@@ -1,6 +1,7 @@
 import path from 'node:path'
 import { createScopedLogger } from '@/lib/logging/core'
 import { resolveStorageKeyFromMediaValue } from '@/lib/media/service'
+import { assertUserMediaWriteReferenceAllowed } from '@/lib/media/write-policy'
 
 type CosHelpers = Pick<typeof import('@/lib/cos'), 'getSignedUrl' | 'toFetchableUrl'>
 
@@ -422,10 +423,10 @@ export async function normalizeReferenceImagesForGeneration(
   return normalized
 }
 
-export function sanitizeImageInputsForTaskPayload(inputs: unknown[]): {
+export async function sanitizeImageInputsForTaskPayload(inputs: unknown[]): Promise<{
   normalized: string[]
   issues: OutboundImageInputIssue[]
-} {
+}> {
   const issues: OutboundImageInputIssue[] = []
   const normalized: string[] = []
   const seen = new Set<string>()
@@ -452,6 +453,11 @@ export function sanitizeImageInputsForTaskPayload(inputs: unknown[]): {
       issues.push({ index: i, input: raw, normalized: unwrapped, reason: 'relative_path_rejected' })
       continue
     }
+
+    // Task payloads are durable references too. Reuse the same fail-closed
+    // boundary as entity writes so immutable VoiceLine publication objects
+    // cannot be kept alive through raw keys, signed URLs, or /m aliases.
+    await assertUserMediaWriteReferenceAllowed(unwrapped)
 
     if (seen.has(unwrapped)) continue
     seen.add(unwrapped)

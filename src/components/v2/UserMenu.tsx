@@ -20,6 +20,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useSession, signOut } from 'next-auth/react'
+import { useTranslations } from 'next-intl'
 import { AppIcon } from '@/components/ui/icons'
 import { isAdmin as checkIsAdmin, UserRole } from '@/lib/auth/user-role'
 
@@ -29,8 +30,10 @@ interface UserMenuProps {
 
 export function UserMenu({ locale = 'zh' }: UserMenuProps) {
   const { data: session, status } = useSession()
+  const t = useTranslations('v2Home.userMenu')
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
     if (!open) return
@@ -38,7 +41,9 @@ export function UserMenu({ locale = 'zh' }: UserMenuProps) {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
     }
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false)
+      if (e.key !== 'Escape') return
+      setOpen(false)
+      triggerRef.current?.focus()
     }
     document.addEventListener('mousedown', onDoc)
     document.addEventListener('keydown', onKey)
@@ -50,21 +55,21 @@ export function UserMenu({ locale = 'zh' }: UserMenuProps) {
 
   if (status === 'loading') {
     return (
-      <div className="flex h-9 w-9 animate-pulse items-center justify-center rounded-full bg-stone-800" />
+      <div className="flex h-11 w-11 animate-pulse items-center justify-center rounded-full bg-white/[0.07]" />
     )
   }
   if (!session?.user) {
     return (
       <Link
         href={`/${locale}/auth/signin`}
-        className="rounded-xl border border-primary-500/40 bg-primary-500/10 px-3 py-1.5 font-mono text-[11px] uppercase tracking-wider text-primary-400 hover:bg-primary-500/20"
+        className="flex min-h-11 items-center rounded-xl border border-[var(--process-cyan)]/40 bg-[var(--process-cyan-soft)] px-3 font-mono text-[11px] uppercase tracking-wider text-[var(--process-cyan-strong)] hover:border-[var(--process-cyan)]"
       >
-        登入
+        {t('signIn')}
       </Link>
     )
   }
 
-  const name = session.user.name ?? session.user.email ?? '使用者'
+  const name = session.user.name ?? session.user.email ?? t('fallbackUser')
   const role = (session.user as { role?: string } | undefined)?.role ?? null
   const initial = name.charAt(0).toUpperCase()
   const isAdmin = checkIsAdmin(role)
@@ -72,39 +77,41 @@ export function UserMenu({ locale = 'zh' }: UserMenuProps) {
   return (
     <div ref={ref} className="relative">
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-2 rounded-full border border-white/[0.09] bg-white/[0.04] py-1 pl-1 pr-2 transition-all hover:border-primary-500/40 hover:bg-white/[0.07]"
+        className="flex min-h-11 min-w-11 items-center justify-center gap-2 rounded-full border border-white/[0.09] bg-white/[0.04] p-1 transition-all hover:border-[var(--process-cyan)]/45 hover:bg-white/[0.07] sm:justify-start sm:pr-2"
         title={`${name} · ${role ?? UserRole.MEMBER}`}
-        aria-haspopup="menu"
+        aria-label={`${name} · ${role ?? UserRole.MEMBER}`}
         aria-expanded={open}
+        aria-controls="kuiper-user-menu"
       >
-        <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-primary-400 to-primary-700 font-display text-xs font-bold text-black">
+        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--process-cyan)] font-display text-xs font-bold text-[#071014]">
           {initial}
         </div>
-        <span className="hidden font-mono text-[11px] uppercase tracking-wider text-stone-300 sm:inline">
+        <span className="hidden font-mono text-[11px] uppercase tracking-wider text-[var(--darkroom-text)] sm:inline">
           {role ? role.toUpperCase() : 'MEMBER'}
         </span>
-        <AppIcon name="chevronDown" className={`h-3 w-3 text-stone-500 transition-transform ${open ? 'rotate-180' : ''}`} />
+        <AppIcon name="chevronDown" className={`hidden h-3 w-3 text-[var(--darkroom-muted)] transition-transform sm:block ${open ? 'rotate-180' : ''}`} />
       </button>
 
       {open && (
         <div
-          role="menu"
-          className="absolute right-0 top-full z-50 mt-2 w-60 overflow-hidden rounded-2xl border border-white/[0.09] bg-overlay shadow-[0_16px_48px_rgba(0,0,0,0.6)]"
+          id="kuiper-user-menu"
+          className="absolute right-0 top-full z-50 mt-2 w-60 overflow-hidden rounded-2xl border border-[var(--darkroom-border)] bg-[var(--darkroom-raised)] shadow-[0_16px_48px_rgba(0,0,0,0.6)]"
         >
-          <div className="border-b border-white/[0.07] px-4 py-3">
-            <div className="font-serif-cn text-sm text-stone-100">{name}</div>
-            <div className="mt-1 font-mono text-[10px] uppercase tracking-wider text-primary-400">
+          <div className="border-b border-[var(--darkroom-border)] px-4 py-3">
+            <div className="font-serif-cn text-sm text-[var(--darkroom-text)]">{name}</div>
+            <div className="mt-1 font-mono text-[10px] uppercase tracking-wider text-[var(--process-cyan-strong)]">
               {role ? role.toUpperCase() : 'MEMBER'}
             </div>
           </div>
-          <nav className="py-1.5">
+          <nav aria-label={t('accountMenu')} className="py-1.5">
             <MenuItem
               href={`/${locale}/workspaces`}
               icon="userAlt"
-              label="工作區 / 團隊"
-              hint="管理組織與成員"
+              label={t('workspaces')}
+              hint={t('workspacesHint')}
               onClose={() => setOpen(false)}
             />
             {isAdmin && (
@@ -112,15 +119,15 @@ export function UserMenu({ locale = 'zh' }: UserMenuProps) {
                 <MenuItem
                   href={`/${locale}/profile`}
                   icon="userRoundCog"
-                  label="設定中心"
-                  hint="provider keys / 預設模型"
+                  label={t('settings')}
+                  hint={t('settingsHint')}
                   onClose={() => setOpen(false)}
                 />
                 <MenuItem
                   href={`/${locale}/admin`}
                   icon="settingsHex"
-                  label="管理員後台"
-                  hint="使用者 / 任務 / 邀請碼"
+                  label={t('admin')}
+                  hint={t('adminHint')}
                   highlight
                   onClose={() => setOpen(false)}
                 />
@@ -129,11 +136,11 @@ export function UserMenu({ locale = 'zh' }: UserMenuProps) {
             <button
               type="button"
               onClick={() => void signOut({ callbackUrl: `/${locale}/auth/signin` })}
-              className="flex w-full items-center gap-3 border-t border-white/[0.07] px-4 py-2.5 text-left transition-colors hover:bg-white/[0.05]"
-              role="menuitem"
+              className="flex min-h-11 w-full items-center gap-3 border-t border-[var(--darkroom-border)] px-4 py-2.5 text-left transition-colors hover:bg-white/[0.05]"
+              aria-label={t('signOut')}
             >
-              <AppIcon name="logout" className="h-4 w-4 text-stone-500" />
-              <span className="font-serif-cn text-sm text-stone-200">登出</span>
+              <AppIcon name="logout" className="h-4 w-4 text-[var(--darkroom-muted)]" />
+              <span className="font-serif-cn text-sm text-[var(--darkroom-text)]">{t('signOut')}</span>
             </button>
           </nav>
         </div>
@@ -156,13 +163,12 @@ function MenuItem({
     <Link
       href={href}
       onClick={onClose}
-      role="menuitem"
-      className={`flex items-start gap-3 px-4 py-2.5 transition-colors ${highlight ? 'hover:bg-primary-500/10' : 'hover:bg-white/[0.05]'}`}
+      className={`flex min-h-11 items-start gap-3 px-4 py-2.5 transition-colors ${highlight ? 'hover:bg-[var(--process-cyan-soft)]' : 'hover:bg-white/[0.05]'}`}
     >
-      <AppIcon name={icon} className={`mt-0.5 h-4 w-4 ${highlight ? 'text-primary-400' : 'text-stone-500'}`} />
+      <AppIcon name={icon} className={`mt-0.5 h-4 w-4 ${highlight ? 'text-[var(--process-cyan-strong)]' : 'text-[var(--darkroom-muted)]'}`} />
       <div className="flex-1">
-        <div className={`font-serif-cn text-sm ${highlight ? 'text-primary-300' : 'text-stone-200'}`}>{label}</div>
-        {hint && <div className="mt-0.5 font-mono text-[10px] tracking-wider text-stone-500">{hint}</div>}
+        <div className={`font-serif-cn text-sm ${highlight ? 'text-[var(--process-cyan-strong)]' : 'text-[var(--darkroom-text)]'}`}>{label}</div>
+        {hint && <div className="mt-0.5 font-mono text-[10px] tracking-wider text-[var(--darkroom-muted)]">{hint}</div>}
       </div>
     </Link>
   )

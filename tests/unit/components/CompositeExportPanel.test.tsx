@@ -87,4 +87,22 @@ describe('CompositeExportPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: '輸出完整合成影片' }))
     expect(onExportVideo).toHaveBeenCalledWith(false)
   })
+
+  it('[原音 checkbox] -> 放在獨立的可觸控 label', () => {
+    render(
+      <CompositeExportPanel
+        canExport
+        progress={{ status: 'idle', currentTime: 0, duration: 10, message: '' }}
+        onExportMask={vi.fn()}
+        onExportFrame={vi.fn()}
+        onExportVideo={vi.fn()}
+        onCancelVideo={vi.fn()}
+      />,
+    )
+
+    const hitArea = screen.getByRole('checkbox', { name: '保留實拍影片原音' })
+      .closest('[data-live-composite-control-hit-area]')
+
+    expect(hitArea?.tagName).toBe('LABEL')
+  })
 })

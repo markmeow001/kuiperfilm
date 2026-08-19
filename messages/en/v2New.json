@@ -3,6 +3,16 @@
   "step": "STEP 00 — NEW",
   "title": "New project",
   "subtitle": "Begin a new short-drama project",
+  "wizard": {
+    "basic": "Project details",
+    "basicHint": "Name it and choose the collaboration scope",
+    "production": "Production setup",
+    "productionHint": "Choose the generation path and opening rhythm",
+    "script": "Script import",
+    "scriptHint": "Upload a script or start with a blank project",
+    "back": "Back",
+    "next": "Continue"
+  },
   "form": {
     "nameLabel": "Project name · NAME *",
     "namePlaceholder": "e.g. Rainy night station, CEO's secretary, martial arts monologue…",

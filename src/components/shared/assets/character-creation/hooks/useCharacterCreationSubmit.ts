@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { shouldShowError } from '@/lib/error-utils'
 import {
@@ -16,6 +16,11 @@ import {
   useUploadProjectTempMedia,
 } from '@/lib/query/hooks'
 import { dataUrlToImageFile } from '../character-upload-utils'
+import {
+  createSubjectUploadRequestId,
+  runResumableCreateWithUpload,
+  type SubjectUploadTarget,
+} from '@/app/[locale]/v2/workspace/[projectId]/subjects/subject-create-upload-flow'
 
 type Mode = 'asset-hub' | 'project'
 
@@ -26,6 +31,7 @@ interface UseCharacterCreationSubmitParams {
   episodeId?: string | null
   name: string
   description: string
+  introduction?: string
   aiInstruction: string
   // Q-006: artStyle removed — styleProfile replaces it.
   referenceImagesBase64: string[]
@@ -51,6 +57,7 @@ export function useCharacterCreationSubmit({
   episodeId,
   name,
   description,
+  introduction = '',
   aiInstruction,
   // Q-006: artStyle removed — styleProfile replaces it.
   referenceImagesBase64,
@@ -67,6 +74,9 @@ export function useCharacterCreationSubmit({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isAiDesigning, setIsAiDesigning] = useState(false)
   const [isExtracting, setIsExtracting] = useState(false)
+  const [uploadRecovery, setUploadRecovery] = useState<SubjectUploadTarget | null>(null)
+  const [uploadError, setUploadError] = useState<string | null>(null)
+  const manualUploadRequestIdRef = useRef<string | null>(null)
 
   const uploadAssetHubTemp = useUploadAssetHubTempMedia()
   const uploadProjectTemp = useUploadProjectTempMedia()
@@ -149,6 +159,7 @@ export function useCharacterCreationSubmit({
         await createProjectCharacter.mutateAsync({
           name: name.trim(),
           description: finalDescription || t('character.defaultDescription', { name: name.trim() }),
+          introduction: introduction.trim(),
           episodeId: episodeId || undefined,
           generateFromReference: true,
           referenceImageUrls,
@@ -173,6 +184,7 @@ export function useCharacterCreationSubmit({
     extractAssetHubDescription,
     extractProjectDescription,
     folderId,
+    introduction,
     mode,
     name,
     onClose,
@@ -243,6 +255,7 @@ export function useCharacterCreationSubmit({
         await createProjectCharacter.mutateAsync({
           name: name.trim(),
           description: description.trim(),
+          introduction: introduction.trim(),
           episodeId: episodeId || undefined,
         })
       }
@@ -264,6 +277,7 @@ export function useCharacterCreationSubmit({
     episodeId,
     folderId,
     isSubAppearance,
+    introduction,
     mode,
     name,
     onClose,
@@ -289,6 +303,7 @@ export function useCharacterCreationSubmit({
         await createProjectCharacter.mutateAsync({
           name: name.trim(),
           description: '',
+          introduction: introduction.trim(),
           episodeId: episodeId || undefined,
         })
       }
@@ -301,10 +316,89 @@ export function useCharacterCreationSubmit({
     } finally {
       setIsSubmitting(false)
     }
-  }, [createAssetHubCharacter, createProjectCharacter, episodeId, folderId, isSubAppearance, mode, name, onClose, onSuccess, t])
+  }, [createAssetHubCharacter, createProjectCharacter, episodeId, folderId, introduction, isSubAppearance, mode, name, onClose, onSuccess, t])
+
+  const runProjectUpload = useCallback(async (existingTarget: SubjectUploadTarget | null) => {
+    if (!projectId) throw new Error(t('errors.createFailed'))
+    const imageSource = referenceImagesBase64[0]
+    if (!imageSource) throw new Error(t('errors.uploadFailed'))
+
+    const imageFile = dataUrlToImageFile(imageSource, `${name.trim()}-四視圖.png`)
+    return await runResumableCreateWithUpload({
+      existingTarget,
+      createTarget: async () => {
+        const idempotencyKey = manualUploadRequestIdRef.current ?? createSubjectUploadRequestId()
+        manualUploadRequestIdRef.current = idempotencyKey
+        const result = await createProjectCharacter.mutateAsync({
+          name: name.trim(),
+          description: '',
+          introduction: introduction.trim(),
+          episodeId: episodeId || undefined,
+          idempotencyKey,
+        })
+        const characterId = result.character?.id
+        const appearanceId = result.character?.appearances?.[0]?.id
+        if (!characterId || !appearanceId) throw new Error(t('errors.createFailed'))
+        return { createdId: characterId, targetId: appearanceId }
+      },
+      onCreated: async () => undefined,
+      uploadTarget: async (target) => {
+        await uploadProjectCharacterImage.mutateAsync({
+          file: imageFile,
+          characterId: target.createdId,
+          appearanceId: target.targetId,
+          imageIndex: 0,
+          labelText: name.trim(),
+        })
+      },
+    })
+  }, [
+    createProjectCharacter,
+    episodeId,
+    introduction,
+    name,
+    projectId,
+    referenceImagesBase64,
+    t,
+    uploadProjectCharacterImage,
+  ])
+
+  const completeProjectUpload = useCallback(async (existingTarget: SubjectUploadTarget | null) => {
+    const result = await runProjectUpload(existingTarget)
+    if (result.status === 'upload-failed') {
+      setUploadRecovery(result.target)
+      setUploadError(t('errors.createdButUploadFailed'))
+      return
+    }
+
+    setUploadRecovery(null)
+    setUploadError(null)
+    manualUploadRequestIdRef.current = null
+    onSuccess()
+    onClose()
+  }, [onClose, onSuccess, runProjectUpload, t])
+
+  const handleRetryUpload = useCallback(async () => {
+    if (mode !== 'project' || !uploadRecovery) return
+    try {
+      setIsSubmitting(true)
+      await completeProjectUpload(uploadRecovery)
+    } catch (error: unknown) {
+      if (shouldShowError(error)) {
+        alert(getErrorMessage(error, t('errors.uploadFailed')))
+      }
+    } finally {
+      setIsSubmitting(false)
+    }
+  }, [completeProjectUpload, mode, t, uploadRecovery])
 
   const handleCreateWithUpload = useCallback(async () => {
     if (!name.trim() || referenceImagesBase64.length === 0) return
+
+    if (mode === 'project' && uploadRecovery) {
+      await handleRetryUpload()
+      return
+    }
 
     try {
       setIsSubmitting(true)
@@ -321,25 +415,8 @@ export function useCharacterCreationSubmit({
           generateFromReference: true,
         })
       } else {
-        const result = (await createProjectCharacter.mutateAsync({
-          name: name.trim(),
-          description: '',
-          episodeId: episodeId || undefined,
-        })) as {
-          character?: { id?: string; appearances?: Array<{ id?: string }> }
-        }
-        const characterId = result.character?.id
-        const appearanceId = result.character?.appearances?.[0]?.id
-        if (!characterId || !appearanceId) throw new Error(t('errors.createFailed'))
-
-        const imageFile = dataUrlToImageFile(referenceImagesBase64[0], `${name.trim()}-四視圖.png`)
-        await uploadProjectCharacterImage.mutateAsync({
-          file: imageFile,
-          characterId,
-          appearanceId,
-          imageIndex: 0,
-          labelText: name.trim(),
-        })
+        await completeProjectUpload(null)
+        return
       }
 
       onSuccess()
@@ -353,10 +430,10 @@ export function useCharacterCreationSubmit({
     }
   }, [
     createAssetHubCharacter,
-    createProjectCharacter,
+    completeProjectUpload,
     description,
-    episodeId,
     folderId,
+    handleRetryUpload,
     mode,
     name,
     onClose,
@@ -364,16 +441,19 @@ export function useCharacterCreationSubmit({
     referenceImagesBase64,
     t,
     uploadAssetHubTemp,
-    uploadProjectCharacterImage,
+    uploadRecovery,
   ])
 
   return {
     isSubmitting,
     isAiDesigning,
     isExtracting,
+    uploadRecovery,
+    uploadError,
     handleExtractDescription,
     handleCreateWithReference,
     handleCreateWithUpload,
+    handleRetryUpload,
     handleAiDesign,
     handleSubmit,
     handleCreateOnly,

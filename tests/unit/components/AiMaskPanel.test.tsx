@@ -206,4 +206,26 @@ describe('AiMaskPanel', () => {
     fireEvent.click(cancelButton)
     expect(onCancel).toHaveBeenCalledTimes(1)
   })
+
+  it('一般控制介面 -> 主要控制符合 44px 與青色鍵盤焦點契約', () => {
+    render(
+      <AiMaskPanel
+        canAnalyze
+        currentTime={1.25}
+        progress={{ status: 'idle', completed: 0, total: 0, message: '' }}
+        onAnalyzeCurrent={vi.fn()}
+        onAnalyzeClip={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    )
+
+    for (const select of screen.getAllByRole('combobox')) {
+      expect(select).toHaveClass('h-11', 'focus-visible:ring-2', 'focus-visible:ring-cyan-300/70')
+    }
+    for (const button of screen.getAllByRole('button')) {
+      expect(button).toHaveClass('min-h-11', 'focus-visible:ring-2', 'focus-visible:ring-cyan-300/70')
+    }
+    expect(screen.getByLabelText('人物信心門檻')).toHaveClass('min-h-11', 'accent-cyan-300')
+    expect(screen.getByLabelText('深度淨化').parentElement).toHaveClass('min-h-11', 'focus-within:ring-cyan-300/70')
+  })
 })

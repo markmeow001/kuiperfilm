@@ -3,11 +3,14 @@ import { addTaskJob } from './queues'
 import { publishTaskEvent } from './publisher'
 import {
   createTask,
+  assertIdempotentTaskBatchPreflight,
+  failActiveTaskAndRollback,
+  getTaskById,
   markTaskEnqueueFailed,
   markTaskEnqueued,
   markTaskFailed,
   rollbackTaskBillingForTask,
-  updateTaskBillingInfo,
+  tryUpdateActiveTaskBillingInfo,
   updateTaskPayload,
 } from './service'
 import { TASK_EVENT_TYPE, type TaskBillingInfo, type TaskType } from './types'
@@ -25,6 +28,7 @@ import { assertNoEpisodeConflict } from './episode-conflict-guard'
 // (412) on violation so front-end can deep-link to setup.
 import { loadSkillConfigById } from '@/lib/skills/server'
 import { enforceConstraints } from '@/lib/skills/constraints'
+import { assertNoVoiceLineTaskOutputReferences } from '@/lib/media/recursive-write-policy'
 
 export function toObject(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
@@ -91,7 +95,18 @@ export function normalizeTaskPayload(type: TaskType, payload?: Record<string, un
   }
 }
 
+export async function preflightIdempotentTaskBatch(params: {
+  requests: Array<{
+    idempotencyTaskId: string
+    dedupeKey: string
+    payload: Record<string, unknown>
+  }>
+}): Promise<void> {
+  await assertIdempotentTaskBatchPreflight(params.requests)
+}
+
 export async function submitTask(params: {
+  idempotencyTaskId?: string
   userId: string
   locale: Locale
   projectId: string
@@ -178,12 +193,15 @@ export async function submitTask(params: {
       locale: params.locale,
     },
   }
+  await assertNoVoiceLineTaskOutputReferences(normalizedPayload)
+
   const computedBillingInfo = isBillableTaskType(params.type)
     ? buildDefaultTaskBillingInfo(params.type, normalizedPayload)
     : null
   const resolvedBillingInfo = computedBillingInfo || params.billingInfo || null
 
   const { task, deduped } = await createTask({
+    ...(params.idempotencyTaskId ? { idempotencyTaskId: params.idempotencyTaskId } : {}),
     userId: params.userId,
     projectId: params.projectId,
     episodeId: params.episodeId || null,
@@ -240,9 +258,6 @@ export async function submitTask(params: {
         projectId: params.projectId,
         billingInfo: preparedBillingInfo,
       })) as TaskBillingInfo | null
-      if (preparedBillingInfo) {
-        await updateTaskBillingInfo(task.id, preparedBillingInfo)
-      }
     } catch (error) {
       if (error instanceof InsufficientBalanceError) {
         await markTaskFailed(task.id, 'INSUFFICIENT_BALANCE', error.message)
@@ -252,8 +267,54 @@ export async function submitTask(params: {
           available: error.available,
         })
       }
-      await markTaskFailed(task.id, 'INTERNAL_ERROR', error instanceof Error ? error.message : String(error))
+      const message = error instanceof Error ? error.message : String(error)
+      await failActiveTaskAndRollback({
+        taskId: task.id,
+        errorCode: 'INTERNAL_ERROR',
+        errorMessage: message,
+        billingInfo: preparedBillingInfo,
+        clearDedupeKey: true,
+      })
       throw error
+    }
+
+    if (preparedBillingInfo) {
+      let stored: boolean
+      try {
+        stored = await tryUpdateActiveTaskBillingInfo(task.id, preparedBillingInfo)
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        await failActiveTaskAndRollback({
+          taskId: task.id,
+          errorCode: 'INTERNAL_ERROR',
+          errorMessage: message,
+          billingInfo: preparedBillingInfo,
+          clearDedupeKey: true,
+        })
+        throw error
+      }
+
+      if (!stored) {
+        // Cancellation may win while prepareTaskBilling is creating a ledger
+        // freeze. Because the terminal owner cannot see an unstored snapshot,
+        // the submitter that created it must compensate before it exits. The
+        // active-only write above prevents a late freeze from being attached
+        // to a cancelled task, and this branch prevents that task from being
+        // published or enqueued afterwards.
+        const rollback = await rollbackTaskBillingForTask({
+          taskId: task.id,
+          billingInfo: preparedBillingInfo,
+        })
+        const compensationFailed = rollback.attempted && !rollback.rolledBack
+        throw new ApiError(compensationFailed ? 'INTERNAL_ERROR' : 'CONFLICT', {
+          code: 'TASK_TERMINATED_DURING_BILLING',
+          message: compensationFailed
+            ? 'Task terminated while billing reservation rollback failed'
+            : 'Task terminated before billing preparation completed',
+          taskId: task.id,
+          compensationFailed,
+        })
+      }
     }
   }
 
@@ -330,51 +391,34 @@ export async function submitTask(params: {
             ? Math.max(1, Math.floor(task.maxAttempts))
             : 5,
       })
-      await markTaskEnqueued(task.id)
-      logger.info({
-        action: 'task.submit.enqueued',
-        message: 'task enqueued',
-        taskId: task.id,
-      })
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error)
-      await markTaskEnqueueFailed(task.id, message || 'queue.add failed')
-      const rollbackResult = await rollbackTaskBillingForTask({
+      try {
+        await markTaskEnqueueFailed(task.id, message || 'queue.add failed')
+      } catch (markerError) {
+        logger.warn({
+          action: 'task.submit.enqueue_failure_marker_failed',
+          message: 'queue add failed and enqueue error marker could not be persisted',
+          taskId: task.id,
+          retryable: true,
+          details: {
+            markerError: markerError instanceof Error ? markerError.message : String(markerError),
+          },
+        })
+      }
+      // A rejected queue.add acknowledgement is ambiguous: Redis may already
+      // have committed the idempotent job and a worker may be processing it.
+      // Keep the Task active and its reservation intact. The tri-state
+      // watchdog will only fail/refund it after Redis is reachable and the job
+      // is authoritatively absent.
+      logger.warn({
+        action: 'task.submit.enqueue_handoff_unknown',
+        message: 'queue add outcome unknown; task left active for watchdog reconciliation',
         taskId: task.id,
-        billingInfo: preparedBillingInfo,
-      })
-      const compensationFailed = rollbackResult.attempted && !rollbackResult.rolledBack
-      const failedCode = compensationFailed ? 'BILLING_COMPENSATION_FAILED' : 'ENQUEUE_FAILED'
-      const failedMessage = compensationFailed
-        ? `${message || 'queue add failed'}; billing rollback failed`
-        : (message || 'queue add failed')
-      await markTaskFailed(task.id, failedCode, failedMessage)
-      await publishTaskEvent({
-        taskId: task.id,
-        projectId: params.projectId,
-        userId: params.userId,
-        type: TASK_EVENT_TYPE.FAILED,
-        taskType: params.type,
-        targetType: params.targetType,
-        targetId: params.targetId,
-        episodeId: params.episodeId || null,
-        payload: {
-          stage: 'enqueue_failed',
-          stageLabel: 'progress.stage.enqueueFailed',
-          message: failedMessage,
-          compensationFailed,
-          errorCode: failedCode,
-        },
-        persist: false,
-      })
-      logger.error({
-        action: 'task.submit.enqueue_failed',
-        message: failedMessage,
-        taskId: task.id,
-        errorCode: compensationFailed ? 'INTERNAL_ERROR' : 'EXTERNAL_ERROR',
-        retryable: false,
+        errorCode: 'EXTERNAL_ERROR',
+        retryable: true,
         details: {
-          compensationFailed,
+          queueAccepted: 'unknown',
         },
         error:
           error instanceof Error
@@ -387,9 +431,53 @@ export async function submitTask(params: {
                 message: String(error),
               },
       })
-      throw new ApiError(compensationFailed ? 'INTERNAL_ERROR' : 'EXTERNAL_ERROR', {
-        message: failedMessage,
+      // Report the durable Task as accepted. Returning a transport error here
+      // would encourage callers without an idempotency key to create a second
+      // Task even though the first BullMQ job may already exist.
+      return {
+        success: true,
+        async: true,
         taskId: task.id,
+        runId,
+        status: task.status,
+        deduped,
+      }
+    }
+
+    // BullMQ already accepted the durable job. A transient DB failure while
+    // recording enqueuedAt must never fail/refund a job that a fast worker may
+    // already be processing or may even have completed.
+    try {
+      await markTaskEnqueued(task.id)
+      logger.info({
+        action: 'task.submit.enqueued',
+        message: 'task enqueued',
+        taskId: task.id,
+      })
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error)
+      let currentStatus = 'unknown'
+      try {
+        currentStatus = (await getTaskById(task.id))?.status || 'unknown'
+      } catch {
+        // Best-effort diagnostic only. Queue acceptance is authoritative here.
+      }
+      try {
+        await markTaskEnqueueFailed(task.id, message || 'enqueued marker update failed')
+      } catch {
+        // Best-effort diagnostic only; the canonical watchdog can reconcile
+        // the idempotent BullMQ job using taskId as jobId.
+      }
+      logger.warn({
+        action: 'task.submit.enqueue_marker_failed',
+        message: 'queue accepted task but enqueuedAt marker could not be persisted',
+        taskId: task.id,
+        retryable: true,
+        details: {
+          queueAccepted: true,
+          status: currentStatus,
+          markerError: message,
+        },
       })
     }
   }

@@ -1,0 +1,98 @@
+{
+  "header": {
+    "eyebrow": "OPERATIONS",
+    "title": "Generation jobs",
+    "description": "Monitor real job status, models, cost, and refunds. Failed jobs are never resubmitted automatically.",
+    "topbar": "Generation jobs",
+    "tagline": "TASKS · COST · STATUS"
+  },
+  "scope": {
+    "label": "Job scope",
+    "personal": "All my jobs",
+    "personalHelp": "Only jobs submitted by you are shown.",
+    "projectHelp": "Jobs submitted by every collaborator in this project are shown.",
+    "loading": "Loading projects…",
+    "loadError": "The project list failed to load. You can still review all of your jobs."
+  },
+  "filters": {
+    "label": "Filter jobs",
+    "all": "All",
+    "active": "Active",
+    "completed": "Completed",
+    "failed": "Failed",
+    "cancelled": "Cancelled",
+    "type": "Job type",
+    "allTypes": "All types",
+    "episode": "Episode",
+    "allEpisodes": "All episodes",
+    "clear": "Clear filters",
+    "loadedCount": "{count} loaded"
+  },
+  "states": {
+    "loadingTitle": "Loading generation jobs",
+    "loadingDescription": "Jobs are read only at this point. No generation is created and no cost is incurred.",
+    "errorTitle": "Could not load jobs",
+    "errorDescription": "Existing jobs were not modified. Reload the list before continuing.",
+    "retry": "Reload",
+    "emptyTitle": "No generation jobs yet",
+    "emptyDescription": "Real status will appear here after your first image, video, or voice job is submitted.",
+    "filteredEmptyTitle": "No jobs match these filters",
+    "filteredEmptyDescription": "Clear one or more filters to review other jobs.",
+    "permissionTitle": "This project's jobs are unavailable",
+    "permissionDescription": "You do not have permission to view this project. No job data was modified."
+  },
+  "card": {
+    "status": {
+      "estimated": "Estimated",
+      "queued": "Queued",
+      "running": "Running",
+      "succeeded": "Completed",
+      "failed": "Failed",
+      "cancelled": "Cancelled",
+      "refunded": "Refunded"
+    },
+    "category": {
+      "image": "Image generation",
+      "video": "Video generation",
+      "voice": "Voice generation",
+      "analysis": "AI analysis",
+      "text": "Content processing",
+      "other": "System job"
+    },
+    "model": "Model",
+    "notRecorded": "Not recorded",
+    "progress": "Job progress",
+    "waitingProgress": "Waiting for worker update",
+    "cost": "Cost",
+    "estimatedCost": "Est. {amount}",
+    "actualCost": "Charged {amount}",
+    "free": "Free",
+    "errorPrefix": "Error: ",
+    "defaultError": "The job failed without a detailed reason.",
+    "refundPrefix": "Refund: ",
+    "refundComplete": "Reserved cost was rolled back",
+  "refundAmount": "Reserved cost {amount} was rolled back",
+  "refundFailed": "The job stopped, but the reserved-cost rollback failed. Ask an administrator to review billing.",
+    "createdAt": "Created",
+    "startedAt": "Started",
+    "finishedAt": "Finished",
+    "duration": "Duration",
+    "attempt": "Attempts",
+    "stage": "Current stage",
+    "target": "Source {type} · {id}",
+    "technicalDetails": "Technical details",
+    "taskId": "Task ID",
+    "taskType": "Task code",
+    "episodeId": "Episode ID",
+    "cancel": "Cancel job",
+    "confirmCancel": "Confirm cancel",
+    "keepRunning": "Keep running",
+    "cancelling": "Cancelling…",
+    "cancelError": "Cancellation failed. The job state may have changed; reload the list."
+  },
+  "pagination": {
+    "loadMore": "Load older jobs",
+    "loading": "Loading…",
+    "end": "All jobs are shown"
+  }
+}

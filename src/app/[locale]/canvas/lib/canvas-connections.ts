@@ -37,7 +37,7 @@ export function canConnectCanvasNodes(source: CanvasNodeType, target: CanvasNode
 export function canvasConnectionHint(source: CanvasNodeType, target: CanvasNodeType): string {
   return canConnectCanvasNodes(source, target)
     ? ''
-    : `「${NODE_META[source].label}」的输出不能被「${NODE_META[target].label}」节点使用`
+    : `「${NODE_META[source].label}」的輸出不能被「${NODE_META[target].label}」節點使用`
 }
 
 function portTypeForSource(source: CanvasNodeType): CanvasPortType | null {
@@ -70,7 +70,7 @@ export function inferCanvasEdgeData(
   }
   const portType = portTypeForSource(source)
   if (!portType) {
-    return { portType: 'frame-image', invalid: true, invalidReason: '导演台没有普通连线输出，请使用发送镜头或导出预演' }
+    return { portType: 'frame-image', invalid: true, invalidReason: '導演台沒有普通連線輸出，請使用傳送鏡頭或匯出預演' }
   }
   if (target === 'video' && options.targetMode === 'firstlast' && (source === 'image' || source === 'video')) {
     const order = options.frameIndex ?? 0

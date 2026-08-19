@@ -158,7 +158,7 @@ export function deserializeCanvas(raw: unknown): {
         sourceHandle: e.sourceHandle ?? CANVAS_SOURCE_HANDLE,
         targetHandle: e.targetHandle ?? CANVAS_TARGET_HANDLE,
         data,
-        ...(data.invalid ? { style: { stroke: '#D85C5C', strokeDasharray: '5 4' }, label: '无效连线' } : {}),
+        ...(data.invalid ? { style: { stroke: '#D85C5C', strokeDasharray: '5 4' }, label: '無效連線' } : {}),
       }
     })
 

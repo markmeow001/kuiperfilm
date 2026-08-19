@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireUserAuth, isErrorResponse } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
+import { assertNoVoiceLineTaskOutputReferences } from '@/lib/media/recursive-write-policy'
+import { assertMediaObjectIdsDoNotReferenceVoiceLineTaskOutputs } from '@/lib/media/write-policy'
+import {
+  resolveCharacterVoiceWrite,
+  VoiceSourceWritePolicyError,
+} from '@/lib/voice/character-voice-write-policy'
 
 interface ImportCharacterBody {
   globalCharacterId?: unknown
@@ -58,8 +64,24 @@ export const POST = apiHandler(async (
   if (!globalCharacter) throw new ApiError('NOT_FOUND')
   if (globalCharacter.userId !== session.user.id) throw new ApiError('FORBIDDEN')
 
+  let voiceClear
+  try {
+    const decision = resolveCharacterVoiceWrite(globalCharacter)
+    if (decision.kind !== 'clear') throw new VoiceSourceWritePolicyError()
+    voiceClear = decision.data
+  } catch (error) {
+    if (error instanceof VoiceSourceWritePolicyError) {
+      throw new ApiError('INVALID_PARAMS', { reason: error.code })
+    }
+    throw error
+  }
+
   type GAppearance = (typeof globalCharacter.appearances)[number]
   const appearancesToClone: GAppearance[] = includeAppearances ? globalCharacter.appearances : []
+  await assertNoVoiceLineTaskOutputReferences(appearancesToClone)
+  await assertMediaObjectIdsDoNotReferenceVoiceLineTaskOutputs(
+    appearancesToClone.flatMap((appearance) => [appearance.imageMediaId]),
+  )
 
   const created = await prisma.$transaction(async (tx) => {
     const character = await tx.novelPromotionCharacter.create({
@@ -67,10 +89,7 @@ export const POST = apiHandler(async (
         novelPromotionProjectId: novelProject.id,
         name: globalCharacter.name,
         aliases: globalCharacter.aliases,
-        voiceId: globalCharacter.voiceId,
-        voiceType: globalCharacter.voiceType,
-        customVoiceUrl: globalCharacter.customVoiceUrl,
-        customVoiceMediaId: globalCharacter.customVoiceMediaId,
+        ...voiceClear,
         profileData: globalCharacter.profileData,
         profileConfirmed: globalCharacter.profileConfirmed,
         sourceGlobalCharacterId: globalCharacter.id,

@@ -47,6 +47,7 @@ import {
 } from '@/lib/live-composite/depth-rebuild-server-contract'
 import type { Locale } from '@/i18n/routing'
 import { logInfo as _ulogInfo, logError as _ulogError } from '@/lib/logging/core'
+import { sanitizeImageInputsForTaskPayload } from '@/lib/media/outbound-image'
 
 const PLAYGROUND_PROJECT_ID = 'playground'
 const MAX_REFERENCE_IMAGES = 9
@@ -396,13 +397,24 @@ export const POST = apiHandler(async (request: NextRequest) => {
     }
   }
 
-  const rawRefImages = parseStringArray(rawImages, 'referenceImages', MAX_REFERENCE_IMAGES)
-  const rawRefVideos = parseStringArray(rawVideos, 'referenceVideos', MAX_REFERENCE_VIDEOS)
+  const parsedRefImages = parseStringArray(rawImages, 'referenceImages', MAX_REFERENCE_IMAGES)
+  const parsedRefVideos = parseStringArray(rawVideos, 'referenceVideos', MAX_REFERENCE_VIDEOS)
   // Optional last-frame image (首尾帧 / first-last-frame video). Single ref,
   // guarded with the same safety filter as the others.
-  const rawLastFrameArr = typeof rawLastFrame === 'string' && rawLastFrame.trim()
+  const parsedLastFrame = typeof rawLastFrame === 'string' && rawLastFrame.trim()
     ? [rawLastFrame.trim()]
     : []
+  const [imageInputAudit, videoInputAudit, lastFrameInputAudit] = await Promise.all([
+    sanitizeImageInputsForTaskPayload(parsedRefImages),
+    sanitizeImageInputsForTaskPayload(parsedRefVideos),
+    sanitizeImageInputsForTaskPayload(parsedLastFrame),
+  ])
+  const rawRefImages = imageInputAudit.normalized
+  const rawRefVideos = videoInputAudit.normalized
+  const rawLastFrameArr = lastFrameInputAudit.normalized
+  if (depthRebuildGuideContract) {
+    await sanitizeImageInputsForTaskPayload([depthRebuildGuideContract.sourceVideoKey])
+  }
   // Reject foreign COS keys (cross-user read) + internal/non-https URLs (SSRF).
   // Fail explicitly rather than silently drop (CLAUDE.md §3 不静默吞错).
   const [imgGuard, vidGuard, lastFrameGuard] = await Promise.all([
@@ -642,7 +654,8 @@ export const POST = apiHandler(async (request: NextRequest) => {
         details: { modelKey: trimmedModelKey },
       })
     }
-    const maskGuard = await filterAuthorizedReferences([rawMaskImage.trim()], userId)
+    const maskInputAudit = await sanitizeImageInputsForTaskPayload([rawMaskImage.trim()])
+    const maskGuard = await filterAuthorizedReferences(maskInputAudit.normalized, userId)
     if (maskGuard.rejected.length > 0 || maskGuard.safe.length === 0) {
       _ulogError(
         `[playground.run] rejected unsafe mask image userId=${userId} rejected=${JSON.stringify(maskGuard.rejected)}`,
@@ -697,7 +710,8 @@ export const POST = apiHandler(async (request: NextRequest) => {
           message: `主体「${name}」需要 1-${KLING_ELEMENT_IMAGES_MAX} 张参考图`,
         })
       }
-      const elGuard = await filterAuthorizedReferences(imageKeys, userId)
+      const elementImageInputAudit = await sanitizeImageInputsForTaskPayload(imageKeys)
+      const elGuard = await filterAuthorizedReferences(elementImageInputAudit.normalized, userId)
       if (elGuard.rejected.length > 0) {
         _ulogError(
           `[playground.run] rejected unsafe element refs userId=${userId} element=${name} rejected=${JSON.stringify(elGuard.rejected)}`,

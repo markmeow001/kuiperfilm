@@ -1,5 +1,5 @@
 import { decodeImageUrlsFromDb } from '@/lib/contracts/image-urls-contract'
-import { resolveMediaRef, resolveMediaRefFromLegacyValue } from './service'
+import { resolveMediaRef, resolveMediaRefFromLegacyValue, resolveVoiceLineMediaRef } from './service'
 import type { MediaRef } from './types'
 
 function parseStringArray(value: unknown): string[] {
@@ -239,7 +239,7 @@ async function attachMediaFieldsToShot<T extends Record<string, unknown>>(shot: 
 }
 
 async function attachMediaFieldsToVoiceLine<T extends Record<string, unknown>>(line: T) {
-  const audioMedia = await resolveMediaRef(line.audioMediaId, line.audioUrl)
+  const audioMedia = await resolveVoiceLineMediaRef(line.audioMediaId, line.audioUrl)
   return {
     ...line,
     media: audioMedia,

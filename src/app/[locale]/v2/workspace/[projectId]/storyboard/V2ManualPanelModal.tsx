@@ -14,11 +14,10 @@
  *   2. Picks characters (toggleable chips) + scene (single-select chip)
  *   3. Writes natural-language prompt (例:medium shot. 張騫在廣場中央停步...)
  *   4. Picks duration (5 / 10 / 15s)
- *   5. Click 建立並生圖
- *      → ensure current episode has a storyboard group (auto-create if not)
- *      → POST /api/.../panel with description + characters JSON + location
- *      → trigger image generation on the new panel
- *      → close modal
+ *   5. Click 建立分鏡
+ *      → atomically create one storyboard group + the real panel draft
+ *      → never trigger image generation or any other AI task
+ *      → parent closes the modal only after the server confirms success
  *
  * Out of scope for Phase 1 (deferred to Phase 2):
  *   - 自定义参考图 upload
@@ -27,8 +26,10 @@
  *   - Edit existing manual panel (use the existing per-card edit UI)
  */
 
-import { useEffect, useMemo, useState } from 'react'
+import { useId, useMemo, useState } from 'react'
+import { useTranslations } from 'next-intl'
 import { AppIcon } from '@/components/ui/icons'
+import { Modal } from '@/components/v2/Modal'
 
 interface CharacterOption {
   id: string
@@ -47,24 +48,29 @@ export interface ManualPanelDraft {
   durationSeconds: number
 }
 
-interface V2ManualPanelModalProps {
+export interface V2ManualPanelModalProps {
   characters: CharacterOption[]
   locations: LocationOption[]
-  /** Called when user clicks 建立。Modal stays open while parent does
-   *  the create+gen work; parent calls onClose when done. */
+  /** Called when user clicks 建立。Modal stays open while the parent stores
+   *  the draft; no generation is started by this callback. */
   onSubmit: (draft: ManualPanelDraft) => Promise<void>
   onClose: () => void
   isSubmitting?: boolean
   /** Optional warning to show at top (e.g. "本集還沒有分鏡組,將自動建立") */
   contextHint?: string
+  /** Parent-owned failure state. Keeping it outside the modal lets a failed
+   *  request re-render without discarding the user's local draft. */
+  submitError?: string | null
+  /** Parent-owned recovery snapshot used when the modal is closed and opened
+   *  again after an outcome-unknown request. */
+  initialDraft?: ManualPanelDraft
+  onDraftChange?: (draft: ManualPanelDraft) => void
+  /** Outcome-unknown requests must replay the exact same body with the same
+   *  idempotency key, so editing is locked until reconciliation succeeds. */
+  draftLocked?: boolean
 }
 
 const DURATION_OPTIONS = [5, 10, 15]
-
-const PROMPT_PLACEHOLDER =
-  '[角色] + [場景] + [關鍵動作] + [鏡頭關係] + [氛圍]\n\n' +
-  '例:medium shot. 張騫在廣場中央停步,抬頭看向城門。風吹動衣襬。' +
-  'camera slowly pushes in as he 再次邁步。'
 
 export function V2ManualPanelModal({
   characters,
@@ -73,32 +79,76 @@ export function V2ManualPanelModal({
   onClose,
   isSubmitting = false,
   contextHint,
+  submitError,
+  initialDraft,
+  onDraftChange,
+  draftLocked = false,
 }: V2ManualPanelModalProps) {
-  const [selectedCharacterIds, setSelectedCharacterIds] = useState<Set<string>>(new Set())
-  const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null)
-  const [description, setDescription] = useState('')
-  const [duration, setDuration] = useState<number>(5)
-
-  // Lock body scroll while modal is open. Restore on unmount.
-  useEffect(() => {
-    const original = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => {
-      document.body.style.overflow = original
-    }
-  }, [])
+  const t = useTranslations('v2Storyboard.manualPanel')
+  const promptId = useId()
+  const [selectedCharacterIds, setSelectedCharacterIds] = useState<Set<string>>(
+    () => new Set(
+      characters
+        .filter((character) => initialDraft?.characterNames.includes(character.name))
+        .map((character) => character.id),
+    ),
+  )
+  const [selectedLocationId, setSelectedLocationId] = useState<string | null>(
+    () => locations.find((location) => location.name === initialDraft?.locationName)?.id ?? null,
+  )
+  const [description, setDescription] = useState(initialDraft?.description ?? '')
+  const [duration, setDuration] = useState<number>(initialDraft?.durationSeconds ?? 5)
 
   function toggleCharacter(id: string) {
-    setSelectedCharacterIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
+    const next = new Set(selectedCharacterIds)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    setSelectedCharacterIds(next)
+    onDraftChange?.({
+      description,
+      characterNames: characters
+        .filter((character) => next.has(character.id))
+        .map((character) => character.name),
+      locationName: selectedLocationId
+        ? locations.find((location) => location.id === selectedLocationId)?.name ?? null
+        : null,
+      durationSeconds: duration,
     })
   }
 
   function pickLocation(id: string) {
-    setSelectedLocationId((prev) => (prev === id ? null : id))
+    const next = selectedLocationId === id ? null : id
+    setSelectedLocationId(next)
+    onDraftChange?.({
+      description,
+      characterNames: characters
+        .filter((character) => selectedCharacterIds.has(character.id))
+        .map((character) => character.name),
+      locationName: next
+        ? locations.find((location) => location.id === next)?.name ?? null
+        : null,
+      durationSeconds: duration,
+    })
+  }
+
+  function updateDescription(nextDescription: string) {
+    setDescription(nextDescription)
+    onDraftChange?.({
+      description: nextDescription,
+      characterNames: selectedCharacterNames,
+      locationName: selectedLocationName,
+      durationSeconds: duration,
+    })
+  }
+
+  function updateDuration(nextDuration: number) {
+    setDuration(nextDuration)
+    onDraftChange?.({
+      description,
+      characterNames: selectedCharacterNames,
+      locationName: selectedLocationName,
+      durationSeconds: nextDuration,
+    })
   }
 
   const selectedCharacterNames = useMemo(() => {
@@ -123,25 +173,37 @@ export function V2ManualPanelModal({
   }
 
   return (
-    <div className="kuiper-modal-backdrop fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="kuiper-modal-surface relative max-h-[92vh] w-full max-w-xl overflow-y-auto p-6">
+    <Modal
+      open
+      onClose={onClose}
+      size="lg"
+      ariaLabel={t('title')}
+      dismissOnBackdrop={!isSubmitting}
+      dismissOnEscape={!isSubmitting}
+      className="kuiper-modal-surface max-h-[calc(100dvh-2rem)] overflow-y-auto"
+    >
+      <div className="p-4 sm:p-6">
         <button
           type="button"
           onClick={onClose}
           disabled={isSubmitting}
-          className="absolute right-4 top-4 text-text-tertiary transition-colors hover:text-primary-400 disabled:opacity-40"
-          aria-label="關閉"
+          data-initial-focus
+          className="absolute right-3 top-3 inline-flex min-h-11 min-w-11 items-center justify-center text-text-tertiary transition-colors hover:text-primary-400 disabled:opacity-40 sm:right-4 sm:top-4"
+          aria-label={t('close')}
         >
           <AppIcon name="close" className="h-5 w-5" />
         </button>
 
         <header className="mb-5">
           <div className="font-mono text-[10px] tracking-[0.3em] text-primary-600/80">
-            MANUAL · STORYBOARD
+            {t('eyebrow')}
           </div>
           <h2 className="mt-1 font-serif-cn text-xl font-medium text-text-primary">
-            手動新增分鏡
+            {t('title')}
           </h2>
+          <p className="mt-2 border-l-2 border-primary-500/50 pl-3 text-sm leading-relaxed text-text-secondary">
+            {t('nonAiNotice')}
+          </p>
           {contextHint ? (
             <div className="mt-2 rounded-sm border border-primary-500/20 bg-primary-500/5 px-2.5 py-1.5 font-mono text-[11px] tracking-wider text-primary-400/80">
               {contextHint}
@@ -152,16 +214,19 @@ export function V2ManualPanelModal({
         {/* Characters */}
         <section className="mb-5">
           <div className="mb-2 flex items-baseline gap-2">
-            <label className="font-mono text-[11px] uppercase tracking-wider text-text-secondary">
-              出場角色
-            </label>
+            <div className="font-mono text-[11px] uppercase tracking-wider text-text-secondary">
+              {t('characters')}
+            </div>
             <span className="font-mono text-[10px] text-text-tertiary">
-              {selectedCharacterNames.length}/{characters.length} 已選
+              {t('selectedCharacters', {
+                selected: selectedCharacterNames.length,
+                total: characters.length,
+              })}
             </span>
           </div>
           {characters.length === 0 ? (
             <div className="rounded-sm border border-border-soft/60 bg-canvas/40 px-3 py-2 font-fraunces text-xs italic text-text-tertiary">
-              本專案還沒有角色,先到劇本拆解 tab 建幾個。
+              {t('noCharacters')}
             </div>
           ) : (
             <div className="flex flex-wrap gap-2">
@@ -172,8 +237,9 @@ export function V2ManualPanelModal({
                     key={c.id}
                     type="button"
                     onClick={() => toggleCharacter(c.id)}
-                    disabled={isSubmitting}
-                    className={`rounded-sm border px-3 py-1.5 font-serif-cn text-sm transition-all ${
+                    disabled={isSubmitting || draftLocked}
+                    aria-pressed={active}
+                    className={`min-h-11 rounded-sm border px-3 py-1.5 font-serif-cn text-sm transition-all ${
                       active
                         ? 'border-primary-500 bg-primary-500/15 text-primary-200'
                         : 'border-border-soft bg-raised/60 text-text-secondary hover:border-primary-500/40 hover:text-primary-300'
@@ -190,16 +256,16 @@ export function V2ManualPanelModal({
         {/* Scene */}
         <section className="mb-5">
           <div className="mb-2 flex items-baseline gap-2">
-            <label className="font-mono text-[11px] uppercase tracking-wider text-text-secondary">
-              場景
-            </label>
+            <div className="font-mono text-[11px] uppercase tracking-wider text-text-secondary">
+              {t('location')}
+            </div>
             <span className="font-mono text-[10px] text-text-tertiary">
-              {selectedLocationName ? '已選' : '可選'} · 單選
+              {t(selectedLocationName ? 'locationSelected' : 'locationOptional')}
             </span>
           </div>
           {locations.length === 0 ? (
             <div className="rounded-sm border border-border-soft/60 bg-canvas/40 px-3 py-2 font-fraunces text-xs italic text-text-tertiary">
-              本專案還沒有場景,先到劇本拆解 tab 建一個或打 prompt 直接寫。
+              {t('noLocations')}
             </div>
           ) : (
             <div className="flex flex-wrap gap-2">
@@ -210,8 +276,9 @@ export function V2ManualPanelModal({
                     key={l.id}
                     type="button"
                     onClick={() => pickLocation(l.id)}
-                    disabled={isSubmitting}
-                    className={`rounded-sm border px-3 py-1.5 font-serif-cn text-sm transition-all ${
+                    disabled={isSubmitting || draftLocked}
+                    aria-pressed={active}
+                    className={`min-h-11 rounded-sm border px-3 py-1.5 font-serif-cn text-sm transition-all ${
                       active
                         ? 'border-primary-500 bg-primary-500/15 text-primary-200'
                         : 'border-border-soft bg-raised/60 text-text-secondary hover:border-primary-500/40 hover:text-primary-300'
@@ -228,38 +295,41 @@ export function V2ManualPanelModal({
         {/* Prompt */}
         <section className="mb-5">
           <div className="mb-2 flex items-baseline justify-between">
-            <label className="font-mono text-[11px] uppercase tracking-wider text-text-secondary">
-              敘事提示詞
+            <label htmlFor={promptId} className="font-mono text-[11px] uppercase tracking-wider text-text-secondary">
+              {t('prompt')}
             </label>
             <span className="font-mono text-[10px] text-text-tertiary">
-              {description.length} 字
+              {t('characterCount', { count: description.length })}
             </span>
           </div>
           <textarea
+            id={promptId}
             value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            disabled={isSubmitting}
+            onChange={(event) => updateDescription(event.target.value)}
+            disabled={isSubmitting || draftLocked}
+            aria-readonly={draftLocked}
             rows={7}
-            placeholder={PROMPT_PLACEHOLDER}
+            placeholder={t('promptPlaceholder')}
             className="w-full resize-none rounded-sm border border-border-soft bg-canvas px-3 py-2 font-serif-cn text-sm text-text-primary placeholder:text-text-tertiary focus:border-primary-500/60 focus:outline-none disabled:opacity-50"
           />
         </section>
 
         {/* Duration */}
         <section className="mb-6">
-          <label className="mb-2 block font-mono text-[11px] uppercase tracking-wider text-text-secondary">
-            時長 (秒)
-          </label>
-          <div className="flex gap-2">
+          <div className="mb-2 font-mono text-[11px] uppercase tracking-wider text-text-secondary">
+            {t('duration')}
+          </div>
+          <div className="flex flex-wrap gap-2">
             {DURATION_OPTIONS.map((d) => {
               const active = duration === d
               return (
                 <button
                   key={d}
                   type="button"
-                  onClick={() => setDuration(d)}
-                  disabled={isSubmitting}
-                  className={`min-w-[64px] rounded-sm border px-3 py-1.5 font-mono text-sm tracking-wider transition-all ${
+                  onClick={() => updateDuration(d)}
+                  disabled={isSubmitting || draftLocked}
+                  aria-pressed={active}
+                  className={`min-h-11 min-w-[64px] rounded-sm border px-3 py-1.5 font-mono text-sm tracking-wider transition-all ${
                     active
                       ? 'border-primary-500 bg-primary-500/15 text-primary-200'
                       : 'border-border-soft bg-raised/60 text-text-secondary hover:border-primary-500/40 hover:text-primary-300'
@@ -272,26 +342,45 @@ export function V2ManualPanelModal({
           </div>
         </section>
 
+        {submitError ? (
+          <div
+            role="alert"
+            className="mb-4 rounded-sm border border-rose-500/35 bg-rose-500/10 px-3 py-2 text-sm text-rose-200"
+          >
+            {submitError}
+          </div>
+        ) : null}
+
+        {draftLocked ? (
+          <p className="mb-4 text-xs leading-relaxed text-text-tertiary">
+            {t('recoveryLocked')}
+          </p>
+        ) : null}
+
         {/* Actions */}
-        <footer className="flex justify-end gap-2 border-t border-border-soft/60 pt-4">
+        <footer className="flex flex-col-reverse justify-end gap-2 border-t border-border-soft/60 pt-4 sm:flex-row">
           <button
             type="button"
             onClick={onClose}
             disabled={isSubmitting}
-            className="rounded-sm border border-border-soft bg-raised/40 px-4 py-2 font-serif-cn text-sm text-text-secondary transition-all hover:border-border-strong hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-50"
+            className="min-h-11 rounded-sm border border-border-soft bg-raised/40 px-4 py-2 font-serif-cn text-sm text-text-secondary transition-all hover:border-border-strong hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-50"
           >
-            取消
+            {t('cancel')}
           </button>
           <button
             type="button"
             onClick={handleSubmit}
             disabled={!canSubmit}
-            className="rounded-sm bg-primary-500 px-5 py-2 font-serif-cn text-sm font-medium text-canvas transition-all hover:bg-primary-400 disabled:cursor-not-allowed disabled:opacity-50"
+            className="min-h-11 rounded-sm bg-primary-500 px-5 py-2 font-serif-cn text-sm font-medium text-canvas transition-all hover:bg-primary-400 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {isSubmitting ? '建立中…' : '建立並生圖'}
+            {isSubmitting
+              ? t('creating')
+              : draftLocked
+                ? t('retryCreate')
+                : t('create')}
           </button>
         </footer>
       </div>
-    </div>
+    </Modal>
   )
 }

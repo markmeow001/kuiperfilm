@@ -23,12 +23,15 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useParams } from 'next/navigation'
 import { useSession } from 'next-auth/react'
+import { useTranslations } from 'next-intl'
 import {
   useRegenerateProjectPanelImage,
   useUpdateProjectPanel,
 } from '@/lib/query/mutations/storyboard-panel-mutations'
 import { useGenerateVideo } from '@/lib/query/hooks/useStoryboards'
 import { useProjectData } from '@/lib/query/hooks/useProjectData'
+import { useProjectAccess } from '@/lib/query/hooks/useProjectAccess'
+import { MobileVoiceDialogueEditor } from './MobileVoiceDialogueEditor'
 
 interface PanelDetail {
   id: string
@@ -68,8 +71,11 @@ export default function MobilePanelDetailPage() {
   const projectId = params?.projectId ?? ''
   const episodeId = params?.episodeId ?? ''
   const panelId = params?.panelId ?? ''
+  const tMobileDialogue = useTranslations('v2Voice.mobileDialogue')
 
   const projectQuery = useProjectData(projectId)
+  const projectAccess = useProjectAccess(projectId)
+  const canEdit = projectAccess.canEdit
   const project = projectQuery.data as { videoModel?: string | null } | undefined
   const projectVideoModel = project?.videoModel ?? null
 
@@ -141,6 +147,7 @@ export default function MobilePanelDetailPage() {
   }
 
   async function handleSaveDescription() {
+    if (!canEdit) return
     if (!panel || !descDirty) return
     try {
       await updatePanel.mutateAsync({
@@ -156,6 +163,7 @@ export default function MobilePanelDetailPage() {
   }
 
   async function handleRegenImage() {
+    if (!canEdit) return
     if (!panel) return
     const isFirstGen = !panel.imageUrl
     try {
@@ -167,6 +175,7 @@ export default function MobilePanelDetailPage() {
   }
 
   async function handleGenVideo() {
+    if (!canEdit) return
     if (!panel) return
     if (!projectVideoModel) {
       setError('專案沒設定 videoModel，請到 desktop /v2 設定')
@@ -186,11 +195,12 @@ export default function MobilePanelDetailPage() {
   }
 
   async function handleSaveDialogue(line: VoiceLine, content: string) {
+    if (!canEdit) return
     try {
       const res = await fetch(`/api/novel-promotion/${projectId}/voice-lines`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ lineId: line.id, content }),
+        body: JSON.stringify({ episodeId, lineId: line.id, content }),
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       setDialogues((prev) =>
@@ -278,7 +288,7 @@ export default function MobilePanelDetailPage() {
       </div>
 
       {/* regen actions */}
-      <div className="mb-6 grid grid-cols-2 gap-2">
+      {canEdit ? <div className="mb-6 grid grid-cols-2 gap-2">
         <button
           type="button"
           onClick={handleRegenImage}
@@ -304,7 +314,7 @@ export default function MobilePanelDetailPage() {
               ? '↻ 重新生成影片'
               : '▶ 生成影片'}
         </button>
-      </div>
+      </div> : null}
 
       {/* shot meta (read-only on mobile) */}
       {(panel.shotType || panel.cameraMove) ? (
@@ -327,7 +337,7 @@ export default function MobilePanelDetailPage() {
           >
             描述
           </label>
-          {descDirty ? (
+          {canEdit && descDirty ? (
             <button
               type="button"
               onClick={() => {
@@ -343,7 +353,9 @@ export default function MobilePanelDetailPage() {
         <textarea
           id="desc"
           value={descDraft}
+          readOnly={!canEdit}
           onChange={(e) => {
+            if (!canEdit) return
             setDescDraft(e.target.value)
             setDescDirty(e.target.value !== (panel.description ?? ''))
           }}
@@ -351,20 +363,21 @@ export default function MobilePanelDetailPage() {
           className="w-full rounded-sm border border-stone-800 bg-stone-950 px-3 py-3 font-serif-cn text-base text-stone-100 placeholder:text-stone-600 focus:border-amber-500/60 focus:outline-none"
           placeholder="這個鏡頭發生什麼…"
         />
-        <button
+        {canEdit ? <button
           type="button"
           onClick={handleSaveDescription}
           disabled={!descDirty || updatePanel.isPending}
           className="mt-3 h-11 w-full rounded-sm bg-amber-500 font-serif-cn text-base font-medium text-stone-950 active:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {updatePanel.isPending ? '儲存中…' : descDirty ? '儲存描述' : '已儲存'}
-        </button>
+        </button> : null}
       </section>
 
       {/* dialogue editor */}
       <section className="mb-6">
-        <div className="mb-2 font-mono text-[10px] uppercase tracking-wider text-stone-500">
-          對白
+        <div className="mb-2 flex items-center justify-between font-mono text-[10px] uppercase tracking-wider text-stone-500">
+          <span>{tMobileDialogue('title')}</span>
+          {!canEdit ? <span>{tMobileDialogue('readOnly')}</span> : null}
         </div>
         {dialogues.length === 0 ? (
           <div className="rounded-sm border border-stone-800/60 bg-stone-950/40 px-3 py-3 font-fraunces text-xs italic text-stone-500">
@@ -373,9 +386,16 @@ export default function MobilePanelDetailPage() {
         ) : (
           <ul className="space-y-3">
             {dialogues.map((line) => (
-              <DialogueEditor
+              <MobileVoiceDialogueEditor
                 key={line.id}
                 line={line}
+                canEdit={canEdit}
+                labels={{
+                  contentLabel: tMobileDialogue('contentLabel', { speaker: line.speaker }),
+                  cancel: tMobileDialogue('cancel'),
+                  save: tMobileDialogue('save'),
+                  saving: tMobileDialogue('saving'),
+                }}
                 onSave={(content) => handleSaveDialogue(line, content)}
               />
             ))}
@@ -402,63 +422,5 @@ export default function MobilePanelDetailPage() {
         </div>
       ) : null}
     </main>
-  )
-}
-
-function DialogueEditor({
-  line,
-  onSave,
-}: {
-  line: VoiceLine
-  onSave: (content: string) => Promise<void>
-}) {
-  const [draft, setDraft] = useState(line.content)
-  const [saving, setSaving] = useState(false)
-  const dirty = draft !== line.content
-
-  // sync external updates (after PATCH success the parent rewrites
-  // the line; pick that up so this editor reflects the saved state)
-  useEffect(() => {
-    setDraft(line.content)
-  }, [line.content])
-
-  return (
-    <li className="rounded-sm border border-stone-800 bg-stone-950/40 px-3 py-3">
-      <div className="mb-2 font-mono text-[10px] tracking-wider text-amber-400">
-        {line.speaker}
-      </div>
-      <textarea
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        rows={2}
-        className="w-full rounded-sm border border-stone-800 bg-stone-900 px-3 py-2 font-serif-cn text-sm text-stone-100 focus:border-amber-500/60 focus:outline-none"
-      />
-      {dirty ? (
-        <div className="mt-2 grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={() => setDraft(line.content)}
-            className="h-9 rounded-sm border border-stone-800 font-mono text-[10px] tracking-wider text-stone-400 active:text-stone-200"
-          >
-            取消
-          </button>
-          <button
-            type="button"
-            onClick={async () => {
-              setSaving(true)
-              try {
-                await onSave(draft)
-              } finally {
-                setSaving(false)
-              }
-            }}
-            disabled={saving}
-            className="h-9 rounded-sm bg-amber-500 font-mono text-[10px] tracking-wider text-stone-950 active:bg-amber-400 disabled:opacity-50"
-          >
-            {saving ? '儲存中…' : '儲存'}
-          </button>
-        </div>
-      ) : null}
-    </li>
   )
 }

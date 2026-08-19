@@ -5,21 +5,25 @@
  * clicked (Image studio). Right rail models the Higgsfield detail layout:
  *   header (identity + close)
  *   → scrollable body: PROMPT (+copy, expand/collapse) + collapsible DETAILS
- *   → pinned action stack: primary 圖轉影片 (i2v) + 重新生成 / 作為參考
- *      + icon row (下載 / 分享 / 更多→帶回修改·換模型重生).
- * Layout borrowed from Higgsfield; KuiperAI keeps its amber-on-stone identity
- * (not Higgsfield's lime). Every action maps to a real capability — no stubs.
+ *   → pinned action stack: image-to-video + regenerate / use as reference
+ *      + icon row (download / share / more actions).
+ * Layout borrowed from Higgsfield; KuiperAI keeps its darkroom/cyan identity.
+ * Every action maps to a real capability — no stubs.
  */
 
 import { useEffect, useState } from 'react'
+import { useLocale, useTranslations } from 'next-intl'
 import { resolveErrorDisplay } from '@/lib/errors/display'
 import { playgroundDownloadHref, type PlaygroundController } from './usePlaygroundController'
+import styles from './PlaygroundPresentation.module.css'
 
 interface ResultLightboxProps {
   ctrl: PlaygroundController
 }
 
 export function ResultLightbox({ ctrl }: ResultLightboxProps) {
+  const t = useTranslations('playground.resultLightbox')
+  const locale = useLocale()
   const run = ctrl.lightboxRun
   const [promptExpanded, setPromptExpanded] = useState(false)
   const [detailsOpen, setDetailsOpen] = useState(true)
@@ -51,7 +55,13 @@ export function ResultLightbox({ ctrl }: ResultLightboxProps) {
   const otherModels = ctrl.activeModels.filter((m) => m.value !== run.modelKey).slice(0, 6)
   const promptLong = (run.prompt?.length ?? 0) > 120
   const statusText =
-    run.status === 'succeeded' ? '已完成' : run.status === 'failed' ? '失敗' : run.status === 'running' ? '生成中' : '排隊中'
+    run.status === 'succeeded'
+      ? t('succeeded')
+      : run.status === 'failed'
+        ? t('statusFailed')
+        : run.status === 'running'
+          ? t('running')
+          : t('queued')
 
   async function copyLink() {
     if (!url) return
@@ -60,120 +70,133 @@ export function ResultLightbox({ ctrl }: ResultLightboxProps) {
       setLinkCopied(true)
       setTimeout(() => setLinkCopied(false), 1500)
     } catch {
-      alert('複製連結失敗:瀏覽器不允許存取剪貼簿')
+      alert(t('copyLinkFailure'))
     }
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex bg-stone-950/90 backdrop-blur-sm">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={t('title')}
+      className={`${styles.touchSurface} fixed inset-0 z-50 flex bg-canvas/90 backdrop-blur-sm`}
+      data-playground-touch-surface
+    >
       {/* Backdrop click closes */}
-      <button type="button" aria-label="關閉" onClick={close} className="absolute inset-0 cursor-default" />
+      <button type="button" aria-label={t('close')} onClick={close} className="absolute inset-0 cursor-default" />
 
-      <div className="relative z-10 m-auto flex max-h-[92vh] w-[94vw] max-w-6xl overflow-hidden rounded-lg border border-stone-800 bg-stone-950 shadow-2xl">
+      <div className="relative z-10 m-auto flex max-h-[92vh] w-[94vw] max-w-6xl flex-col overflow-hidden rounded-lg border border-white/[0.08] bg-canvas shadow-2xl lg:flex-row">
         {/* Media */}
-        <div className="flex min-w-0 flex-1 items-center justify-center bg-black p-4">
+        <div className="flex min-h-[38vh] w-full min-w-0 shrink-0 items-center justify-center bg-black p-3 sm:min-h-[42vh] sm:p-4 lg:min-h-0 lg:flex-1 lg:shrink">
           {url ? (
             isImage ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={url}
-                alt="result"
+                alt={t('imageAlt')}
                 onLoad={(e) => setDims({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })}
-                className="max-h-[84vh] max-w-full object-contain"
+                className="max-h-[32vh] max-w-full object-contain sm:max-h-[36vh] lg:max-h-[84vh]"
               />
             ) : (
-              <video src={url} controls autoPlay playsInline className="max-h-[84vh] max-w-full object-contain" />
+              <video
+                src={url}
+                controls
+                autoPlay
+                playsInline
+                className="max-h-[32vh] max-w-full object-contain sm:max-h-[36vh] lg:max-h-[84vh]"
+              />
             )
           ) : run.status === 'failed' ? (
             <div className="p-10 text-center">
-              <div className="mb-2 font-mono text-[12px] uppercase tracking-wider text-rose-400">生成失敗</div>
-              <div className="font-mono text-[11px] text-stone-500" title={run.errorMessage ?? undefined}>
-                {resolveErrorDisplay({ message: run.errorMessage })?.message ?? run.errorMessage ?? '未知錯誤'}
+              <div className="mb-2 font-mono text-[12px] uppercase tracking-wider text-rose-400">{t('failed')}</div>
+              <div className="font-mono text-[11px] text-text-tertiary" title={run.errorMessage ?? undefined}>
+                {resolveErrorDisplay({ message: run.errorMessage })?.message ?? run.errorMessage ?? t('unknownError')}
               </div>
             </div>
           ) : (
-            <div className="p-10 font-mono text-[12px] uppercase tracking-wider text-stone-500">處理中…</div>
+            <div className="p-10 font-mono text-[12px] uppercase tracking-wider text-text-tertiary">{t('processing')}</div>
           )}
         </div>
 
         {/* Right rail */}
-        <div className="flex w-[360px] flex-shrink-0 flex-col bg-stone-950">
+        <div className="flex max-h-[52vh] min-h-0 w-full lg:w-[360px] flex-shrink-0 flex-col overflow-hidden bg-raised sm:max-h-[48vh] lg:max-h-none">
           {/* Header */}
-          <div className="flex items-center gap-3 border-b border-l border-stone-800 px-4 py-3">
-            <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-amber-400 to-amber-600 font-mono text-[11px] font-bold text-stone-950">
+          <div className="flex items-center gap-3 border-b border-white/[0.08] px-4 py-3 lg:border-l">
+            <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-cyan-300 to-cyan-600 font-mono text-[11px] font-bold text-black">
               AI
             </div>
             <div className="min-w-0 flex-1">
-              <div className="truncate font-mono text-[13px] text-stone-200">{modelLabel}</div>
-              <div className="font-mono text-[10px] uppercase tracking-wider text-stone-500">
-                {isImage ? '圖片' : '影片'} · {statusText}
+              <div className="truncate font-mono text-[13px] text-text-primary">{modelLabel}</div>
+              <div className="font-mono text-[10px] uppercase tracking-wider text-text-tertiary">
+                {isImage ? t('image') : t('video')} · {statusText}
               </div>
             </div>
             <button
               type="button"
               onClick={close}
-              title="關閉 (Esc)"
-              className="flex h-7 w-7 items-center justify-center rounded-sm border border-stone-700 text-stone-400 hover:border-stone-500 hover:text-stone-200"
+              aria-label={t('close')}
+              title={t('closeTitle')}
+              className="flex h-11 w-11 items-center justify-center rounded-sm border border-white/[0.12] text-text-secondary hover:border-cyan-400/60 hover:text-cyan-200"
             >
               ✕
             </button>
           </div>
 
           {/* Scrollable body */}
-          <div className="flex-1 overflow-y-auto border-l border-stone-800 px-4 py-4">
+          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 lg:border-l lg:border-white/[0.08]">
             {/* PROMPT */}
             <div className="mb-4">
               <div className="mb-2 flex items-center justify-between">
-                <span className="font-mono text-[10px] uppercase tracking-wider text-stone-500">描述詞</span>
+                <span className="font-mono text-[10px] uppercase tracking-wider text-text-tertiary">{t('prompt')}</span>
                 <button
                   type="button"
                   onClick={() => ctrl.copyPrompt(run.prompt)}
-                  className="rounded-sm border border-stone-700 px-2 py-0.5 font-mono text-[10px] text-stone-400 hover:border-amber-500/60 hover:text-amber-300"
+                  className="rounded-sm border border-white/[0.12] px-2 py-0.5 font-mono text-[10px] text-text-secondary hover:border-cyan-400/60 hover:text-cyan-200"
                 >
-                  {ctrl.promptCopied ? '✓ 已複製' : '複製'}
+                  {ctrl.promptCopied ? t('copied') : t('copy')}
                 </button>
               </div>
               <div
-                className={`whitespace-pre-wrap break-words font-serif-cn text-[12px] leading-relaxed text-stone-400 ${
+                className={`whitespace-pre-wrap break-words font-serif-cn text-[12px] leading-relaxed text-text-secondary ${
                   promptExpanded ? 'max-h-[45vh] overflow-y-auto' : 'max-h-28 overflow-hidden'
                 }`}
               >
-                {run.prompt || '（此筆無描述詞紀錄）'}
+                {run.prompt || t('noPrompt')}
               </div>
               {promptLong ? (
                 <button
                   type="button"
                   onClick={() => setPromptExpanded((v) => !v)}
-                  className="mt-1.5 font-mono text-[11px] text-amber-400/80 hover:text-amber-300"
+                  className="mt-1.5 font-mono text-[11px] text-cyan-300/80 hover:text-cyan-200"
                 >
-                  {promptExpanded ? '收起 ▲' : '展開全部 ▼'}
+                  {promptExpanded ? t('collapse') : t('expand')}
                 </button>
               ) : null}
             </div>
 
             {/* DETAILS */}
-            <div className="border-t border-stone-800 pt-3">
+            <div className="border-t border-white/[0.08] pt-3">
               <button
                 type="button"
                 onClick={() => setDetailsOpen((v) => !v)}
-                className="mb-2 flex w-full items-center justify-between font-mono text-[10px] uppercase tracking-wider text-stone-500 hover:text-stone-300"
+                className="mb-2 flex w-full items-center justify-between font-mono text-[10px] uppercase tracking-wider text-text-tertiary hover:text-text-primary"
               >
-                <span>詳情</span>
+                <span>{t('details')}</span>
                 <span>{detailsOpen ? '▲' : '▼'}</span>
               </button>
               {detailsOpen ? (
                 <div className="space-y-1.5 font-mono text-[11px]">
-                  <Row label="模型" value={modelLabel} />
-                  {isImage && dims ? <Row label="尺寸" value={`${dims.w}×${dims.h}`} /> : null}
-                  <Row label="狀態" value={statusText} />
-                  <Row label="建立" value={new Date(run.createdAt).toLocaleString('zh-TW', { hour12: false })} />
+                  <Row label={t('model')} value={modelLabel} />
+                  {isImage && dims ? <Row label={t('dimensions')} value={`${dims.w}×${dims.h}`} /> : null}
+                  <Row label={t('status')} value={statusText} />
+                  <Row label={t('created')} value={new Date(run.createdAt).toLocaleString(locale, { hour12: false })} />
                 </div>
               ) : null}
             </div>
           </div>
 
           {/* Pinned action stack */}
-          <div className="relative border-l border-t border-stone-800 p-4">
+          <div className="relative border-t border-white/[0.08] p-4 lg:border-l">
             {/* More popover */}
             {moreOpen ? (
               <>
@@ -184,18 +207,20 @@ export function ResultLightbox({ ctrl }: ResultLightboxProps) {
                   onClick={() => setMoreOpen(false)}
                   className="fixed inset-0 z-40 cursor-default"
                 />
-                <div className="absolute bottom-full right-4 z-50 mb-2 w-[300px] rounded-lg border border-stone-800 bg-stone-900 p-3 shadow-2xl">
+                <div className="absolute bottom-full right-4 z-50 mb-2 w-[300px] rounded-lg border border-white/[0.08] bg-overlay p-3 shadow-2xl">
                   <button
                     type="button"
                     onClick={() => ctrl.editPrompt(run.prompt)}
                     disabled={ctrl.isBusy || !run.prompt}
-                    className="mb-3 w-full rounded-sm border border-stone-700 py-2 font-mono text-[12px] text-stone-300 hover:border-amber-500/60 hover:text-amber-300 disabled:cursor-not-allowed disabled:opacity-40"
+                    className="mb-3 w-full rounded-sm border border-white/[0.12] py-2 font-mono text-[12px] text-text-secondary hover:border-cyan-400/60 hover:text-cyan-200 disabled:cursor-not-allowed disabled:opacity-40"
                   >
-                    帶回輸入框修改
+                    {t('editPrompt')}
                   </button>
                   {otherModels.length > 0 ? (
                     <>
-                      <div className="mb-1.5 font-mono text-[10px] uppercase tracking-wider text-stone-600">換模型重生同一描述詞</div>
+                      <div className="mb-1.5 font-mono text-[10px] uppercase tracking-wider text-text-tertiary">
+                        {t('regenerateWithModel')}
+                      </div>
                       <div className="flex flex-wrap gap-1.5">
                         {otherModels.map((m) => (
                           <button
@@ -206,8 +231,8 @@ export function ResultLightbox({ ctrl }: ResultLightboxProps) {
                               ctrl.handleRun(m.value, run.prompt)
                             }}
                             disabled={ctrl.isBusy || !run.prompt}
-                            className="rounded-sm border border-stone-700 bg-stone-900/40 px-2 py-1 font-mono text-[10px] text-stone-300 hover:border-violet-400/60 hover:text-violet-300 disabled:cursor-not-allowed disabled:opacity-40"
-                            title={`用 ${m.label} 重跑`}
+                            className="rounded-sm border border-white/[0.12] bg-raised px-2 py-1 font-mono text-[10px] text-text-secondary hover:border-cyan-400/60 hover:text-cyan-200 disabled:cursor-not-allowed disabled:opacity-40"
+                            title={t('rerunWithModel', { model: m.label })}
                           >
                             {m.label}
                           </button>
@@ -225,9 +250,9 @@ export function ResultLightbox({ ctrl }: ResultLightboxProps) {
                 type="button"
                 onClick={() => ctrl.applyRunAsReference(run, { asVideo: true })}
                 disabled={ctrl.isBusy}
-                className="mb-2 flex w-full items-center justify-center gap-2 rounded-lg bg-amber-500 py-2.5 font-mono text-[13px] font-semibold uppercase tracking-wider text-stone-950 hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
+                className="mb-2 flex w-full items-center justify-center gap-2 rounded-lg bg-cyan-400 py-2.5 font-mono text-[13px] font-semibold uppercase tracking-wider text-black hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                ▶ 圖轉影片
+                ▶ {t('imageToVideo')}
               </button>
             ) : null}
 
@@ -237,17 +262,17 @@ export function ResultLightbox({ ctrl }: ResultLightboxProps) {
                 type="button"
                 onClick={() => ctrl.handleRun(run.modelKey, run.prompt)}
                 disabled={ctrl.isBusy || !run.prompt}
-                className="rounded-lg border border-stone-700 py-2 font-mono text-[12px] text-stone-300 hover:border-amber-500/60 hover:text-amber-300 disabled:cursor-not-allowed disabled:opacity-40"
+                className="rounded-lg border border-white/[0.12] py-2 font-mono text-[12px] text-text-secondary hover:border-cyan-400/60 hover:text-cyan-200 disabled:cursor-not-allowed disabled:opacity-40"
               >
-                重新生成
+                {t('regenerate')}
               </button>
               <button
                 type="button"
                 onClick={() => ctrl.applyRunAsReference(run)}
                 disabled={ctrl.isBusy || !url}
-                className="rounded-lg border border-stone-700 py-2 font-mono text-[12px] text-stone-300 hover:border-violet-400/60 hover:text-violet-300 disabled:cursor-not-allowed disabled:opacity-40"
+                className="rounded-lg border border-white/[0.12] py-2 font-mono text-[12px] text-text-secondary hover:border-cyan-400/60 hover:text-cyan-200 disabled:cursor-not-allowed disabled:opacity-40"
               >
-                作為參考
+                {t('useAsReference')}
               </button>
             </div>
 
@@ -257,26 +282,29 @@ export function ResultLightbox({ ctrl }: ResultLightboxProps) {
                 <a
                   href={playgroundDownloadHref(url, `kuiperai-${run.id}`)}
                   download
-                  className="flex flex-1 items-center justify-center gap-1 rounded-lg border border-stone-800 py-2 font-mono text-[11px] uppercase tracking-wider text-stone-400 hover:border-stone-600 hover:text-stone-200"
+                  className="flex flex-1 items-center justify-center gap-1 rounded-lg border border-white/[0.08] py-2 font-mono text-[11px] uppercase tracking-wider text-text-secondary hover:border-cyan-400/50 hover:text-cyan-200"
                 >
-                  ↓ 下載
+                  ↓ {t('download')}
                 </a>
               ) : null}
               {url ? (
                 <button
                   type="button"
                   onClick={copyLink}
-                  className="flex flex-1 items-center justify-center gap-1 rounded-lg border border-stone-800 py-2 font-mono text-[11px] uppercase tracking-wider text-stone-400 hover:border-stone-600 hover:text-stone-200"
+                  className="flex flex-1 items-center justify-center gap-1 rounded-lg border border-white/[0.08] py-2 font-mono text-[11px] uppercase tracking-wider text-text-secondary hover:border-cyan-400/50 hover:text-cyan-200"
                 >
-                  {linkCopied ? '✓ 已複製' : '⤴ 分享'}
+                  {linkCopied ? t('linkCopied') : `⤴ ${t('share')}`}
                 </button>
               ) : null}
               <button
                 type="button"
                 onClick={() => setMoreOpen((v) => !v)}
-                title="更多"
-                className={`flex h-9 w-11 flex-shrink-0 items-center justify-center rounded-lg border font-mono text-[14px] ${
-                  moreOpen ? 'border-amber-500/60 text-amber-300' : 'border-stone-800 text-stone-400 hover:border-stone-600 hover:text-stone-200'
+                aria-label={t('more')}
+                title={t('more')}
+                className={`flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg border font-mono text-[14px] ${
+                  moreOpen
+                    ? 'border-cyan-400/60 text-cyan-200'
+                    : 'border-white/[0.08] text-text-secondary hover:border-cyan-400/60 hover:text-cyan-200'
                 }`}
               >
                 ⋯
@@ -292,8 +320,8 @@ export function ResultLightbox({ ctrl }: ResultLightboxProps) {
 function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex justify-between gap-2">
-      <span className="text-stone-600">{label}</span>
-      <span className="truncate text-stone-300" title={value}>
+      <span className="text-text-tertiary">{label}</span>
+      <span className="truncate text-text-secondary" title={value}>
         {value}
       </span>
     </div>

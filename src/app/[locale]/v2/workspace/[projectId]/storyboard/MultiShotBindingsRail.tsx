@@ -12,7 +12,7 @@
  * Stage 1 (default, no callbacks): read-only chips — show what's bound.
  * Stage 2 (caller supplies `onCharacterChipClick` / `onSceneChipClick`):
  *   chips become buttons that open the appearance / view picker;
- *   pending overrides render with the violet "✏ 已改" treatment so the
+ *   pending overrides render with the process-cyan "✏ 已改" treatment so the
  *   user sees what will swap on next regenerate. The caller owns the
  *   override map state (characterOverrides / locationOverrides) and
  *   forwards it through `characterOverrideAppearanceById` /
@@ -166,19 +166,19 @@ interface MultiShotBindingsRailProps {
  * — not a public URL. Rewrite it through the project's video-proxy
  * route so the browser can stream + the server enforces auth.
  *
- * If the value already looks like a full URL we leave it alone.
+ * Full URLs also go through the proxy. A signed-looking URL is not ownership
+ * evidence; the server pins the exact value to this project's durable output.
  *
  * `downloadFilenameBase` is appended as a `filename` query param so
  * the proxy emits Content-Disposition with the user-friendly name
  * (e.g. `ep1_group01.mp4`) instead of the URL segment "video-proxy".
  */
-function resolveVideoSrc(
+export function resolveVideoSrc(
   raw: string | null | undefined,
   projectId: string | undefined,
   downloadFilenameBase?: string,
 ): string | null {
   if (!raw) return null
-  if (raw.startsWith('http://') || raw.startsWith('https://')) return raw
   if (!projectId) return null
   const params = new URLSearchParams({ key: raw })
   if (downloadFilenameBase && downloadFilenameBase.trim().length > 0) {
@@ -478,7 +478,7 @@ export function MultiShotBindingsRail({
                   const baseClass =
                     'inline-flex items-center gap-1.5 rounded-full border py-0.5 pl-0.5 pr-2'
                   const stateClass = hasOverride
-                    ? 'border-violet-500/60 bg-violet-500/10'
+                    ? 'border-[var(--process-cyan)]/60 bg-[var(--process-cyan-soft)]'
                     : 'border-primary-900/30 bg-canvas/40'
                   const interactive = onCharacterChipClick
                     ? `${baseClass} ${stateClass} cursor-pointer transition-colors hover:border-primary-500/60 hover:bg-primary-500/10`
@@ -504,7 +504,7 @@ export function MultiShotBindingsRail({
                           {c.appearanceLabel ?? '默認造型'}
                         </span>
                         {hasOverride ? (
-                          <span className="font-mono text-[12px] tracking-wider text-violet-300">
+                          <span className="font-mono text-[12px] tracking-wider text-[var(--process-cyan-strong)]">
                             ✏ 已改
                           </span>
                         ) : null}
@@ -540,7 +540,7 @@ export function MultiShotBindingsRail({
                   const baseClass =
                     'inline-flex items-center gap-1.5 rounded-full border py-0.5 pl-0.5 pr-2'
                   const stateClass = hasOverride
-                    ? 'border-violet-500/60 bg-violet-500/10'
+                    ? 'border-[var(--process-cyan)]/60 bg-[var(--process-cyan-soft)]'
                     : 'border-primary-900/30 bg-canvas/40'
                   const interactive = onSceneChipClick
                     ? `${baseClass} ${stateClass} cursor-pointer transition-colors hover:border-primary-500/60 hover:bg-primary-500/10`
@@ -566,7 +566,7 @@ export function MultiShotBindingsRail({
                           {s.viewName ?? '主視角'}
                         </span>
                         {hasOverride ? (
-                          <span className="font-mono text-[12px] tracking-wider text-violet-300">
+                          <span className="font-mono text-[12px] tracking-wider text-[var(--process-cyan-strong)]">
                             ✏ 已改
                           </span>
                         ) : null}

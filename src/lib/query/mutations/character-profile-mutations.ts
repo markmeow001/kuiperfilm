@@ -135,10 +135,16 @@ export function useExtractProjectReferenceCharacterDescription(projectId: string
  * 创建项目角色
  */
 
+export interface ProjectCharacterCreateResponse {
+    success: true
+    character: {
+        id: string
+        appearances: Array<{ id: string }>
+    }
+}
+
 export function useCreateProjectCharacter(projectId: string) {
     const queryClient = useQueryClient()
-    const invalidateProjectAssets = () =>
-        invalidateQueryTemplates(queryClient, [queryKeys.projectAssets.all(projectId)])
 
     return useMutation({
         // Q-006: artStyle removed from create-character payload — styleProfile is the only style anchor.
@@ -150,8 +156,10 @@ export function useCreateProjectCharacter(projectId: string) {
             customDescription?: string
             initialImageUrl?: string
             episodeId?: string
+            introduction?: string
+            idempotencyKey?: string
         }) =>
-            await requestJsonWithError(
+            await requestJsonWithError<ProjectCharacterCreateResponse>(
                 `/api/novel-promotion/${projectId}/character`,
                 {
                     method: 'POST',
@@ -160,7 +168,22 @@ export function useCreateProjectCharacter(projectId: string) {
                 },
                 'Failed to create character',
             ),
-        onSuccess: invalidateProjectAssets,
+        onSuccess: async (_data, payload) => {
+            await queryClient.invalidateQueries({
+                queryKey: queryKeys.projectAssets.all(projectId),
+                exact: true,
+            })
+            await queryClient.invalidateQueries({
+                queryKey: queryKeys.projectAssets.characters(projectId),
+                exact: true,
+            })
+            if (payload.episodeId) {
+                await queryClient.invalidateQueries({
+                    queryKey: [...queryKeys.tasks.all(projectId), 'episode-bindings', payload.episodeId],
+                    exact: true,
+                })
+            }
+        },
     })
 }
 
@@ -170,14 +193,13 @@ export function useCreateProjectCharacter(projectId: string) {
 
 export function useCreateProjectCharacterAppearance(projectId: string) {
     const queryClient = useQueryClient()
-    const invalidateProjectAssets = () =>
-        invalidateQueryTemplates(queryClient, [queryKeys.projectAssets.all(projectId)])
 
     return useMutation({
         mutationFn: async (payload: {
             characterId: string
             changeReason: string
             description: string
+            episodeId?: string
         }) =>
             await requestJsonWithError(
                 `/api/novel-promotion/${projectId}/character/appearance`,
@@ -188,7 +210,26 @@ export function useCreateProjectCharacterAppearance(projectId: string) {
                 },
                 'Failed to create character appearance',
             ),
-        onSuccess: invalidateProjectAssets,
+        onSuccess: async (_data, payload) => {
+            await queryClient.invalidateQueries({
+                queryKey: queryKeys.projectAssets.all(projectId),
+                exact: true,
+            })
+            await queryClient.invalidateQueries({
+                queryKey: queryKeys.projectAssets.characters(projectId),
+                exact: true,
+            })
+            if (payload.episodeId) {
+                await queryClient.invalidateQueries({
+                    queryKey: [
+                        ...queryKeys.tasks.all(projectId),
+                        'episode-bindings',
+                        payload.episodeId,
+                    ],
+                    exact: true,
+                })
+            }
+        },
     })
 }
 
@@ -212,6 +253,66 @@ export function useConfirmProjectCharacterSelection(projectId: string) {
                 '确认选择失败',
             ),
         onSettled: invalidateProjectAssets,
+    })
+}
+
+export interface FinalizeProjectCharacterVisualResponse {
+    success: true
+    alreadyFinal: boolean
+    character: { id: string; profileConfirmed: true }
+}
+
+function patchFinalizedCharacterRows(value: unknown, characterId: string): unknown {
+    if (!Array.isArray(value)) return value
+    return value.map((row) => {
+        if (!row || typeof row !== 'object') return row
+        const record = row as Record<string, unknown>
+        return record.id === characterId ? { ...record, profileConfirmed: true } : row
+    })
+}
+
+function patchFinalizedProjectAssets(value: unknown, characterId: string): unknown {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return value
+    const record = value as Record<string, unknown>
+    if (!Array.isArray(record.characters)) return value
+    return {
+        ...record,
+        characters: patchFinalizedCharacterRows(record.characters, characterId),
+    }
+}
+
+export function useFinalizeProjectCharacterVisual(projectId: string) {
+    const queryClient = useQueryClient()
+    return useMutation({
+        mutationFn: async (payload: { characterId: string; appearanceId: string }) =>
+            await requestJsonWithError<FinalizeProjectCharacterVisualResponse>(
+                `/api/novel-promotion/${projectId}/character-profile/finalize`,
+                {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                },
+                'Failed to finalize character visual',
+            ),
+        onSuccess: async (data) => {
+            const characterId = data.character.id
+            queryClient.setQueryData(
+                queryKeys.projectAssets.characters(projectId),
+                (current: unknown) => patchFinalizedCharacterRows(current, characterId),
+            )
+            queryClient.setQueryData(
+                queryKeys.projectAssets.all(projectId),
+                (current: unknown) => patchFinalizedProjectAssets(current, characterId),
+            )
+            await queryClient.invalidateQueries({
+                queryKey: queryKeys.projectAssets.characters(projectId),
+                exact: true,
+            })
+            await queryClient.invalidateQueries({
+                queryKey: queryKeys.projectAssets.all(projectId),
+                exact: true,
+            })
+        },
     })
 }
 

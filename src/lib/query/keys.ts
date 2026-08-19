@@ -77,6 +77,18 @@ export const queryKeys = {
                 : ['pending-tasks', projectId] as const,
     },
 
+    // ============ 生成任务中心 ============
+    generationJobs: {
+        all: () => ['generation-jobs'] as const,
+        list: (filters: {
+            projectId: string | null
+            episodeId: string | null
+            statuses: readonly string[]
+            types: readonly string[]
+            limit: number
+        }) => ['generation-jobs', 'list', filters] as const,
+    },
+
     // ============ 项目数据 ============
     project: {
         detail: (projectId: string) => ['project', projectId] as const,
@@ -99,6 +111,9 @@ export const queryKeys = {
      */
     episodeData: (projectId: string, episodeId: string) =>
         ['episode-data', projectId, episodeId] as const,
+
+    episodeDelivery: (projectId: string, episodeId: string) =>
+        ['episode-delivery', projectId, episodeId] as const,
 
     // ============ Phase 12.5 通知中心 ============
     notifications: {

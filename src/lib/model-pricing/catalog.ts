@@ -16,9 +16,13 @@ export interface BuiltinPricingTier {
 }
 
 export interface BuiltinPricingDefinition {
-  mode: 'flat' | 'capability'
+  mode: 'flat' | 'capability' | 'usage'
   flatAmount?: number
   tiers?: BuiltinPricingTier[]
+  currency?: 'USD'
+  unit?: 'character'
+  unitAmount?: number
+  countScale?: number
 }
 
 export interface BuiltinPricingCatalogEntry {
@@ -98,8 +102,8 @@ function normalizePricing(raw: unknown, filePath: string, index: number): Builti
   }
 
   const modeRaw = raw.mode
-  if (modeRaw !== 'flat' && modeRaw !== 'capability') {
-    throw new Error(`PRICING_CATALOG_INVALID: ${filePath}#${index}.pricing.mode must be flat or capability`)
+  if (modeRaw !== 'flat' && modeRaw !== 'capability' && modeRaw !== 'usage') {
+    throw new Error(`PRICING_CATALOG_INVALID: ${filePath}#${index}.pricing.mode must be flat, capability, or usage`)
   }
 
   if (modeRaw === 'flat') {
@@ -111,6 +115,38 @@ function normalizePricing(raw: unknown, filePath: string, index: number): Builti
     return {
       mode: 'flat',
       flatAmount,
+    }
+  }
+
+  if (modeRaw === 'usage') {
+    const allowedFields = new Set(['mode', 'currency', 'unit', 'unitAmount', 'countScale'])
+    const unsupportedField = Object.keys(raw).find((field) => !allowedFields.has(field))
+    if (unsupportedField) {
+      throw new Error(`PRICING_CATALOG_INVALID: ${filePath}#${index}.pricing.${unsupportedField} is not allowed in usage mode`)
+    }
+    if (raw.unit !== 'character') {
+      throw new Error(`PRICING_CATALOG_INVALID: ${filePath}#${index}.pricing.unit must be character`)
+    }
+    if (raw.currency !== 'USD') {
+      throw new Error(`PRICING_CATALOG_INVALID: ${filePath}#${index}.pricing.currency must be USD`)
+    }
+    const unitAmount = readFiniteNumber(raw.unitAmount)
+    if (unitAmount === null || unitAmount < 0) {
+      throw new Error(`PRICING_CATALOG_INVALID: ${filePath}#${index}.pricing.unitAmount must be finite number >= 0`)
+    }
+    const countScale = readFiniteNumber(raw.countScale)
+    if (countScale === null || !Number.isInteger(countScale) || countScale <= 0) {
+      throw new Error(`PRICING_CATALOG_INVALID: ${filePath}#${index}.pricing.countScale must be a positive integer`)
+    }
+    if (raw.flatAmount !== undefined || raw.tiers !== undefined) {
+      throw new Error(`PRICING_CATALOG_INVALID: ${filePath}#${index}.pricing usage mode cannot contain flatAmount or tiers`)
+    }
+    return {
+      mode: 'usage',
+      currency: 'USD',
+      unit: 'character',
+      unitAmount,
+      countScale,
     }
   }
 
@@ -144,6 +180,9 @@ function normalizePricingEntry(raw: unknown, filePath: string, index: number): B
   }
 
   const pricing = normalizePricing(raw.pricing, filePath, index)
+  if (pricing.mode === 'usage' && apiTypeRaw !== 'voice') {
+    throw new Error(`PRICING_CATALOG_INVALID: ${filePath}#${index}.pricing usage mode is only valid for voice`)
+  }
 
   return {
     apiType: apiTypeRaw,

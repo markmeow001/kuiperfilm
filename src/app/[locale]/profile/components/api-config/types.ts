@@ -170,7 +170,7 @@ export const PRESET_MODELS: PresetModel[] = [
     { modelId: 'bytedance/seedance-2.0/fast/reference-to-video', name: 'Seedance 2.0 Fast R2V (fal · 9-ref cheap)', type: 'video', provider: 'fal' },
 
     // 音频模型
-    { modelId: 'fal-ai/index-tts-2/text-to-speech', name: 'IndexTTS 2', type: 'audio', provider: 'fal' },
+    { modelId: 'bytedance/seed-audio-1.0', name: 'Seed Audio 1.0 (AtlasCloud)', type: 'audio', provider: 'atlascloud' },
     // 口型同步模型
     { modelId: 'fal-ai/kling-video/lipsync/audio-to-video', name: 'Kling Lip Sync', type: 'lipsync', provider: 'fal' },
     { modelId: 'vidu-lipsync', name: 'Vidu Lip Sync', type: 'lipsync', provider: 'vidu' },

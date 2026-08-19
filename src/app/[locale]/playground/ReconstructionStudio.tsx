@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslations } from 'next-intl'
 import { AppIcon } from '@/components/ui/icons'
 import { buildReconstructionKeyframePrompt, buildReconstructionPrompt } from '@/lib/playground/reconstruction-prompt'
 import { getReconstructionStageAvailability } from '@/lib/playground/reconstruction-stage'
@@ -49,7 +50,10 @@ function nearestAspectRatio(width: number, height: number): string {
   return '1:1'
 }
 
-function readLocalMetadata(file: File): Promise<ReconstructionVideoMetadata> {
+function readLocalMetadata(
+  file: File,
+  errors: { invalidDuration: string; invalidVideo: string },
+): Promise<ReconstructionVideoMetadata> {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file)
     const video = document.createElement('video')
@@ -60,20 +64,22 @@ function readLocalMetadata(file: File): Promise<ReconstructionVideoMetadata> {
       const height = video.videoHeight
       URL.revokeObjectURL(url)
       if (!Number.isFinite(durationSec) || durationSec <= 0) {
-        reject(new Error('無法讀取影片長度'))
+        reject(new Error(errors.invalidDuration))
         return
       }
       resolve({ durationSec, width, height, fps: null, hasAudio: true })
     }
     video.onerror = () => {
       URL.revokeObjectURL(url)
-      reject(new Error('無法讀取影片資料'))
+      reject(new Error(errors.invalidVideo))
     }
     video.src = url
   })
 }
 
 export function ReconstructionStudio({ ctrl, locale }: ReconstructionStudioProps) {
+  const t = useTranslations('playground.reconstruction')
+  const steps = t.raw('steps') as string[]
   const {
     modelKey: controllerModelKey,
     setModelKey: setControllerModelKey,
@@ -178,9 +184,16 @@ export function ReconstructionStudio({ ctrl, locale }: ReconstructionStudioProps
   async function selectSource(file: File) {
     setError(null)
     try {
-      const local = await readLocalMetadata(file)
+      const local = await readLocalMetadata(file, {
+        invalidDuration: t('invalidDuration'),
+        invalidVideo: t('invalidVideo'),
+      })
       if (local.durationSec < REF_VIDEO_MIN_SEC || local.durationSec > REF_VIDEO_MAX_SEC) {
-        throw new Error(`影片需介於 ${REF_VIDEO_MIN_SEC}–${REF_VIDEO_MAX_SEC} 秒，目前為 ${local.durationSec.toFixed(1)} 秒`)
+        throw new Error(t('durationRange', {
+          min: REF_VIDEO_MIN_SEC,
+          max: REF_VIDEO_MAX_SEC,
+          current: local.durationSec.toFixed(1),
+        }))
       }
       const uploaded = await ctrl.upload.mutateAsync({ file, type: 'video' })
       ctrl.applyUploadedVideoReference({ key: uploaded.key, signedUrl: uploaded.signedUrl })
@@ -200,7 +213,7 @@ export function ReconstructionStudio({ ctrl, locale }: ReconstructionStudioProps
       setPromptFingerprint(null)
       setReconstructionRunId(null)
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : '影片上傳失敗')
+      setError(caught instanceof Error ? caught.message : t('uploadFailed'))
     }
   }
 
@@ -218,7 +231,7 @@ export function ReconstructionStudio({ ctrl, locale }: ReconstructionStudioProps
       if (!result.metadata.hasAudio || result.metadata.durationSec < 4) setAudioMode('generate')
       if (result.metadata.durationSec < 4) setDurationMode('4')
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : '鏡頭分析失敗')
+      setError(caught instanceof Error ? caught.message : t('analysisFailed'))
     }
   }
 
@@ -226,7 +239,7 @@ export function ReconstructionStudio({ ctrl, locale }: ReconstructionStudioProps
     const endSec = metadata?.durationSec ?? 5
     setDialogue((current) => [...current, {
       id: crypto.randomUUID(),
-      speaker: `角色 ${current.length + 1}`,
+      speaker: t('speakerNumber', { number: current.length + 1 }),
       startSec: 0,
       endSec,
       text: '',
@@ -270,7 +283,7 @@ export function ReconstructionStudio({ ctrl, locale }: ReconstructionStudioProps
     } catch (caught) {
       URL.revokeObjectURL(previewUrl)
       referencePreviewUrlsRef.current.delete(previewUrl)
-      setError(caught instanceof Error ? caught.message : '參考圖片上傳失敗')
+      setError(caught instanceof Error ? caught.message : t('referenceUploadFailed'))
     }
   }
 
@@ -286,20 +299,20 @@ export function ReconstructionStudio({ ctrl, locale }: ReconstructionStudioProps
 
   async function generateTargetKeyframe() {
     if (!analysisResult?.sourceFrame) {
-      setError('請先完成原片分析，系統才能取得動作關鍵幀')
+      setError(t('analysisRequired'))
       return
     }
     if (!characterReference) {
-      setError('請先上傳要套用的新角色圖片')
+      setError(t('characterRequired'))
       return
     }
     const required = [brief.era, brief.location, brief.story, brief.characterDesign, brief.wardrobe, brief.mood, brief.weatherAndTime]
     if (required.some((value) => !value.trim())) {
-      setError('請先補齊年代、場景、故事、人物、服裝、時間與影像氣氛，再建立定裝關鍵幀')
+      setError(t('keyframeFieldsRequired'))
       return
     }
     if (!keyframeModel) {
-      setError('目前帳號尚未啟用可接收參考圖的 AtlasCloud 圖片模型')
+      setError(t('keyframeModelRequired'))
       return
     }
 
@@ -329,35 +342,35 @@ export function ReconstructionStudio({ ctrl, locale }: ReconstructionStudioProps
       const rawKey = Array.isArray(taskResult.resultUrls) && typeof taskResult.resultUrls[0] === 'string'
         ? taskResult.resultUrls[0]
         : null
-      if (!rawKey) throw new Error('定裝關鍵幀任務沒有回傳圖片')
+      if (!rawKey) throw new Error(t('keyframeNoImage'))
 
       const response = await fetch(`/api/playground/runs/${submitted.run.id}`, { cache: 'no-store' })
       const payload = await response.json().catch(() => null) as { run?: { resultUrls?: string[] | null } } | null
       const signedUrl = payload?.run?.resultUrls?.[0]
-      if (!response.ok || !signedUrl) throw new Error('定裝關鍵幀已產生，但無法取得預覽網址')
+      if (!response.ok || !signedUrl) throw new Error(t('keyframePreviewUnavailable'))
       setTargetKeyframe({ key: rawKey, signedUrl })
       setTargetKeyframeFingerprint(keyframeInputFingerprint)
       setPromptPreview('')
       setPromptFingerprint(null)
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : '定裝關鍵幀生成失敗')
+      setError(caught instanceof Error ? caught.message : t('keyframeFailed'))
     } finally {
       setIsGeneratingKeyframe(false)
     }
   }
 
   function validateConfiguration(): string | null {
-    if (!analysisResult || !metadata || !ctrl.refVideo) return '請先上傳並完成鏡頭分析'
-    if (!effectiveModelKey) return '目前帳號尚未啟用 AtlasCloud Seedance 2.0 R2V，請先到設定中心啟用'
+    if (!analysisResult || !metadata || !ctrl.refVideo) return t('sourceAnalysisRequired')
+    if (!effectiveModelKey) return t('videoModelRequired')
     const required = [brief.era, brief.location, brief.story, brief.characterDesign, brief.wardrobe, brief.mood, brief.weatherAndTime, brief.backgroundMotion]
-    if (required.some((value) => !value.trim())) return '重建設定不可留白，請補齊年代、場景、人物與動態背景描述'
+    if (required.some((value) => !value.trim())) return t('settingsRequired')
     const invalidLine = dialogue.find((line) => !line.text.trim() || line.startSec < 0 || line.endSec <= line.startSec || line.endSec > metadata.durationSec + 0.1)
-    if (invalidLine) return '對白內容與時間碼需完整，且不得超過原片長度'
-    if (audioMode === 'preserve-original' && durationMode !== 'source') return '保留原始對白音軌時，輸出秒數必須選擇「跟隨原片」'
-    if (!Number.isInteger(outputDurationSec) || outputDurationSec < 4 || outputDurationSec > 15) return '輸出秒數需介於 4–15 秒'
-    if (!characterReference) return '請先上傳要套用的新角色圖片'
-    if (!targetKeyframe) return '請先建立並確認定裝關鍵幀，再生成完整影片'
-    if (keyframeIsStale) return '角色、場景或重建設定已變更，請重新建立定裝關鍵幀'
+    if (invalidLine) return t('dialogueInvalid')
+    if (audioMode === 'preserve-original' && durationMode !== 'source') return t('sourceDurationRequired')
+    if (!Number.isInteger(outputDurationSec) || outputDurationSec < 4 || outputDurationSec > 15) return t('outputDurationInvalid')
+    if (!characterReference) return t('characterRequired')
+    if (!targetKeyframe) return t('targetKeyframeRequired')
+    if (keyframeIsStale) return t('targetKeyframeStale')
     return null
   }
 
@@ -379,7 +392,7 @@ export function ReconstructionStudio({ ctrl, locale }: ReconstructionStudioProps
       outputDurationSec: durationMode === 'source' ? metadata.durationSec : outputDurationSec,
     })
     if (prompt.length > 6000) {
-      setError(`重建提示詞為 ${prompt.length} 字，超過 6000 字上限；請縮短創作設定或對白`)
+      setError(t('promptTooLong', { count: prompt.length }))
       return
     }
     setError(null)
@@ -395,15 +408,15 @@ export function ReconstructionStudio({ ctrl, locale }: ReconstructionStudioProps
       return
     }
     if (!promptPreview.trim()) {
-      setError('請先產出並檢查 Prompt，再確認生成')
+      setError(t('promptRequired'))
       return
     }
     if (promptIsStale) {
-      setError('設定已變更，請重新產出 Prompt 後再生成')
+      setError(t('promptStale'))
       return
     }
     if (promptPreview.length > 6000) {
-      setError(`重建提示詞為 ${promptPreview.length} 字，超過 6000 字上限；請精簡後再生成`)
+      setError(t('promptTooLongBeforeGenerate', { count: promptPreview.length }))
       return
     }
     ctrl.setPrompt(promptPreview)
@@ -423,16 +436,16 @@ export function ReconstructionStudio({ ctrl, locale }: ReconstructionStudioProps
   }
 
   return (
-    <main className="flex min-h-0 flex-1 overflow-hidden bg-[#07090c]">
-      <section className="w-[430px] shrink-0 overflow-y-auto border-r border-white/[0.08] bg-[#090b0f] p-5">
+    <section className="flex h-full min-h-0 flex-col overflow-y-auto bg-[#07090c] lg:flex-row lg:overflow-hidden">
+      <section className="w-full shrink-0 border-b border-white/[0.08] bg-[#090b0f] p-5 lg:w-[430px] lg:overflow-y-auto lg:border-b-0 lg:border-r">
         <div className="mb-5">
-          <div className="font-mono text-[10px] tracking-[0.22em] text-cyan-400">LIVE ACTION RECONSTRUCTION</div>
-          <h2 className="mt-2 font-serif-cn text-xl font-semibold text-white">實拍重建</h2>
-          <p className="mt-2 text-sm leading-6 text-text-tertiary">保留演員表演、原始運鏡與對白節奏，完整改造人物造型與動態環境。</p>
+          <div className="font-mono text-[10px] tracking-[0.22em] text-cyan-400">{t('kicker')}</div>
+          <h2 className="mt-2 font-serif-cn text-xl font-semibold text-white">{t('title')}</h2>
+          <p className="mt-2 text-sm leading-6 text-text-tertiary">{t('description')}</p>
         </div>
 
         <div className="mb-5 grid grid-cols-5 gap-1.5 text-center text-[11px]">
-          {['影片', '設定', '分析', '定裝', '生成'].map((label, index) => {
+          {steps.map((label, index) => {
             const reached = index === 0
               ? Boolean(ctrl.refVideo)
               : index === 1
@@ -451,18 +464,18 @@ export function ReconstructionStudio({ ctrl, locale }: ReconstructionStudioProps
           event.target.value = ''
           if (file) void selectSource(file)
         }} />
-        <button type="button" onClick={() => inputRef.current?.click()} disabled={ctrl.upload.isPending || analyze.isPending || ctrl.isGenerating} className="flex w-full items-center justify-center gap-2 rounded-xl border border-cyan-400/30 bg-cyan-400/10 px-4 py-3 text-sm font-medium text-cyan-200 transition hover:bg-cyan-400/15 disabled:opacity-50">
+        <button type="button" onClick={() => inputRef.current?.click()} disabled={ctrl.upload.isPending || analyze.isPending || ctrl.isGenerating} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-cyan-400/30 bg-cyan-400/10 px-4 py-3 text-sm font-medium text-cyan-200 transition hover:bg-cyan-400/15 disabled:opacity-50">
           <AppIcon name="upload" className="h-4 w-4" />
-          {sourceName ? `更換影片 · ${sourceName}` : '上傳實拍影片（1.8–15 秒，≤150MB）'}
+          {sourceName ? t('changeVideo', { name: sourceName }) : t('uploadVideo')}
         </button>
 
         {ctrl.refVideo ? (
           <div className="mt-3 space-y-2">
-            <button type="button" onClick={() => void analyzeSource()} disabled={analyze.isPending || ctrl.isGenerating} className="flex w-full items-center justify-center gap-2 rounded-xl bg-cyan-400 px-4 py-3 text-sm font-semibold text-black transition hover:bg-cyan-300 disabled:opacity-50">
+            <button type="button" onClick={() => void analyzeSource()} disabled={analyze.isPending || ctrl.isGenerating} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-cyan-400 px-4 py-3 text-sm font-semibold text-black transition hover:bg-cyan-300 disabled:opacity-50">
               <AppIcon name="sparklesAlt" className="h-4 w-4" />
-              {analyze.isPending ? 'AI 正在分析運鏡與表演…' : analysisResult ? '重新分析鏡頭（會產生費用）' : '需要時再分析鏡頭（會產生費用）'}
+              {analyze.isPending ? t('analyzing') : analysisResult ? t('reanalyze') : t('analyzeWhenNeeded')}
             </button>
-            {!analysisResult ? <p className="text-[11px] leading-5 text-text-tertiary">可先填設定、上傳角色與場景圖片，不會產生 AI 分析費；建立定裝關鍵幀前再分析即可。</p> : null}
+            {!analysisResult ? <p className="text-[11px] leading-5 text-text-tertiary">{t('analysisFreeHint')}</p> : null}
           </div>
         ) : null}
 
@@ -470,9 +483,9 @@ export function ReconstructionStudio({ ctrl, locale }: ReconstructionStudioProps
           <div className="mt-5 space-y-5">
             {analysisResult ? (
               <div className="rounded-xl border border-white/[0.08] bg-white/[0.03] p-3 text-xs leading-5 text-text-secondary">
-                <div className="mb-1 text-cyan-300">分析摘要</div>
+                <div className="mb-1 text-cyan-300">{t('analysisSummary')}</div>
                 {analysisResult.analysis.summary}
-                <div className="mt-2 text-text-tertiary">運鏡：{analysisResult.analysis.camera.movement}</div>
+                <div className="mt-2 text-text-tertiary">{t('cameraMovement', { movement: analysisResult.analysis.camera.movement })}</div>
               </div>
             ) : null}
 
@@ -542,6 +555,6 @@ export function ReconstructionStudio({ ctrl, locale }: ReconstructionStudioProps
         characterReferenceUrl={characterReference?.previewUrl ?? characterReference?.signedUrl ?? null}
         sceneReferenceUrl={sceneReference?.previewUrl ?? sceneReference?.signedUrl ?? null}
       />
-    </main>
+    </section>
   )
 }

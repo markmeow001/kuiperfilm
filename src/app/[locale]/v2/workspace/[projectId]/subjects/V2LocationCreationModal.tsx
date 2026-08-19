@@ -8,8 +8,8 @@
  * 入口。設計參考 user 提供的「新场景」mockup。
  *
  * 兩種建立路徑:
- *   1. 上傳模式 — 選了圖,POST 建立 location(無 description),再用
- *      upload-asset-image 把圖綁上去。沒有自動 AI 生成。
+ *   1. 上傳模式 — 選了圖,POST 建立 location 並保存 description,再用
+ *      upload-asset-image 把圖綁上去。明確跳過 AI 生成。
  *   2. AI 生成模式 — 描述非空,POST 建立 location(帶 description),
  *      API 會自動觸發 generate-image task 在後台跑。
  *
@@ -18,6 +18,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react'
+import { useTranslations } from 'next-intl'
 import { AppIcon } from '@/components/ui/icons'
 import { LOCATION_METADATA_OPTIONS, stringifyLocationSummary, type LocationMetadata } from '@/lib/location-metadata'
 import {
@@ -25,6 +26,7 @@ import {
   resolveLocationCreateSubmission,
   type LocationCreateMode,
 } from './subject-create-policy'
+import type { SubjectUploadTarget } from './subject-create-upload-flow'
 
 export interface V2LocationCreationModalProps {
   onClose: () => void
@@ -35,6 +37,8 @@ export interface V2LocationCreationModalProps {
     file: File | null
   }) => void | Promise<void>
   isSubmitting: boolean
+  uploadRecovery?: SubjectUploadTarget | null
+  uploadError?: string | null
 }
 
 const EMPTY_META: LocationMetadata = {
@@ -50,7 +54,14 @@ const EMPTY_META: LocationMetadata = {
 
 const DESC_MAX = 600
 
-export function V2LocationCreationModal({ onClose, onSubmit, isSubmitting }: V2LocationCreationModalProps) {
+export function V2LocationCreationModal({
+  onClose,
+  onSubmit,
+  isSubmitting,
+  uploadRecovery = null,
+  uploadError = null,
+}: V2LocationCreationModalProps) {
+  const t = useTranslations('v2Subjects')
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [createMode, setCreateMode] = useState<LocationCreateMode>('description')
@@ -134,6 +145,7 @@ export function V2LocationCreationModal({ onClose, onSubmit, isSubmitting }: V2L
       className="kuiper-modal-backdrop fixed inset-0 z-50 flex items-center justify-center px-4 py-8"
       role="dialog"
       aria-modal="true"
+      aria-labelledby="v2-location-create-title"
       onClick={(e) => {
         if (e.target === e.currentTarget && !isSubmitting) onClose()
       }}
@@ -149,7 +161,7 @@ export function V2LocationCreationModal({ onClose, onSubmit, isSubmitting }: V2L
         <div className="flex items-center justify-between border-b border-primary-900/20 px-6 py-4 flex-shrink-0">
           <div className="flex items-center gap-2.5">
             <AppIcon name="image" className="h-4 w-4 text-primary-400" />
-            <div className="font-fraunces text-lg italic text-text-primary">新場景</div>
+            <div id="v2-location-create-title" className="font-fraunces text-lg italic text-text-primary">新場景</div>
             <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-primary-600/80">MANUAL · CREATE</div>
           </div>
           <button
@@ -202,7 +214,7 @@ export function V2LocationCreationModal({ onClose, onSubmit, isSubmitting }: V2L
                   setCreateMode('upload')
                   fileRef.current?.click()
                 }}
-                disabled={isSubmitting}
+                disabled={isSubmitting || Boolean(uploadRecovery)}
                 className={`flex items-center justify-center gap-2 rounded-sm border px-4 py-2.5 font-serif-cn text-sm transition-all disabled:opacity-50 ${
                   createMode === 'upload'
                     ? 'border-primary-500/60 bg-primary-500/10 text-primary-300'
@@ -215,7 +227,7 @@ export function V2LocationCreationModal({ onClose, onSubmit, isSubmitting }: V2L
               <button
                 type="button"
                 onClick={() => setCreateMode('description')}
-                disabled={isSubmitting}
+                disabled={isSubmitting || Boolean(uploadRecovery)}
                 className={`flex items-center justify-center gap-2 rounded-sm border px-4 py-2.5 font-serif-cn text-sm transition-all disabled:opacity-50 ${
                   createMode === 'description'
                     ? 'border-primary-500/60 bg-primary-500/10 text-primary-300'
@@ -380,6 +392,14 @@ export function V2LocationCreationModal({ onClose, onSubmit, isSubmitting }: V2L
 
         {/* Footer */}
         <div className="border-t border-primary-900/20 bg-raised/30 px-6 py-4 flex-shrink-0">
+          {uploadRecovery ? (
+            <div
+              role="alert"
+              className="mb-3 rounded-sm border border-rose-500/35 bg-rose-500/10 px-3 py-2 font-serif-cn text-sm text-rose-200"
+            >
+              {uploadError ?? t('uploadRecovery.message')}
+            </div>
+          ) : null}
           {createPolicy.hint ? (
             <div className="mb-3 font-mono text-[11px] tracking-wider text-primary-300/80" role="status">
               {createPolicy.hint}
@@ -396,13 +416,18 @@ export function V2LocationCreationModal({ onClose, onSubmit, isSubmitting }: V2L
             </button>
             <button
               type="submit"
-              disabled={!createPolicy.canSubmit}
+              disabled={uploadRecovery ? isSubmitting : !createPolicy.canSubmit}
               className="flex items-center gap-2 rounded-sm bg-primary-500 px-5 py-2 font-serif-cn text-sm font-medium text-canvas transition-all hover:bg-primary-400 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isSubmitting ? (
                 <>
                   <AppIcon name="loader" className="h-4 w-4 animate-spin" />
                   建立中…
+                </>
+              ) : uploadRecovery ? (
+                <>
+                  <AppIcon name="upload" className="h-4 w-4" />
+                  {t('uploadRecovery.retry')}
                 </>
               ) : (
                 <>

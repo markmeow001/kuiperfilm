@@ -6085,20 +6085,14 @@
   },
   {
     "apiType": "voice",
-    "provider": "system",
-    "modelId": "index-tts2",
+    "provider": "atlascloud",
+    "modelId": "bytedance/seed-audio-1.0",
     "pricing": {
-      "mode": "flat",
-      "flatAmount": 0.0144
-    }
-  },
-  {
-    "apiType": "voice",
-    "provider": "fal",
-    "modelId": "fal-ai/index-tts-2/text-to-speech",
-    "pricing": {
-      "mode": "flat",
-      "flatAmount": 0.0144
+      "mode": "usage",
+      "currency": "USD",
+      "unit": "character",
+      "unitAmount": 0.015,
+      "countScale": 1000
     }
   },
   {

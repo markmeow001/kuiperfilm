@@ -32,8 +32,10 @@
  */
 
 import {
+  createContext,
   forwardRef,
   useCallback,
+  useContext,
   useEffect,
   useId,
   useRef,
@@ -43,6 +45,16 @@ import {
 import { createPortal } from 'react-dom'
 
 type Size = 'sm' | 'md' | 'lg' | 'xl'
+
+const ModalTitleIdContext = createContext<string | null>(null)
+const FOCUSABLE_SELECTOR = [
+  'button:not([disabled])',
+  '[href]',
+  'input:not([disabled])',
+  'select:not([disabled])',
+  'textarea:not([disabled])',
+  '[tabindex]:not([tabindex="-1"])',
+].join(',')
 
 export interface ModalV2Props {
   /** Whether the modal is rendered. Parent controls. */
@@ -89,7 +101,12 @@ const ModalImpl = (function Modal({
   children,
 }: ModalV2Props): React.JSX.Element | null {
   const dialogRef = useRef<HTMLDivElement | null>(null)
+  const onCloseRef = useRef(onClose)
   const titleId = useId()
+
+  useEffect(() => {
+    onCloseRef.current = onClose
+  }, [onClose])
 
   // Body scroll lock while open (don't let the page scroll behind a
   // modal). Restored to previous overflow value on close so other
@@ -103,19 +120,53 @@ const ModalImpl = (function Modal({
     }
   }, [open])
 
-  // Escape key close. Bound at document level so it works even when
-  // focus isn't inside the dialog yet (e.g. mid-transition).
+  // Capture once per open cycle, then return to the trigger on close.
+  // Keeping this separate from the keyboard listener prevents callback
+  // identity changes during form edits from returning focus prematurely.
   useEffect(() => {
-    if (!open || !dismissOnEscape) return
+    if (!open) return
+    const previouslyFocused = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null
+    return () => previouslyFocused?.focus()
+  }, [open])
+
+  // Keyboard boundary. Bound at document level so Escape works even before
+  // the initial-focus effect runs. Tab and Shift+Tab wrap inside the dialog.
+  useEffect(() => {
+    if (!open) return
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
+      if (e.key === 'Escape' && dismissOnEscape) {
+        e.preventDefault()
         e.stopPropagation()
-        onClose()
+        onCloseRef.current()
+        return
+      }
+      if (e.key !== 'Tab') return
+
+      const dialog = dialogRef.current
+      if (!dialog) return
+      const focusable = Array.from(dialog.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR))
+        .filter((element) => !element.hasAttribute('disabled'))
+      if (focusable.length === 0) {
+        e.preventDefault()
+        dialog.focus()
+        return
+      }
+
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      if (e.shiftKey && (document.activeElement === first || !dialog.contains(document.activeElement))) {
+        e.preventDefault()
+        last.focus()
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault()
+        first.focus()
       }
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [open, dismissOnEscape, onClose])
+  }, [open, dismissOnEscape])
 
   // Initial focus — move to the dialog panel itself. Authors who want
   // to focus a specific control can override via autoFocus on the
@@ -126,10 +177,10 @@ const ModalImpl = (function Modal({
       const el = dialogRef.current
       if (!el) return
       const focusable = el.querySelector<HTMLElement>(
-        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+        `[data-initial-focus], ${FOCUSABLE_SELECTOR}`,
       )
       ;(focusable ?? el).focus()
-    }, 60)
+    }, 0)
     return () => clearTimeout(t)
   }, [open])
 
@@ -150,7 +201,7 @@ const ModalImpl = (function Modal({
       aria-modal="true"
       aria-labelledby={ariaLabel ? undefined : titleId}
       aria-label={ariaLabel}
-      className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/70 backdrop-blur-sm motion-safe:animate-[fadeIn_200ms_ease-out]"
+      className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm motion-safe:animate-[modalV2FadeIn_200ms_ease-out]"
       onClick={onBackdropClick}
     >
       <div
@@ -158,23 +209,25 @@ const ModalImpl = (function Modal({
         tabIndex={-1}
         data-modal-title-id={titleId}
         className={[
-          'relative w-full mx-4',
+          'relative w-full',
           sizeClass(size),
-          'rounded-modal border border-border-soft bg-raised shadow-elev-3 outline-none',
-          'motion-safe:animate-[scaleIn_320ms_cubic-bezier(0.16,1,0.3,1)]',
+          'rounded-modal border border-[var(--production-border)] bg-[var(--production-surface)] text-[var(--production-ink)] shadow-elev-3 outline-none',
+          'motion-safe:animate-[modalV2ScaleIn_320ms_cubic-bezier(0.16,1,0.3,1)]',
           className ?? '',
         ].filter(Boolean).join(' ')}
       >
-        {children}
+        <ModalTitleIdContext.Provider value={titleId}>
+          {children}
+        </ModalTitleIdContext.Provider>
       </div>
       {/* Inline keyframes — local to this component so we don't
           pollute globals.css with one-off animations. */}
-      <style jsx>{`
-        @keyframes fadeIn {
+      <style>{`
+        @keyframes modalV2FadeIn {
           from { opacity: 0; }
           to   { opacity: 1; }
         }
-        @keyframes scaleIn {
+        @keyframes modalV2ScaleIn {
           from { opacity: 0; transform: scale(0.96); }
           to   { opacity: 1; transform: scale(1); }
         }
@@ -198,14 +251,26 @@ interface ModalHeaderProps extends HTMLAttributes<HTMLDivElement> {
   showClose?: boolean
   /** Called when the close X is clicked. Wire to the parent's onClose. */
   onClose?: () => void
+  /** Localised accessible name for the close control. */
+  closeAriaLabel?: string
 }
 
 const ModalHeader = forwardRef<HTMLDivElement, ModalHeaderProps>(function ModalHeader(
-  { heading, subtitle, showClose = true, onClose, className, children, ...rest },
+  {
+    heading,
+    subtitle,
+    showClose = true,
+    onClose,
+    closeAriaLabel = '關閉',
+    className,
+    children,
+    ...rest
+  },
   ref,
 ) {
+  const titleId = useContext(ModalTitleIdContext)
   const classes = [
-    'flex items-start justify-between gap-4 border-b border-border-soft px-5 py-4',
+    'flex items-start justify-between gap-4 border-b border-[var(--production-border)] px-5 py-4',
     className ?? '',
   ]
     .filter(Boolean)
@@ -215,12 +280,12 @@ const ModalHeader = forwardRef<HTMLDivElement, ModalHeaderProps>(function ModalH
     <div ref={ref} className={classes} {...rest}>
       <div className="flex-1">
         {heading ? (
-          <h2 className="text-[16px] font-medium leading-[1.4] text-text-primary">
+          <h2 id={titleId ?? undefined} className="text-[16px] font-medium leading-[1.4] text-[var(--production-ink)]">
             {heading}
           </h2>
         ) : null}
         {subtitle ? (
-          <p className="mt-1 text-[13px] leading-[1.4] text-text-secondary">
+          <p className="mt-1 text-[13px] leading-[1.4] text-[var(--production-ink-muted)]">
             {subtitle}
           </p>
         ) : null}
@@ -230,8 +295,8 @@ const ModalHeader = forwardRef<HTMLDivElement, ModalHeaderProps>(function ModalH
         <button
           type="button"
           onClick={onClose}
-          aria-label="關閉"
-          className="-mr-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-input text-text-tertiary transition-colors duration-[120ms] ease-out hover:bg-overlay hover:text-text-primary"
+          aria-label={closeAriaLabel}
+          className="-mr-1 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-input text-[var(--production-ink-muted)] transition-colors duration-[120ms] ease-out hover:bg-[var(--production-muted)] hover:text-[var(--production-ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--production-focus)]"
         >
           <span aria-hidden="true" className="text-[18px] leading-none">×</span>
         </button>
@@ -241,7 +306,7 @@ const ModalHeader = forwardRef<HTMLDivElement, ModalHeaderProps>(function ModalH
 })
 
 function ModalBody({ className, children, ...rest }: HTMLAttributes<HTMLDivElement>) {
-  const classes = ['px-5 py-4 text-[14px] text-text-secondary', className ?? '']
+  const classes = ['px-5 py-4 text-[14px] text-[var(--production-ink-muted)]', className ?? '']
     .filter(Boolean)
     .join(' ')
   return (
@@ -253,7 +318,7 @@ function ModalBody({ className, children, ...rest }: HTMLAttributes<HTMLDivEleme
 
 function ModalFooter({ className, children, ...rest }: HTMLAttributes<HTMLDivElement>) {
   const classes = [
-    'flex items-center justify-end gap-2 border-t border-border-soft px-5 py-3',
+    'flex items-center justify-end gap-2 border-t border-[var(--production-border)] px-5 py-3',
     className ?? '',
   ]
     .filter(Boolean)

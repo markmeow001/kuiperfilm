@@ -5,7 +5,7 @@ import { TASK_TYPE, type TaskJobData } from '@/lib/task/types'
 const prismaMock = vi.hoisted(() => ({
   novelPromotionPanel: {
     findUnique: vi.fn(),
-    update: vi.fn(async () => ({})),
+    update: vi.fn(async (_args?: unknown) => ({})),
   },
 }))
 
@@ -39,7 +39,38 @@ const styleProfileLoaderMock = vi.hoisted(() => ({
   }),
 }))
 
+const projectScopeMock = vi.hoisted(() => ({
+  requireNovelPromotionPanelInProject: vi.fn(),
+  updateNovelPromotionPanelInProject: vi.fn(),
+}))
+
+const canonicalPanelProjectData = vi.hoisted(() => ({
+  videoRatio: '16:9',
+  characters: [{
+    id: 'character-1',
+    name: 'Hero',
+    appearances: [{
+      id: 'appearance-b',
+      appearanceIndex: 1,
+      changeReason: 'B',
+      description: 'canonical B',
+      descriptions: null,
+      imageUrl: 'characters/b.png',
+      imageUrls: JSON.stringify(['characters/b.png']),
+      selectedIndex: 0,
+    }],
+  }],
+  locations: [],
+  props: [],
+}))
+
+const episodeAppearanceMock = vi.hoisted(() => ({
+  canonicalizeEpisodeCharacterAppearances: vi.fn(async () => canonicalPanelProjectData),
+}))
+
 vi.mock('@/lib/style-profile/loader', () => styleProfileLoaderMock)
+vi.mock('@/lib/novel-promotion/project-scope', () => projectScopeMock)
+vi.mock('@/lib/novel-promotion/episode-appearance', () => episodeAppearanceMock)
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }))
 vi.mock('@/lib/workers/utils', () => utilsMock)
 vi.mock('@/lib/media/outbound-image', () => outboundMock)
@@ -92,6 +123,9 @@ describe('worker panel-image-task-handler behavior', () => {
   beforeEach(() => {
     vi.clearAllMocks()
 
+    utilsMock.resolveImageSourceFromGeneration.mockReset()
+    utilsMock.uploadImageSourceToCos.mockReset()
+
     prismaMock.novelPromotionPanel.findUnique.mockResolvedValue({
       id: 'panel-1',
       storyboardId: 'storyboard-1',
@@ -107,7 +141,20 @@ describe('worker panel-image-task-handler behavior', () => {
       actingNotes: null,
       sketchImageUrl: null,
       imageUrl: null,
+      storyboard: { id: 'storyboard-1', episodeId: 'episode-1' },
     })
+
+    projectScopeMock.requireNovelPromotionPanelInProject.mockImplementation(
+      async () => await prismaMock.novelPromotionPanel.findUnique(),
+    )
+    projectScopeMock.updateNovelPromotionPanelInProject.mockImplementation(
+      async (_projectId: string, panelId: string, data: Record<string, unknown>) => {
+        await prismaMock.novelPromotionPanel.update({ where: { id: panelId }, data })
+      },
+    )
+    episodeAppearanceMock.canonicalizeEpisodeCharacterAppearances.mockImplementation(
+      async () => canonicalPanelProjectData,
+    )
 
     utilsMock.resolveImageSourceFromGeneration
       .mockResolvedValueOnce('generated-source-1')
@@ -121,6 +168,88 @@ describe('worker panel-image-task-handler behavior', () => {
   it('missing panelId -> explicit error', async () => {
     const job = buildJob({}, '')
     await expect(handlePanelImageTask(job)).rejects.toThrow('panelId missing')
+  })
+
+  it('forged cross-project target fails before provider or persistence', async () => {
+    projectScopeMock.requireNovelPromotionPanelInProject.mockRejectedValueOnce(
+      new Error('NOVEL_PROMOTION_PROJECT_SCOPE_MISMATCH'),
+    )
+
+    await expect(handlePanelImageTask(buildJob({ candidateCount: 1 }, 'panel-foreign')))
+      .rejects.toThrow('NOVEL_PROMOTION_PROJECT_SCOPE_MISMATCH')
+
+    expect(projectScopeMock.requireNovelPromotionPanelInProject)
+      .toHaveBeenCalledWith('project-1', 'panel-foreign')
+    expect(utilsMock.resolveImageSourceFromGeneration).not.toHaveBeenCalled()
+    expect(utilsMock.uploadImageSourceToCos).not.toHaveBeenCalled()
+    expect(prismaMock.novelPromotionPanel.update).not.toHaveBeenCalled()
+  })
+
+  it('payload panel cannot override the durable job target', async () => {
+    await expect(handlePanelImageTask(buildJob({ panelId: 'panel-2', candidateCount: 1 })))
+      .rejects.toThrow('PANEL_IMAGE_TARGET_MISMATCH')
+
+    expect(projectScopeMock.requireNovelPromotionPanelInProject).not.toHaveBeenCalled()
+    expect(utilsMock.resolveImageSourceFromGeneration).not.toHaveBeenCalled()
+    expect(utilsMock.uploadImageSourceToCos).not.toHaveBeenCalled()
+  })
+
+  it('job episode must match the scoped panel episode', async () => {
+    const job = buildJob({ candidateCount: 1 })
+    job.data.episodeId = 'episode-2'
+
+    await expect(handlePanelImageTask(job)).rejects.toThrow('PANEL_IMAGE_TARGET_EPISODE_MISMATCH')
+
+    expect(utilsMock.resolveImageSourceFromGeneration).not.toHaveBeenCalled()
+    expect(utilsMock.uploadImageSourceToCos).not.toHaveBeenCalled()
+  })
+
+  it('unresolved episode appearance fails before provider, upload, or persistence', async () => {
+    episodeAppearanceMock.canonicalizeEpisodeCharacterAppearances.mockRejectedValueOnce(
+      new Error('EPISODE_APPEARANCE_BINDING_MISSING'),
+    )
+
+    await expect(handlePanelImageTask(buildJob({ candidateCount: 1 })))
+      .rejects.toThrow('EPISODE_APPEARANCE_BINDING_MISSING')
+
+    expect(episodeAppearanceMock.canonicalizeEpisodeCharacterAppearances).toHaveBeenCalledWith(
+      expect.objectContaining({
+        projectId: 'project-1',
+        episodeId: 'episode-1',
+        panels: [expect.objectContaining({ id: 'panel-1' })],
+      }),
+    )
+    expect(utilsMock.getProjectModels).not.toHaveBeenCalled()
+    expect(utilsMock.resolveImageSourceFromGeneration).not.toHaveBeenCalled()
+    expect(utilsMock.uploadImageSourceToCos).not.toHaveBeenCalled()
+    expect(projectScopeMock.updateNovelPromotionPanelInProject).not.toHaveBeenCalled()
+  })
+
+  it('reference collector receives only the canonical roster and no episode fallback argument', async () => {
+    await handlePanelImageTask(buildJob({ candidateCount: 1 }))
+
+    expect(sharedMock.collectPanelReferenceImages).toHaveBeenCalledWith(
+      canonicalPanelProjectData,
+      expect.objectContaining({ id: 'panel-1' }),
+    )
+    expect(sharedMock.collectPanelReferenceImages.mock.calls[0]).toHaveLength(2)
+  })
+
+  it('scope is rechecked atomically before panel persistence', async () => {
+    projectScopeMock.updateNovelPromotionPanelInProject.mockRejectedValueOnce(
+      new Error('NOVEL_PROMOTION_PROJECT_SCOPE_MISMATCH'),
+    )
+
+    await expect(handlePanelImageTask(buildJob({ candidateCount: 1 })))
+      .rejects.toThrow('NOVEL_PROMOTION_PROJECT_SCOPE_MISMATCH')
+
+    expect(utilsMock.resolveImageSourceFromGeneration).toHaveBeenCalledTimes(1)
+    expect(projectScopeMock.updateNovelPromotionPanelInProject).toHaveBeenCalledWith(
+      'project-1',
+      'panel-1',
+      expect.any(Object),
+    )
+    expect(prismaMock.novelPromotionPanel.update).not.toHaveBeenCalled()
   })
 
   it('first generation -> persists main image and candidate list', async () => {
@@ -173,6 +302,7 @@ describe('worker panel-image-task-handler behavior', () => {
       actingNotes: null,
       sketchImageUrl: null,
       imageUrl: 'cos/panel-old.png',
+      storyboard: { id: 'storyboard-1', episodeId: 'episode-1' },
     })
 
     utilsMock.resolveImageSourceFromGeneration.mockResolvedValueOnce('generated-source-regen')

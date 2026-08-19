@@ -26,7 +26,7 @@ import {
   parsePanelPropReferences,
   findPropByName,
   parseImageUrls,
-  resolveNovelData,
+  type NovelProjectData,
 } from './image-task-handler-shared'
 import { toSignedUrlIfCos } from '../utils'
 
@@ -67,7 +67,7 @@ export const DEFAULT_MAX_CHARACTER_REFS = 4
 export const DEFAULT_MAX_SCENE_REFS = 2
 export const DEFAULT_MAX_PROP_REFS = 3
 
-type NovelData = Awaited<ReturnType<typeof resolveNovelData>>
+type NovelData = NovelProjectData
 
 interface LocationImageRow {
   id?: string
@@ -87,8 +87,8 @@ interface LocationRow {
  *
  * Two-pass priority (matches BobAPI seedance-path's behavior):
  *   1. Pass 1 — panel.characters JSON references with explicit name +
- *      optional appearance hint. Episode-level appearance bindings +
- *      per-call overrides win when present.
+ *      optional legacy appearance hint. Appearance selection itself was
+ *      already resolved by the canonical episode boundary.
  *   2. Pass 2 — description-mining fallback. For panels where
  *      panel.characters is empty but the description / videoPrompt
  *      mentions a project character by name (with `/`-separated
@@ -98,7 +98,6 @@ interface LocationRow {
 export function collectCharacterRefs(
   panels: RefCollectionPanel[],
   projectData: NovelData,
-  episodeBindings: Map<string, string>,
   maxRefs: number = DEFAULT_MAX_CHARACTER_REFS,
   /**
    * 2026-05-28 — extra free text to mine for character names (Pass 3).
@@ -122,22 +121,9 @@ export function collectCharacterRefs(
       const character = findCharacterByName(projectData.characters || [], ref.name)
       if (!character) continue
       if (seenIds.has(character.id)) continue
-      const appearances = character.appearances || []
-      let appearance = appearances[0]
-      const boundAppearanceId = episodeBindings.get(character.id)
-      if (ref.appearance) {
-        const matched = appearances.find(
-          (a) => (a.changeReason || '').toLowerCase() === ref.appearance!.toLowerCase(),
-        )
-        if (matched) appearance = matched
-        else if (boundAppearanceId) {
-          const bound = appearances.find((a) => a.id === boundAppearanceId)
-          if (bound) appearance = bound
-        }
-      } else if (boundAppearanceId) {
-        const bound = appearances.find((a) => a.id === boundAppearanceId)
-        if (bound) appearance = bound
-      }
+      // Canonical input contains one authoritative appearance. Ignore the
+      // panel hint so stale LLM metadata cannot switch the costume.
+      const appearance = character.appearances?.[0]
       if (!appearance) continue
       const imageUrls = parseImageUrls(appearance.imageUrls, 'characterAppearance.imageUrls')
       const selectedIndex = appearance.selectedIndex
@@ -162,13 +148,7 @@ export function collectCharacterRefs(
       const aliases = character.name.split('/').map((s) => s.trim()).filter(Boolean)
       const hit = aliases.some((alias) => alias && desc.includes(alias))
       if (!hit) continue
-      const appearances = character.appearances || []
-      let appearance = appearances[0]
-      const boundAppearanceId = episodeBindings.get(character.id)
-      if (boundAppearanceId) {
-        const bound = appearances.find((a) => a.id === boundAppearanceId)
-        if (bound) appearance = bound
-      }
+      const appearance = character.appearances?.[0]
       if (!appearance) continue
       const imageUrls = parseImageUrls(appearance.imageUrls, 'characterAppearance.imageUrls')
       const selectedIndex = appearance.selectedIndex
@@ -198,13 +178,7 @@ export function collectCharacterRefs(
       const aliases = character.name.split('/').map((s) => s.trim()).filter(Boolean)
       const hit = aliases.some((alias) => alias && minedText.includes(alias.toLowerCase()))
       if (!hit) continue
-      const appearances = character.appearances || []
-      let appearance = appearances[0]
-      const boundAppearanceId = episodeBindings.get(character.id)
-      if (boundAppearanceId) {
-        const bound = appearances.find((a) => a.id === boundAppearanceId)
-        if (bound) appearance = bound
-      }
+      const appearance = character.appearances?.[0]
       if (!appearance) continue
       const imageUrls = parseImageUrls(appearance.imageUrls, 'characterAppearance.imageUrls')
       const selectedIndex = appearance.selectedIndex

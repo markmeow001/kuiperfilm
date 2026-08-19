@@ -2,8 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireUserAuth, requireEditorAuth, isErrorResponse } from '@/lib/api-auth'
 import { ApiError, apiHandler } from '@/lib/api-errors'
+import {
+    rejectLegacyCustomVoiceWrite,
+    resolveLegacyCharacterVoiceWrite,
+} from '@/lib/voice/legacy-custom-voice-boundary'
 
-// 多人系统：团队共享 — 任何成员都能读取角色详情
+// 角色详情按创建用户隔离
 export const GET = apiHandler(async (
     _request: NextRequest,
     context: { params: Promise<{ characterId: string }> }
@@ -12,9 +16,10 @@ export const GET = apiHandler(async (
 
     const authResult = await requireUserAuth()
     if (isErrorResponse(authResult)) return authResult
+    const { session } = authResult
 
-    const character = await prisma.globalCharacter.findUnique({
-        where: { id: characterId },
+    const character = await prisma.globalCharacter.findFirst({
+        where: { id: characterId, userId: session.user.id },
         include: { appearances: true }
     })
     if (!character) {
@@ -33,30 +38,37 @@ export const PATCH = apiHandler(async (
 
     const authResult = await requireEditorAuth()
     if (isErrorResponse(authResult)) return authResult
+    const { session } = authResult
 
-    const character = await prisma.globalCharacter.findUnique({
-        where: { id: characterId }
+    const character = await prisma.globalCharacter.findFirst({
+        where: { id: characterId, userId: session.user.id }
     })
     if (!character) {
         throw new ApiError('NOT_FOUND')
     }
 
     const body = await request.json()
-    const { name, aliases, profileData, profileConfirmed, voiceId, voiceType, customVoiceUrl, folderId, globalVoiceId } = body
+    const { name, aliases, profileData, profileConfirmed, folderId, globalVoiceId } = body
+
+    const voiceWrite = resolveLegacyCharacterVoiceWrite(body)
+    if (globalVoiceId !== undefined && globalVoiceId !== null) {
+        rejectLegacyCustomVoiceWrite()
+    }
 
     const updateData: Record<string, unknown> = {}
     if (name !== undefined) updateData.name = name.trim()
     if (aliases !== undefined) updateData.aliases = aliases
     if (profileData !== undefined) updateData.profileData = profileData
     if (profileConfirmed !== undefined) updateData.profileConfirmed = profileConfirmed
-    if (voiceId !== undefined) updateData.voiceId = voiceId
-    if (voiceType !== undefined) updateData.voiceType = voiceType
-    if (customVoiceUrl !== undefined) updateData.customVoiceUrl = customVoiceUrl
-    if (globalVoiceId !== undefined) updateData.globalVoiceId = globalVoiceId
+    if (voiceWrite.kind === 'clear') {
+        Object.assign(updateData, voiceWrite.data, { globalVoiceId: null })
+    } else if (globalVoiceId === null) {
+        updateData.globalVoiceId = null
+    }
     if (folderId !== undefined) {
         if (folderId) {
-            const folder = await prisma.globalAssetFolder.findUnique({
-                where: { id: folderId }
+            const folder = await prisma.globalAssetFolder.findFirst({
+                where: { id: folderId, userId: session.user.id }
             })
             if (!folder) {
                 throw new ApiError('INVALID_PARAMS')
@@ -66,7 +78,7 @@ export const PATCH = apiHandler(async (
     }
 
     const updatedCharacter = await prisma.globalCharacter.update({
-        where: { id: characterId },
+        where: { id: characterId, userId: session.user.id },
         data: updateData,
         include: { appearances: true }
     })
@@ -83,16 +95,18 @@ export const DELETE = apiHandler(async (
 
     const authResult = await requireEditorAuth()
     if (isErrorResponse(authResult)) return authResult
+    const { session } = authResult
 
-    const character = await prisma.globalCharacter.findUnique({
-        where: { id: characterId }
+    const character = await prisma.globalCharacter.findFirst({
+        where: { id: characterId, userId: session.user.id },
+        select: { id: true }
     })
     if (!character) {
         throw new ApiError('NOT_FOUND')
     }
 
     await prisma.globalCharacter.delete({
-        where: { id: characterId }
+        where: { id: characterId, userId: session.user.id }
     })
 
     return NextResponse.json({ success: true })

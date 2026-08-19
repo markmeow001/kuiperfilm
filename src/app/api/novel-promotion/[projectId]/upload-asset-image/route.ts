@@ -1,26 +1,26 @@
-import { NextRequest, NextResponse, after } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { uploadToCOS, generateUniqueKey } from '@/lib/cos'
+import { deleteCOSObject, uploadToCOS, generateUniqueKey } from '@/lib/cos'
 import sharp from 'sharp'
 import { initializeFonts, createLabelSVG } from '@/lib/fonts'
 import { decodeImageUrlsFromDb, encodeImageUrls } from '@/lib/contracts/image-urls-contract'
 import { requireProjectAuthLight, isErrorResponse } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
 import { createScopedLogger } from '@/lib/logging/core'
-import { redescribeAssetFromImage } from '@/lib/novel-promotion/asset-image-redescribe'
+import { detectSupportedImageType } from '@/lib/playground/image-file-type'
+
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024
+const MAX_IMAGE_INDEX = 31
 
 interface CharacterAppearanceRecord {
   id: string
   imageUrls: string | null
   selectedIndex: number | null
-  description: string | null
-  descriptions: string | null
 }
 
 interface LocationImageRecord {
   id: string
   imageIndex: number
-  description?: string | null
 }
 
 interface LocationRecord {
@@ -29,12 +29,13 @@ interface LocationRecord {
 }
 
 interface UploadAssetImageDb {
+  $transaction<T>(callback: (transaction: UploadAssetImageDb) => Promise<T>): Promise<T>
   characterAppearance: {
-    findUnique(args: Record<string, unknown>): Promise<CharacterAppearanceRecord | null>
+    findFirst(args: Record<string, unknown>): Promise<CharacterAppearanceRecord | null>
     update(args: Record<string, unknown>): Promise<unknown>
   }
   novelPromotionLocation: {
-    findUnique(args: Record<string, unknown>): Promise<LocationRecord | null>
+    findFirst(args: Record<string, unknown>): Promise<LocationRecord | null>
     update(args: Record<string, unknown>): Promise<unknown>
   }
   locationImage: {
@@ -44,6 +45,54 @@ interface UploadAssetImageDb {
   novelPromotionProp: {
     findFirst(args: Record<string, unknown>): Promise<{ id: string } | null>
     update(args: Record<string, unknown>): Promise<unknown>
+  }
+}
+
+type AssetType = 'character' | 'location' | 'prop'
+
+function isAssetType(value: string): value is AssetType {
+  return value === 'character' || value === 'location' || value === 'prop'
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
+async function persistUploadedAsset<T>(input: {
+  projectId: string
+  assetType: AssetType
+  assetId: string
+  imageKey: string
+  persist: () => Promise<T>
+}): Promise<T> {
+  try {
+    return await input.persist()
+  } catch (persistenceError: unknown) {
+    let cleanupError: unknown = null
+    try {
+      await deleteCOSObject(input.imageKey, { throwOnError: true })
+    } catch (error: unknown) {
+      cleanupError = error
+    }
+
+    createScopedLogger({
+      module: 'api.upload-asset-image',
+      action: 'asset_image_persistence_failed',
+      projectId: input.projectId,
+    }).error({
+      action: 'asset_image_persistence_failed',
+      message: 'asset image persistence failed after upload',
+      details: {
+        projectId: input.projectId,
+        assetType: input.assetType,
+        assetId: input.assetId,
+        imageKey: input.imageKey,
+        persistenceError: errorMessage(persistenceError),
+        cleanupError: cleanupError === null ? null : errorMessage(cleanupError),
+      },
+    })
+
+    throw new ApiError('INTERNAL_ERROR')
   }
 }
 
@@ -58,29 +107,109 @@ export const POST = apiHandler(async (
   const { projectId } = await context.params
   const db = prisma as unknown as UploadAssetImageDb
 
-  // 初始化字体（在 Vercel 环境中需要）
-  await initializeFonts()
-
   // 🔐 统一权限验证
   const authResult = await requireProjectAuthLight(projectId)
   if (isErrorResponse(authResult)) return authResult
 
   // 解析表单数据
   const formData = await request.formData()
-  const file = formData.get('file') as File
-  const type = formData.get('type') as string // 'character' | 'location'
-  const id = formData.get('id') as string // characterId 或 locationId
-  const appearanceId = formData.get('appearanceId') as string | null  // UUID
-  const imageIndex = formData.get('imageIndex') as string | null
-  const labelText = formData.get('labelText') as string // 文字标识符
+  const fileEntry = formData.get('file')
+  const typeEntry = formData.get('type')
+  const idEntry = formData.get('id')
+  const appearanceIdEntry = formData.get('appearanceId')
+  const imageIndexEntry = formData.get('imageIndex')
+  const labelTextEntry = formData.get('labelText')
 
-  if (!file || !type || !id || !labelText) {
+  if (
+    !(fileEntry instanceof File)
+    || typeof typeEntry !== 'string'
+    || !isAssetType(typeEntry)
+    || typeof idEntry !== 'string'
+    || !idEntry
+    || typeof labelTextEntry !== 'string'
+    || !labelTextEntry
+  ) {
     throw new ApiError('INVALID_PARAMS')
   }
 
-  // 读取文件
+  const file = fileEntry
+  const type = typeEntry
+  const id = idEntry
+  const appearanceId = typeof appearanceIdEntry === 'string' && appearanceIdEntry
+    ? appearanceIdEntry
+    : null
+  const imageIndex = typeof imageIndexEntry === 'string' && imageIndexEntry
+    ? imageIndexEntry
+    : null
+  const labelText = labelTextEntry
+
+  let appearance: CharacterAppearanceRecord | null = null
+  let location: LocationRecord | null = null
+  let prop: { id: string } | null = null
+
+  if (type === 'character') {
+    if (!appearanceId) {
+      throw new ApiError('INVALID_PARAMS')
+    }
+    appearance = await db.characterAppearance.findFirst({
+      where: {
+        id: appearanceId,
+        characterId: id,
+        character: { novelPromotionProject: { projectId } },
+      },
+    })
+    if (!appearance) {
+      throw new ApiError('NOT_FOUND')
+    }
+  } else if (type === 'location') {
+    location = await db.novelPromotionLocation.findFirst({
+      where: { id, novelPromotionProject: { projectId } },
+      include: { images: { orderBy: { imageIndex: 'asc' } } },
+    })
+    if (!location) {
+      throw new ApiError('NOT_FOUND')
+    }
+  } else {
+    prop = await db.novelPromotionProp.findFirst({
+      where: { id, novelPromotionProject: { projectId } },
+      select: { id: true },
+    })
+    if (!prop) {
+      throw new ApiError('NOT_FOUND', { code: 'PROP_NOT_IN_PROJECT' })
+    }
+  }
+
+  let parsedImageIndex: number | null = null
+  if (imageIndex !== null) {
+    if (!/^\d+$/.test(imageIndex)) {
+      throw new ApiError('INVALID_PARAMS')
+    }
+    parsedImageIndex = Number(imageIndex)
+    if (
+      !Number.isSafeInteger(parsedImageIndex)
+      || parsedImageIndex < 0
+      || parsedImageIndex > MAX_IMAGE_INDEX
+    ) {
+      throw new ApiError('INVALID_PARAMS')
+    }
+  }
+
+  if (file.size < 1 || file.size > MAX_IMAGE_BYTES) {
+    throw new ApiError('INVALID_PARAMS')
+  }
+
   const arrayBuffer = await file.arrayBuffer()
   const buffer = Buffer.from(arrayBuffer)
+  if (
+    buffer.length < 1
+    || buffer.length > MAX_IMAGE_BYTES
+    || detectSupportedImageType(buffer) === null
+  ) {
+    throw new ApiError('INVALID_PARAMS')
+  }
+
+  // 初始化字体（在 Vercel 环境中需要）
+  await initializeFonts()
 
   // 添加文字标识符
   const meta = await sharp(buffer).metadata()
@@ -110,107 +239,53 @@ export const POST = apiHandler(async (
   await uploadToCOS(processed, key)
 
   // 更新数据库
-  if (type === 'character' && appearanceId !== null) {
-    // 更新角色形象图片 - 使用 UUID 直接查询
-    const appearance = await db.characterAppearance.findUnique({
-      where: { id: appearanceId }
-    })
+  if (type === 'character' && appearance !== null) {
+    const { targetIndex } = await persistUploadedAsset({
+      projectId,
+      assetType: type,
+      assetId: id,
+      imageKey: key,
+      persist: async () => {
+        // 解析现有图片数组
+        const imageUrls = decodeImageUrlsFromDb(
+          appearance.imageUrls,
+          'characterAppearance.imageUrls',
+        )
 
-    if (!appearance) {
-      throw new ApiError('NOT_FOUND')
-    }
+        // 如果指定了imageIndex，替换对应位置的图片
+        const targetIndex = parsedImageIndex ?? imageUrls.length
 
-    // 解析现有图片数组
-    const imageUrls = decodeImageUrlsFromDb(appearance.imageUrls, 'characterAppearance.imageUrls')
-
-    // 如果指定了imageIndex，替换对应位置的图片
-    const targetIndex = imageIndex !== null ? parseInt(imageIndex) : imageUrls.length
-
-    // 确保数组足够大
-    while (imageUrls.length <= targetIndex) {
-      imageUrls.push('')
-    }
-
-    imageUrls[targetIndex] = key
-
-    // 计算是否需要同步更新 imageUrl
-    // 当上传的图片是选中的图片时，或者是第一张图片且没有选中任何图片时
-    const selectedIndex = appearance.selectedIndex
-    const shouldUpdateImageUrl =
-      selectedIndex === targetIndex ||  // 上传的是选中的图片
-      (selectedIndex === null && targetIndex === 0) ||  // 没有选中任何图片，上传的是第一张
-      imageUrls.filter(u => !!u).length === 1  // 只有一张有效图片
-
-    const updateData: Record<string, unknown> = {
-      imageUrls: encodeImageUrls(imageUrls)
-    }
-
-    if (shouldUpdateImageUrl) {
-      updateData.imageUrl = key
-    }
-
-    // 更新数据库
-    await db.characterAppearance.update({
-      where: { id: appearance.id },
-      data: updateData
-    })
-
-    // Auto-rewrite appearance.description to match the uploaded image.
-    // See lib/novel-promotion/asset-image-redescribe.ts for the full
-    // rationale (iangyc 2026-05-12 case — uploaded 古裝劍仙 ref but
-    // description still said "modern white suit", panel gen trusted
-    // text over image).
-    //
-    // Only rewrite when the uploaded image is the appearance's selected
-    // image — that's the one panel gen actually feeds to the model.
-    // 2026-06-16 — run the vision-LLM description rewrite AFTER the response
-    // is sent (Next 15 `after`). The image + imageUrl are already persisted
-    // above, so the upload returns immediately and the card's "上傳中" overlay
-    // clears at once instead of waiting the full LLM round-trip (which made
-    // uploads look stuck until a manual refresh, esp. on slower LLM providers).
-    if (shouldUpdateImageUrl) {
-      const appearanceId = appearance.id
-      const prevDescription = appearance.description ?? null
-      const prevDescriptions = appearance.descriptions ?? null
-      after(async () => {
-        try {
-          const result = await redescribeAssetFromImage({
-            kind: 'character',
-            imageKeyOrUrl: key,
-            projectId,
-            userId: authResult.session.user.id,
-            entityId: appearanceId,
-          })
-          if (result.ok) {
-            await db.characterAppearance.update({
-              where: { id: appearanceId },
-              data: {
-                previousDescription: prevDescription,
-                previousDescriptions: prevDescriptions,
-                description: result.description,
-                // Worker's pickAppearanceDescription prefers `descriptions`
-                // (plural JSON array) over `description` (singular); reset the
-                // array to the new value so both readers see the same story.
-                descriptions: JSON.stringify([result.description]),
-              },
-            })
-          } else {
-            createScopedLogger({
-              module: 'api.upload-asset-image',
-              action: 'character_appearance_describe',
-            }).warn({
-              message: 'character description rewrite skipped',
-              details: { appearanceId, code: result.code, error: result.message },
-            })
-          }
-        } catch (err) {
-          createScopedLogger({
-            module: 'api.upload-asset-image',
-            action: 'character_appearance_describe',
-          }).warn({ message: 'character description rewrite failed (after)', details: { appearanceId, error: (err as Error)?.message } })
+        // 确保数组足够大
+        while (imageUrls.length <= targetIndex) {
+          imageUrls.push('')
         }
-      })
-    }
+
+        imageUrls[targetIndex] = key
+
+        // 计算是否需要同步更新 imageUrl
+        // 当上传的图片是选中的图片时，或者是第一张图片且没有选中任何图片时
+        const selectedIndex = appearance.selectedIndex
+        const shouldUpdateImageUrl =
+          selectedIndex === targetIndex ||  // 上传的是选中的图片
+          (selectedIndex === null && targetIndex === 0) ||  // 没有选中任何图片，上传的是第一张
+          imageUrls.filter(u => !!u).length === 1  // 只有一张有效图片
+
+        const updateData: Record<string, unknown> = {
+          imageUrls: encodeImageUrls(imageUrls)
+        }
+
+        if (shouldUpdateImageUrl) {
+          updateData.imageUrl = key
+        }
+
+        await db.characterAppearance.update({
+          where: { id: appearance.id },
+          data: updateData,
+        })
+
+        return { targetIndex }
+      },
+    })
 
     return NextResponse.json({
       success: true,
@@ -218,183 +293,92 @@ export const POST = apiHandler(async (
       imageIndex: targetIndex
     })
 
-  } else if (type === 'location') {
-    // 更新场景图片
-    const location = await db.novelPromotionLocation.findUnique({
-      where: { id },
-      include: { images: { orderBy: { imageIndex: 'asc' } } }
-    })
+  } else if (type === 'location' && location !== null) {
+    const { returnImageIndex } = await persistUploadedAsset({
+      projectId,
+      assetType: type,
+      assetId: id,
+      imageKey: key,
+      persist: async () => db.$transaction(async (transaction) => {
+        // 如果指定了imageIndex，更新对应的图片记录
+        let returnImageIndex: number
+        if (parsedImageIndex !== null) {
+          const targetImageIndex = parsedImageIndex
+          const existingImage = location.images?.find((img) => img.imageIndex === targetImageIndex)
+          returnImageIndex = targetImageIndex
 
-    if (!location) {
-      throw new ApiError('NOT_FOUND')
-    }
-
-    // 如果指定了imageIndex，更新对应的图片记录
-    let touchedImage: { id: string; previousDescription: string | null } | null = null
-    let returnImageIndex: number
-    if (imageIndex !== null) {
-      const targetImageIndex = parseInt(imageIndex)
-      const existingImage = location.images?.find((img) => img.imageIndex === targetImageIndex)
-      returnImageIndex = targetImageIndex
-
-      if (existingImage) {
-        const updated = await db.locationImage.update({
-          where: { id: existingImage.id },
-          data: { imageUrl: key }
-        })
-        if (!location.selectedImageId) {
-          await prisma.novelPromotionLocation.update({
-            where: { id },
-            data: { selectedImageId: updated.id }
-          })
-        }
-        touchedImage = {
-          id: existingImage.id,
-          previousDescription: (existingImage as { description?: string | null }).description ?? null,
-        }
-      } else {
-        const created = await db.locationImage.create({
-          data: {
-            locationId: id,
-            imageIndex: targetImageIndex,
-            imageUrl: key,
-            description: labelText,
-            isSelected: targetImageIndex === 0
-          }
-        })
-        if (!location.selectedImageId) {
-          await prisma.novelPromotionLocation.update({
-            where: { id },
-            data: { selectedImageId: created.id }
-          })
-        }
-        touchedImage = { id: created.id, previousDescription: null }
-      }
-    } else {
-      // 创建新的图片记录
-      const maxIndex = location.images?.length || 0
-      returnImageIndex = maxIndex
-      const created = await db.locationImage.create({
-        data: {
-          locationId: id,
-          imageIndex: maxIndex,
-          imageUrl: key,
-          description: labelText,
-          isSelected: maxIndex === 0
-        }
-      })
-      if (!location.selectedImageId) {
-        await prisma.novelPromotionLocation.update({
-          where: { id },
-          data: { selectedImageId: created.id }
-        })
-      }
-      touchedImage = { id: created.id, previousDescription: null }
-    }
-
-    // Auto-rewrite LocationImage.description from the uploaded image —
-    // mirrors the character path. Panel gen reads pick.description to
-    // build the 场景 line of the image prompt, so this keeps text and
-    // image in sync. `labelText` from the form is just the view-name
-    // label (e.g. "窗邊"); we overwrite it with the LLM's read of the
-    // actual scene contents.
-    // 2026-06-16 — defer the vision-LLM rewrite to after() (see character path).
-    if (touchedImage) {
-      const touchedImageId = touchedImage.id
-      const prevDescription = touchedImage.previousDescription
-      after(async () => {
-        try {
-          const result = await redescribeAssetFromImage({
-            kind: 'location',
-            imageKeyOrUrl: key,
-            projectId,
-            userId: authResult.session.user.id,
-            entityId: touchedImageId,
-          })
-          if (result.ok) {
-            await prisma.locationImage.update({
-              where: { id: touchedImageId },
-              data: {
-                previousDescription: prevDescription,
-                description: result.description,
-              },
+          if (existingImage) {
+            const updated = await transaction.locationImage.update({
+              where: { id: existingImage.id },
+              data: { imageUrl: key }
             })
+            if (!location.selectedImageId) {
+              await transaction.novelPromotionLocation.update({
+                where: { id },
+                data: { selectedImageId: updated.id }
+              })
+            }
           } else {
-            createScopedLogger({
-              module: 'api.upload-asset-image',
-              action: 'location_image_describe',
-            }).warn({
-              message: 'location description rewrite skipped',
-              details: { locationImageId: touchedImageId, code: result.code, error: result.message },
+            const created = await transaction.locationImage.create({
+              data: {
+                locationId: id,
+                imageIndex: targetImageIndex,
+                imageUrl: key,
+                description: labelText,
+                isSelected: targetImageIndex === 0
+              }
+            })
+            if (!location.selectedImageId) {
+              await transaction.novelPromotionLocation.update({
+                where: { id },
+                data: { selectedImageId: created.id }
+              })
+            }
+          }
+        } else {
+          // 创建新的图片记录
+          const maxIndex = location.images?.length || 0
+          returnImageIndex = maxIndex
+          const created = await transaction.locationImage.create({
+            data: {
+              locationId: id,
+              imageIndex: maxIndex,
+              imageUrl: key,
+              description: labelText,
+              isSelected: maxIndex === 0
+            }
+          })
+          if (!location.selectedImageId) {
+            await transaction.novelPromotionLocation.update({
+              where: { id },
+              data: { selectedImageId: created.id }
             })
           }
-        } catch (err) {
-          createScopedLogger({
-            module: 'api.upload-asset-image',
-            action: 'location_image_describe',
-          }).warn({ message: 'location description rewrite failed (after)', details: { locationImageId: touchedImageId, error: (err as Error)?.message } })
         }
-      })
-    }
+
+        return { returnImageIndex }
+      }),
+    })
 
     return NextResponse.json({
       success: true,
       imageKey: key,
       imageIndex: returnImageIndex
     })
-  } else if (type === 'prop') {
+  } else if (type === 'prop' && prop !== null) {
     // 道具图片上传 — 跟角色/场景一样把 COS key 写回 imageUrl
     // (Phase 11.3 Stage C: NovelPromotionProp 单图模型,没有 images[] 数组,
     // 所以这里不处理 imageIndex,直接覆盖 imageUrl。)
-    const prop = await db.novelPromotionProp.findFirst({
-      where: { id, novelPromotionProject: { projectId } },
-      select: { id: true },
+    await persistUploadedAsset({
+      projectId,
+      assetType: type,
+      assetId: id,
+      imageKey: key,
+      persist: async () => db.novelPromotionProp.update({
+        where: { id: prop.id },
+        data: { imageUrl: key },
+      }),
     })
-
-    if (!prop) {
-      throw new ApiError('NOT_FOUND', { code: 'PROP_NOT_IN_PROJECT' })
-    }
-
-    await db.novelPromotionProp.update({
-      where: { id: prop.id },
-      data: { imageUrl: key },
-    })
-
-    // Auto-rewrite prop.description from the uploaded image — deferred to
-    // after() (see character path) so the upload returns immediately.
-    {
-      const propId = prop.id
-      after(async () => {
-        try {
-          const propResult = await redescribeAssetFromImage({
-            kind: 'prop',
-            imageKeyOrUrl: key,
-            projectId,
-            userId: authResult.session.user.id,
-            entityId: propId,
-          })
-          if (propResult.ok) {
-            await db.novelPromotionProp.update({
-              where: { id: propId },
-              data: { description: propResult.description },
-            })
-          } else {
-            createScopedLogger({
-              module: 'api.upload-asset-image',
-              action: 'prop_describe',
-            }).warn({
-              message: 'prop description rewrite skipped',
-              details: { propId, code: propResult.code, error: propResult.message },
-            })
-          }
-        } catch (err) {
-          createScopedLogger({
-            module: 'api.upload-asset-image',
-            action: 'prop_describe',
-          }).warn({ message: 'prop description rewrite failed (after)', details: { propId, error: (err as Error)?.message } })
-        }
-      })
-    }
 
     return NextResponse.json({
       success: true,

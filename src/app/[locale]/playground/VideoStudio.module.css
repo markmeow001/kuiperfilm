@@ -1,0 +1,26 @@
+.root {
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.root :global(button),
+.root :global(select),
+.root :global(a) {
+  min-height: 44px;
+}
+
+@media (max-width: 900px) {
+  .root {
+    overscroll-behavior-y: contain;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .root *,
+  .root *::before,
+  .root *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}

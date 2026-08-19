@@ -31,6 +31,8 @@ import { Inspector } from '@/components/v2/Inspector'
 import { EmptyState } from '@/components/v2/EmptyState'
 import { GenerationProgress } from '@/components/v2/GenerationProgress'
 import { MediaReveal } from '@/components/v2/MediaReveal'
+import { ProductionContractPreview } from './ProductionContractPreview'
+import { ThemeContractPreview } from './ThemeContractPreview'
 import {
   useSkills,
   useInstallSkill,
@@ -40,7 +42,7 @@ import {
 
 export default function ComponentsPreview() {
   return (
-    <main className="min-h-screen bg-canvas text-text-primary">
+    <main className="kuiper-dashboard min-h-screen bg-canvas text-text-primary">
       <div className="mx-auto max-w-[1280px] px-6 py-12">
         <header className="mb-10 border-b border-border-soft pb-6">
           <h1 className="font-medium text-[36px] leading-[1.1] tracking-[-0.02em]">
@@ -51,19 +53,21 @@ export default function ComponentsPreview() {
           </p>
         </header>
 
+        <ThemeContractPreview />
+
         <section className="mb-12">
           <h2 className="mb-4 text-[20px] font-medium">Surface scale</h2>
           <p className="mb-4 text-[13px] text-text-tertiary">
             §3.2 — a view may use ≤3 neutrals: canvas, raised, overlay.
             More = visual debt.
           </p>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div className="rounded-card border border-border-soft bg-canvas p-6">
               <div className="text-[12px] uppercase tracking-[0.04em] text-text-tertiary">
                 bg-canvas
               </div>
               <div className="mt-2 font-mono text-[14px] text-text-secondary">
-                #0A0A0A
+                #070B0F
               </div>
             </div>
             <div className="rounded-card border border-border-soft bg-raised p-6">
@@ -71,7 +75,7 @@ export default function ComponentsPreview() {
                 bg-raised
               </div>
               <div className="mt-2 font-mono text-[14px] text-text-secondary">
-                #171717
+                #111B24
               </div>
             </div>
             <div className="rounded-card border border-border-soft bg-overlay p-6">
@@ -79,7 +83,7 @@ export default function ComponentsPreview() {
                 bg-overlay
               </div>
               <div className="mt-2 font-mono text-[14px] text-text-secondary">
-                #1F1F1F
+                #17232D
               </div>
             </div>
           </div>
@@ -436,6 +440,17 @@ export default function ComponentsPreview() {
           </p>
 
           <SkillPickerDemo />
+        </section>
+
+        <section className="mb-12">
+          <h2 className="mb-4 text-[20px] font-medium">
+            Production UI contract — 2026 platform upgrade
+          </h2>
+          <p className="mb-6 max-w-3xl text-[13px] leading-6 text-text-tertiary">
+            統一深色製片工作區與完整狀態語言的整合預覽。
+            下方資料只用於開發驗收，不會送出生成、建立資料或產生費用。
+          </p>
+          <ProductionContractPreview />
         </section>
       </div>
     </main>

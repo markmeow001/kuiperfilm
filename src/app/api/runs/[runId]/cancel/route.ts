@@ -32,16 +32,27 @@ export const POST = apiHandler(async (
     }
   }
 
+  if (run.taskId) {
+    const taskCancellation = await cancelTask(run.taskId, 'Run cancelled by user')
+    if (!taskCancellation.task) {
+      throw new ApiError('NOT_FOUND')
+    }
+    if (taskCancellation.providerHandoffProtected) {
+      throw new ApiError('CONFLICT', {
+        code: 'VOICE_PROVIDER_CANCEL_RECONCILIATION_REQUIRED',
+        message: 'Voice provider request is already in progress and cannot be safely cancelled',
+      })
+    }
+  }
+
   const cancelledRun = await requestRunCancel({
     runId,
-    userId: session.user.id,
+    // requestRunCancel scopes the mutation to the run owner. Authorization
+    // above decides whether a collaborator may perform this write.
+    userId: run.userId,
   })
   if (!cancelledRun) {
     throw new ApiError('NOT_FOUND')
-  }
-
-  if (cancelledRun.taskId) {
-    await cancelTask(cancelledRun.taskId, 'Run cancelled by user')
   }
 
   if (
@@ -64,4 +75,3 @@ export const POST = apiHandler(async (
     run: cancelledRun,
   })
 })
-

@@ -202,8 +202,30 @@ describe('billing/cost', () => {
   })
 
   it('calculates voice costs from quantities', () => {
-    expect(calcVoice(30)).toBeGreaterThan(0)
+    expect(calcVoice('atlascloud::bytedance/seed-audio-1.0', 1_000)).toBeCloseTo(0.015 * USD_TO_CNY, 8)
   })
+
+  it.each([
+    ['ASCII code points', 'Atlas', 5],
+    ['CJK code points', '配音測試', 4],
+    ['astral emoji code points', 'A😀中', 3],
+  ])('%s -> charges the exact Unicode code-point quantity', (_label, text, expectedCharacters) => {
+    const characters = [...text].length
+    expect(characters).toBe(expectedCharacters)
+    expect(calcVoice('atlascloud::bytedance/seed-audio-1.0', characters)).toBeCloseTo(
+      0.015 * USD_TO_CNY * (expectedCharacters / 1_000),
+      12,
+    )
+  })
+
+  it.each([Number.NaN, Number.POSITIVE_INFINITY, -1, 1.5])(
+    'invalid voice character quantity %s -> fails instead of normalizing billing usage',
+    (quantity) => {
+      expect(() => calcVoice('atlascloud::bytedance/seed-audio-1.0', quantity)).toThrow(
+        'Voice character count must be a non-negative integer',
+      )
+    },
+  )
 
   // AtlasCloud seedance-2.5 — per-resolution tiers sampled from the vendor
   // playground 2026-08-07 (5s: 480p $0.704375 / 720p $1.514799), linearly

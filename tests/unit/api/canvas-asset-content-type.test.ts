@@ -10,34 +10,24 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { contentTypeForKey } from '@/lib/cos'
-
-const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
-
-function resolveAssetContentType(upstreamType: string, key: string): string | null {
-  const normalized = upstreamType.split(';')[0].trim().toLowerCase()
-  const inferred = contentTypeForKey(key)
-  if (ALLOWED_TYPES.includes(normalized)) return normalized
-  if (ALLOWED_TYPES.includes(inferred)) return inferred
-  return null
-}
+import { resolveCanvasAssetContentType } from '@/lib/canvas/canvas-asset-response'
 
 describe('canvas asset content-type resolution', () => {
   it('trusts a valid upstream content-type', () => {
-    expect(resolveAssetContentType('image/png', 'playground-ref/u1/bg.jpg')).toBe('image/png')
+    expect(resolveCanvasAssetContentType('image/png', 'playground-ref/u1/bg.jpg')).toBe('image/png')
   })
 
   it('falls back to key extension when upstream says octet-stream (legacy R2 objects)', () => {
-    expect(resolveAssetContentType('application/octet-stream', 'playground-ref/u1/bg-123.jpg')).toBe('image/jpeg')
-    expect(resolveAssetContentType('application/octet-stream', 'images/playground-ref/u1/bg-123.png')).toBe('image/png')
+    expect(resolveCanvasAssetContentType('application/octet-stream', 'playground-ref/u1/bg-123.jpg')).toBe('image/jpeg')
+    expect(resolveCanvasAssetContentType('application/octet-stream', 'images/playground-ref/u1/bg-123.png')).toBe('image/png')
   })
 
   it('rejects when neither upstream nor extension yields an allowed image type', () => {
-    expect(resolveAssetContentType('application/octet-stream', 'playground-ref/u1/clip.mp4')).toBeNull()
-    expect(resolveAssetContentType('text/html', 'playground-ref/u1/no-extension')).toBeNull()
+    expect(resolveCanvasAssetContentType('application/octet-stream', 'playground-ref/u1/clip.mp4')).toBeNull()
+    expect(resolveCanvasAssetContentType('text/html', 'playground-ref/u1/no-extension')).toBeNull()
   })
 
   it('never lets video/unknown types through the image proxy', () => {
-    expect(resolveAssetContentType('video/mp4', 'playground-ref/u1/clip.mp4')).toBeNull()
+    expect(resolveCanvasAssetContentType('video/mp4', 'playground-ref/u1/clip.mp4')).toBeNull()
   })
 })

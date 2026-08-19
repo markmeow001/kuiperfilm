@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { TASK_TYPE, type TaskType } from '@/lib/task/types'
 import { buildMockRequest } from '../../../helpers/request'
+import { ApiError } from '@/lib/api-errors'
+
+vi.mock('server-only', () => ({}))
 
 type AuthState = {
   authenticated: boolean
@@ -31,6 +34,17 @@ const authState = vi.hoisted<AuthState>(() => ({
 }))
 
 const submitTaskMock = vi.hoisted(() => vi.fn<(...args: unknown[]) => Promise<SubmitResult>>())
+const outboundImageMock = vi.hoisted(() => ({
+  sanitizeImageInputsForTaskPayload: vi.fn(),
+}))
+
+const sanitizeImageInputs = async (inputs: unknown[]) => ({
+  normalized: inputs
+    .filter((item): item is string => typeof item === 'string')
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0),
+  issues: [] as Array<{ reason: string }>,
+})
 
 const configServiceMock = vi.hoisted(() => ({
   getUserModelConfig: vi.fn(async () => ({
@@ -72,6 +86,9 @@ const hasOutputMock = vi.hoisted(() => ({
 }))
 
 const prismaMock = vi.hoisted(() => ({
+  task: {
+    findMany: vi.fn(async () => []),
+  },
   userPreference: {
     findUnique: vi.fn(async () => ({ lipSyncModel: 'fal::lipsync-model' })),
   },
@@ -82,6 +99,7 @@ const prismaMock = vi.hoisted(() => ({
         id,
         panelIndex: id === 'panel-ins' ? 2 : 1,
         storyboardId: 'storyboard-1',
+        storyboard: { id: 'storyboard-1', episodeId: 'episode-1' },
       }
     }),
     findMany: vi.fn(async () => []),
@@ -140,12 +158,19 @@ const prismaMock = vi.hoisted(() => ({
     })),
   },
   novelPromotionStoryboard: {
+    findFirst: vi.fn(async () => ({
+      id: 'storyboard-1',
+      episodeId: 'episode-1',
+      clipId: 'clip-1',
+    })),
     findUnique: vi.fn(async () => ({ episodeId: 'episode-1' })),
   },
   novelPromotionEpisode: {
     findFirst: vi.fn(async () => ({
       id: 'episode-1',
       speakerVoices: '{}',
+      novelPromotionProject: { analysisModel: 'llm::analysis' },
+      storyboards: [{ panels: [{ id: 'panel-1' }, { id: 'panel-2' }] }],
     })),
   },
   novelPromotionVoiceLine: {
@@ -154,8 +179,26 @@ const prismaMock = vi.hoisted(() => ({
     ]),
     findFirst: vi.fn(async () => ({
       id: 'line-1',
+      episodeId: 'episode-1',
       speaker: 'Narrator',
       content: 'hello world voice line',
+      voicePresetId: 'voice-preset-system',
+      emotionPrompt: null,
+      emotionStrength: 0.4,
+      audioUrl: 'https://voice.example/line-1.mp3',
+      episode: {
+        speakerVoices: '{}',
+        novelPromotionProject: { characters: [] },
+      },
+    })),
+  },
+  voicePreset: {
+    findFirst: vi.fn(async () => ({
+      id: 'voice-preset-system',
+      isSystem: true,
+      audioUrl: 'voice/system/narrator.wav',
+      audioMediaId: null,
+      audioMedia: null,
     })),
   },
   $transaction: vi.fn(async (fn: (tx: {
@@ -211,6 +254,9 @@ vi.mock('@/lib/task/submitter', () => ({
 vi.mock('@/lib/task/resolve-locale', () => ({
   resolveRequiredTaskLocale: vi.fn(() => 'zh'),
 }))
+vi.mock('@/lib/workers/handlers/resolve-analysis-model', () => ({
+  resolveAnalysisModel: vi.fn(async () => 'llm::analysis'),
+}))
 vi.mock('@/lib/config-service', () => configServiceMock)
 vi.mock('@/lib/task/has-output', () => hasOutputMock)
 vi.mock('@/lib/billing', () => ({
@@ -220,15 +266,7 @@ vi.mock('@/lib/qwen-voice-design', () => ({
   validateVoicePrompt: vi.fn(() => ({ valid: true })),
   validatePreviewText: vi.fn(() => ({ valid: true })),
 }))
-vi.mock('@/lib/media/outbound-image', () => ({
-  sanitizeImageInputsForTaskPayload: vi.fn((inputs: unknown[]) => ({
-    normalized: inputs
-      .filter((item): item is string => typeof item === 'string')
-      .map((item) => item.trim())
-      .filter((item) => item.length > 0),
-    issues: [] as Array<{ reason: string }>,
-  })),
-}))
+vi.mock('@/lib/media/outbound-image', () => outboundImageMock)
 vi.mock('@/lib/model-capabilities/lookup', () => ({
   resolveBuiltinCapabilitiesByModelKey: vi.fn(() => ({ video: { firstlastframe: true } })),
 }))
@@ -239,6 +277,16 @@ vi.mock('@/lib/api-config', () => ({
   resolveModelSelection: vi.fn(async () => ({
     model: 'img::storyboard',
   })),
+  resolveAtlasCloudSeedAudioConfiguration: vi.fn(async () => ({
+    selection: {
+      modelId: 'bytedance/seed-audio-1.0',
+      modelKey: 'atlascloud::bytedance/seed-audio-1.0',
+      provider: 'atlascloud',
+      mediaType: 'audio',
+    },
+    provider: { id: 'atlascloud', name: 'AtlasCloud', apiKey: 'atlas-key' },
+  })),
+  getProviderKey: vi.fn((provider: string) => provider.split(':')[0]),
 }))
 vi.mock('@/lib/prisma', () => ({
   prisma: prismaMock,
@@ -249,6 +297,7 @@ function toApiPath(routeFile: string): string {
     .replace(/^src\/app/, '')
     .replace(/\/route\.ts$/, '')
     .replace('[projectId]', 'project-1')
+    .replace('[episodeId]', 'episode-1')
 }
 
 function toModuleImportPath(routeFile: string): string {
@@ -278,11 +327,12 @@ const DIRECT_CASES: ReadonlyArray<DirectRouteCase> = [
     expectedProjectId: 'global-asset-hub',
   },
   {
-    routeFile: 'src/app/api/asset-hub/voice-design/route.ts',
-    body: { voicePrompt: 'female calm narrator', previewText: '你好世界' },
-    expectedTaskType: TASK_TYPE.ASSET_HUB_VOICE_DESIGN,
-    expectedTargetType: 'GlobalAssetHubVoiceDesign',
-    expectedProjectId: 'global-asset-hub',
+    routeFile: 'src/app/api/novel-promotion/[projectId]/episodes/[episodeId]/auto-group-multi-shot/route.ts',
+    body: {},
+    params: { projectId: 'project-1', episodeId: 'episode-1' },
+    expectedTaskType: TASK_TYPE.AUTO_GROUP_MULTI_SHOT,
+    expectedTargetType: 'NovelPromotionEpisode',
+    expectedProjectId: 'project-1',
   },
   {
     routeFile: 'src/app/api/novel-promotion/[projectId]/generate-image/route.ts',
@@ -404,7 +454,12 @@ const DIRECT_CASES: ReadonlyArray<DirectRouteCase> = [
   },
   {
     routeFile: 'src/app/api/novel-promotion/[projectId]/voice-generate/route.ts',
-    body: { episodeId: 'episode-1', lineId: 'line-1', audioModel: 'fal::audio-model' },
+    body: {
+      episodeId: 'episode-1',
+      lineId: 'line-1',
+      audioModel: 'atlascloud::bytedance/seed-audio-1.0',
+      clientRequestId: '11111111-1111-4111-8111-111111111111',
+    },
     params: { projectId: 'project-1' },
     expectedTaskType: TASK_TYPE.VOICE_LINE,
     expectedTargetType: 'NovelPromotionVoiceLine',
@@ -434,6 +489,7 @@ describe('api contract - direct submit routes (behavior)', () => {
       taskId: `task-${++seq}`,
       async: true,
     }))
+    outboundImageMock.sanitizeImageInputsForTaskPayload.mockImplementation(sanitizeImageInputs)
   })
 
   it('keeps expected coverage size', () => {
@@ -476,4 +532,59 @@ describe('api contract - direct submit routes (behavior)', () => {
       }
     })
   }
+
+  it.each([
+    'src/app/api/asset-hub/modify-image/route.ts',
+    'src/app/api/novel-promotion/[projectId]/modify-asset-image/route.ts',
+  ])('%s -> reserved extra image rejects before task submission', async (routeFile) => {
+    const routeCase = DIRECT_CASES.find((item) => item.routeFile === routeFile)
+    expect(routeCase).toBeDefined()
+    const reserved = `voice/project-a/episode-a/line-a/${'a'.repeat(32)}-${'b'.repeat(64)}.wav`
+    outboundImageMock.sanitizeImageInputsForTaskPayload.mockRejectedValueOnce(
+      new ApiError('INVALID_PARAMS', { code: 'VOICE_LINE_TASK_OUTPUT_REFERENCE_FORBIDDEN' }),
+    )
+
+    const res = await invokePostRoute({
+      ...routeCase!,
+      body: { ...routeCase!.body, extraImageUrls: [reserved] },
+    })
+    const responseBody = await res.json()
+    expect(res.status).toBe(400)
+    expect(responseBody.error.details.code).toBe('VOICE_LINE_TASK_OUTPUT_REFERENCE_FORBIDDEN')
+    expect(outboundImageMock.sanitizeImageInputsForTaskPayload).toHaveBeenCalledWith([reserved])
+    expect(submitTaskMock).not.toHaveBeenCalled()
+  })
+
+  it('modify-storyboard selected asset -> reserved reference rejects before task submission', async () => {
+    const routeCase = DIRECT_CASES.find((item) => (
+      item.routeFile === 'src/app/api/novel-promotion/[projectId]/modify-storyboard-image/route.ts'
+    ))
+    expect(routeCase).toBeDefined()
+    const reserved = `https://cos.example/voice/project-a/episode-a/line-a/${'a'.repeat(32)}-${'b'.repeat(64)}.wav?q-signature=fake`
+    outboundImageMock.sanitizeImageInputsForTaskPayload.mockImplementation(async (inputs: unknown[]) => {
+      if (inputs.includes(reserved)) {
+        throw new ApiError('INVALID_PARAMS', {
+          code: 'VOICE_LINE_TASK_OUTPUT_REFERENCE_FORBIDDEN',
+        })
+      }
+      return sanitizeImageInputs(inputs)
+    })
+
+    const res = await invokePostRoute({
+      ...routeCase!,
+      body: {
+        ...routeCase!.body,
+        extraImageUrls: ['https://example.com/allowed.png'],
+        selectedAssets: [{ imageUrl: reserved }],
+      },
+    })
+    const responseBody = await res.json()
+    expect(res.status).toBe(400)
+    expect(responseBody.error.details.code).toBe('VOICE_LINE_TASK_OUTPUT_REFERENCE_FORBIDDEN')
+    expect(outboundImageMock.sanitizeImageInputsForTaskPayload.mock.calls).toEqual([
+      [['https://example.com/allowed.png']],
+      [[reserved]],
+    ])
+    expect(submitTaskMock).not.toHaveBeenCalled()
+  })
 })

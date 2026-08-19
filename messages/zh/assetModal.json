@@ -72,6 +72,7 @@
     },
     "errors": {
         "uploadFailed": "上传失败",
+        "createdButUploadFailed": "素材已建立，圖片上傳失敗",
         "extractDescriptionFailed": "提取描述失败",
         "createFailed": "创建失败",
         "aiDesignFailed": "AI 设计失败",

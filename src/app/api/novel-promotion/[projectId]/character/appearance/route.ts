@@ -9,7 +9,10 @@ import { apiHandler, ApiError } from '@/lib/api-errors'
 
 /**
  * POST - 为现有角色添加子形象
- * Body: { characterId, changeReason, description }
+ * Body: { characterId, changeReason, description, episodeId? }
+ *
+ * episodeId 有值时，造型与该集的 EpisodeCharacter 绑定在同一交易写入。
+ * episodeId 缺省时只建立项目造型目录记录，不推断或改写任何剧集绑定。
  */
 export const POST = apiHandler(async (
   request: NextRequest,
@@ -17,107 +20,104 @@ export const POST = apiHandler(async (
 ) => {
   const { projectId } = await context.params
 
-  // 🔐 统一权限验证
-  const authResult = await requireProjectAuthLight(projectId)
+  const authResult = await requireProjectAuthLight(projectId, { action: 'write' })
   if (isErrorResponse(authResult)) return authResult
 
-  const body = await request.json()
-  const { characterId, changeReason, description } = body
+  const body = (await request.json()) as {
+    characterId?: unknown
+    changeReason?: unknown
+    description?: unknown
+    episodeId?: unknown
+  }
+  const characterId = typeof body.characterId === 'string' ? body.characterId.trim() : ''
+  const changeReason = typeof body.changeReason === 'string' ? body.changeReason.trim() : ''
+  const description = typeof body.description === 'string' ? body.description.trim() : ''
+  const hasEpisodeId = body.episodeId !== undefined && body.episodeId !== null
+  const episodeId = typeof body.episodeId === 'string' ? body.episodeId.trim() : ''
 
-  if (!characterId || !changeReason || !description) {
+  if (!characterId || !changeReason || !description || (hasEpisodeId && !episodeId)) {
     throw new ApiError('INVALID_PARAMS')
   }
 
-  // 验证角色存在
-  const character = await prisma.novelPromotionCharacter.findUnique({
-    where: { id: characterId },
-    include: {
-      appearances: { orderBy: { appearanceIndex: 'asc' } },
-      novelPromotionProject: true
-    }
+  // URL project 是第一层权限边界；foreign character 对外统一表现为不存在。
+  const character = await prisma.novelPromotionCharacter.findFirst({
+    where: {
+      id: characterId,
+      novelPromotionProject: { projectId },
+    },
+    select: {
+      id: true,
+      name: true,
+      novelPromotionProjectId: true,
+      appearances: {
+        orderBy: { appearanceIndex: 'asc' },
+        select: { appearanceIndex: true },
+      },
+    },
   })
 
   if (!character) {
     throw new ApiError('NOT_FOUND')
   }
 
-  // 验证角色属于当前项目
-  if (character.novelPromotionProject.projectId !== projectId) {
-    throw new ApiError('INVALID_PARAMS')
+  // 若指定集数，必须与已验证角色属于同一个 NovelPromotionProject。
+  // 在写交易前完成链路验证，避免先建 catalog row 再发现 binding 非法。
+  if (episodeId) {
+    const episode = await prisma.novelPromotionEpisode.findFirst({
+      where: {
+        id: episodeId,
+        novelPromotionProjectId: character.novelPromotionProjectId,
+      },
+      select: { id: true },
+    })
+    if (!episode) {
+      throw new ApiError('NOT_FOUND')
+    }
   }
 
-  // 计算新的 appearanceIndex
   const maxIndex = character.appearances.reduce(
     (max, app) => Math.max(max, app.appearanceIndex),
     0
   )
   const newIndex = maxIndex + 1
 
-  // 创建子形象
-  const newAppearance = await prisma.characterAppearance.create({
-    data: {
-      characterId,
-      appearanceIndex: newIndex,
-      changeReason: changeReason.trim(),
-      description: description.trim(),
-      descriptions: JSON.stringify([description.trim()]),
-      imageUrls: encodeImageUrls([]),
-      previousImageUrls: encodeImageUrls([])}
+  const newAppearance = await prisma.$transaction(async (tx) => {
+    const appearance = await tx.characterAppearance.create({
+      data: {
+        characterId,
+        appearanceIndex: newIndex,
+        changeReason,
+        description,
+        descriptions: JSON.stringify([description]),
+        imageUrls: encodeImageUrls([]),
+        previousImageUrls: encodeImageUrls([]),
+      },
+    })
+
+    if (episodeId) {
+      await tx.episodeCharacter.upsert({
+        where: {
+          episodeId_characterId: {
+            episodeId,
+            characterId,
+          },
+        },
+        update: { appearanceId: appearance.id },
+        create: {
+          episodeId,
+          characterId,
+          appearanceId: appearance.id,
+          role: 'manual',
+        },
+      })
+    }
+
+    return appearance
   })
 
-  _ulogInfo(`✓ 添加子形象: ${character.name} - ${changeReason} (index: ${newIndex})`)
-
-  // 2026-05-04 — auto-bind 新 appearance 到專案內每一集。
-  //
-  // 起因:iangyc 報「上傳了角色圖但生圖沒用到」。trace 發現 user
-  // 上傳新造型後 EpisodeCharacter.appearanceId 仍是 NULL,worker 走
-  // fallback 用 appearance[0](初始形象),不是 user 上傳的那張。
-  //
-  // 設計選擇:user 明確要求(2026-05-04)「之後每一集上傳角色後都會
-  // 自動綁定在同一個專案內」。從此每次新增 appearance 視為「換臉宣告」,
-  // 套用到該角色在所有 episode 的 binding;最新上傳 wins。
-  //
-  // 取捨:這會破壞「ep1-10 用 appearance A, ep11+ 用 appearance B」
-  // 的 multi-appearance use case。但內部 10-20 人 TikTok 短劇場景下,
-  // user 直覺「上傳=換臉」遠優先。需要跨集區間造型時 user 仍可在主體頁
-  // 的「每集綁定」UI 手動 PATCH 覆寫。
-  //
-  // Best-effort:binding 失敗不應該擋住 appearance 建立(已回 200)。
-  // 失敗只 log,不 throw。下次上傳會再 upsert 一次,自我修復。
-  try {
-    const episodes = await prisma.novelPromotionEpisode.findMany({
-      where: { novelPromotionProjectId: character.novelPromotionProjectId },
-      select: { id: true },
-    })
-    if (episodes.length > 0) {
-      await prisma.$transaction(
-        episodes.map((ep) =>
-          prisma.episodeCharacter.upsert({
-            where: {
-              episodeId_characterId: {
-                episodeId: ep.id,
-                characterId,
-              },
-            },
-            update: { appearanceId: newAppearance.id },
-            create: {
-              episodeId: ep.id,
-              characterId,
-              appearanceId: newAppearance.id,
-              role: 'manual',
-            },
-          }),
-        ),
-      )
-      _ulogInfo(
-        `✓ 自動綁定 appearance ${newAppearance.id} 到 ${episodes.length} 集 (project=${projectId}, character=${character.name})`,
-      )
-    }
-  } catch (bindErr) {
-    _ulogWarn(
-      `[appearance auto-bind] 綁定失敗(不影響 appearance 建立): ${(bindErr as Error)?.message ?? bindErr}`,
-    )
-  }
+  _ulogInfo(
+    `✓ 添加子形象: ${character.name} - ${changeReason} (index: ${newIndex}, episode=${episodeId || 'catalog-only'})`,
+  )
 
   return NextResponse.json({
     success: true,

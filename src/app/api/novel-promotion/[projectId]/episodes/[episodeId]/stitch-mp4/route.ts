@@ -13,12 +13,13 @@
  * resolveTaskResponse / poll runs status.
  */
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
 import { requireProjectAuthLight, isErrorResponse } from '@/lib/api-auth'
 import { apiHandler, ApiError, getRequestId } from '@/lib/api-errors'
 import { submitTask } from '@/lib/task/submitter'
 import { resolveRequiredTaskLocale } from '@/lib/task/resolve-locale'
 import { TASK_TYPE } from '@/lib/task/types'
+import { EpisodeDeliverySourceError } from '@/lib/novel-promotion/final-delivery'
+import { getEpisodeDeliveryInputSnapshot } from '@/lib/novel-promotion/episode-delivery-snapshot'
 
 export const POST = apiHandler(async (
   request: NextRequest,
@@ -33,54 +34,21 @@ export const POST = apiHandler(async (
   const body = await request.json().catch(() => ({}))
   const locale = resolveRequiredTaskLocale(request, body as Record<string, unknown>)
 
-  // Verify the episode exists, belongs to this project, and has at least
-  // one panel with a videoUrl (otherwise ffmpeg has nothing to concat).
-  const episode = await prisma.novelPromotionEpisode.findUnique({
-    where: { id: episodeId },
-    select: {
-      id: true,
-      novelPromotionProjectId: true,
-      novelPromotionProject: { select: { projectId: true } },
-      storyboards: {
-        select: {
-          panels: { select: { id: true, videoUrl: true } },
-        },
-      },
-    },
-  })
-
-  if (!episode) {
+  let snapshot
+  try {
+    snapshot = await getEpisodeDeliveryInputSnapshot(projectId, episodeId)
+  } catch (error) {
+    if (error instanceof EpisodeDeliverySourceError) {
+      throw new ApiError('INVALID_PARAMS', { code: 'EPISODE_DELIVERY_SOURCE_INVALID' })
+    }
+    throw error
+  }
+  if (!snapshot) {
     throw new ApiError('NOT_FOUND', { code: 'EPISODE_NOT_FOUND' })
   }
-  if (episode.novelPromotionProject?.projectId !== projectId) {
-    throw new ApiError('NOT_FOUND', { code: 'EPISODE_NOT_IN_PROJECT' })
-  }
-
-  const panelsWithVideo = episode.storyboards
-    .flatMap((sb) => sb.panels)
-    .filter((p) => Boolean(p.videoUrl))
-
-  // Multi-shot B-path episodes have empty panel.videoUrl — the playable
-  // mp4 lives on the latest completed video_multi_shot task per group
-  // instead. Allow the package to proceed when either source exists so
-  // the worker can pull whichever videos are available.
-  let multiShotTaskCount = 0
-  if (panelsWithVideo.length === 0) {
-    multiShotTaskCount = await prisma.task.count({
-      where: {
-        episodeId: episode.id,
-        type: TASK_TYPE.VIDEO_MULTI_SHOT,
-        status: 'completed',
-      },
-    })
-  }
-
-  if (panelsWithVideo.length === 0 && multiShotTaskCount === 0) {
+  if (!snapshot.input.canCreate) {
     throw new ApiError('INVALID_PARAMS', {
-      code: 'NO_PANEL_VIDEOS',
-      details: {
-        message: '此 episode 還沒有任何分鏡或多鏡頭視頻,請先生成 panel videos 或 multi-shot 群組',
-      },
+      code: 'NO_DELIVERY_INPUTS',
     })
   }
 
@@ -89,14 +57,15 @@ export const POST = apiHandler(async (
     locale,
     requestId: getRequestId(request),
     projectId,
-    episodeId: episode.id,
+    episodeId: snapshot.episode.id,
     type: TASK_TYPE.EPISODE_STITCH_MP4,
     targetType: 'NovelPromotionEpisode',
-    targetId: episode.id,
+    targetId: snapshot.episode.id,
     payload: {
-      episodeId: episode.id,
+      episodeId: snapshot.episode.id,
+      sourceFingerprint: snapshot.sourceFingerprint,
     },
-    dedupeKey: `episode_stitch_mp4:${episode.id}`,
+    dedupeKey: `episode_stitch_mp4:${snapshot.episode.id}`,
   })
 
   return NextResponse.json(result)

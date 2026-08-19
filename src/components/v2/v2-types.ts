@@ -31,7 +31,7 @@ export const V2_STEPS: readonly V2Step[] = [
   { id: 'subjects', num: '02', label: '劇本拆解', subtitle: 'Breakdown', icon: 'userCircle' },
   { id: 'storyboard', num: '03', label: '分鏡', subtitle: 'Storyboard', icon: 'image' },
   { id: 'voice', num: '04', label: '配音', subtitle: 'Voice', icon: 'mic' },
-  { id: 'final', num: '05', label: '成片', subtitle: 'Final Cut', icon: 'play' },
+  { id: 'final', num: '05', label: '素材交付', subtitle: 'Asset Delivery', icon: 'play' },
 ] as const
 
 export function findV2Step(id: V2StepId): V2Step {

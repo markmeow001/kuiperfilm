@@ -47,11 +47,23 @@ describe('billing/cost error branches', () => {
     expect(() => calcImage('provider::missing-image-model', 1)).toThrow('Unknown image model pricing')
   })
 
-  it('normalizes invalid numeric inputs to zero before pricing', () => {
+  it('legacy media NaN normalizes to zero while voice character NaN fails explicitly', () => {
     lookupMock.resolveBuiltinPricing.mockImplementation(
-      (input: { selections?: { tokenType?: 'input' | 'output' } }) => {
+      (input: { apiType?: string; selections?: { tokenType?: 'input' | 'output' } }) => {
         if (input.selections?.tokenType === 'input') return { status: 'resolved', amount: 2 }
         if (input.selections?.tokenType === 'output') return { status: 'resolved', amount: 4 }
+        if (input.apiType === 'voice') {
+          return {
+            status: 'resolved',
+            amount: 3,
+            entry: {
+              apiType: 'voice',
+              provider: 'atlascloud',
+              modelId: 'voice-model',
+              pricing: { mode: 'usage', currency: 'USD', unit: 'character', unitAmount: 3, countScale: 1_000 },
+            },
+          }
+        }
         return { status: 'resolved', amount: 3 }
       },
     )
@@ -60,6 +72,6 @@ describe('billing/cost error branches', () => {
     expect(calcText('text-model', 1_000_000, Number.NaN)).toBeCloseTo(2, 8)
     expect(calcImage('image-model', Number.NaN)).toBe(0)
     expect(calcVideo('video-model', '720p', Number.NaN)).toBe(0)
-    expect(calcVoice(Number.NaN)).toBe(0)
+    expect(() => calcVoice('voice-model', Number.NaN)).toThrow('Voice character count must be a non-negative integer')
   })
 })

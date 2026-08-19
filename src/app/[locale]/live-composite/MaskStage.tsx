@@ -30,6 +30,7 @@ import {
   type DepthGuideRecordingSession,
 } from './lib/depth-guide-recorder'
 import type { CompositeView, MaskEditTarget, MaskKeyframe, MaskRaster, MaskStroke, MaskTool, NormalizedPoint, VideoMetadata, VirtualCharacterAppearance, VirtualCharacterLayer, VirtualCharacterMotionKeyframe } from './live-composite-types'
+import styles from './LiveCompositeShell.module.css'
 
 export interface MaskStageHandle {
   exportMask: () => Promise<Blob>
@@ -517,7 +518,7 @@ export const MaskStage = forwardRef<MaskStageHandle, MaskStageProps>(function Ma
 
   if (!videoUrl) {
     return (
-      <div className="grid min-h-0 flex-1 place-items-center bg-[#09090b] p-10">
+      <div className={styles.stageEmpty}>
         <div className="max-w-md text-center">
           <div className="mx-auto grid h-20 w-20 place-items-center rounded-full border border-dashed border-cyan-400/30 bg-cyan-400/5 text-3xl text-cyan-300">＋</div>
           <h2 className="mt-6 text-xl font-medium text-stone-100">從左側上傳一段實拍影片</h2>
@@ -528,7 +529,7 @@ export const MaskStage = forwardRef<MaskStageHandle, MaskStageProps>(function Ma
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-[#09090b]">
+    <div className={styles.stageSurface}>
       <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden p-5">
         <video
           ref={videoRef}
@@ -571,27 +572,33 @@ export const MaskStage = forwardRef<MaskStageHandle, MaskStageProps>(function Ma
         {stageError ? <div role="alert" className="absolute bottom-5 rounded-lg border border-red-400/30 bg-red-950/90 px-4 py-2 text-sm text-red-200">{stageError}</div> : null}
       </div>
 
-      <div className="flex items-center gap-3 border-t border-white/10 bg-stone-950 px-5 py-3">
-        <button type="button" disabled={editingDisabled} onClick={togglePlayback} aria-label={playing ? '暫停影片' : '播放影片'} className="grid h-9 w-9 place-items-center rounded-full bg-white text-stone-950 hover:bg-cyan-200 disabled:opacity-40">
+      <div className={styles.playbackControls} data-live-composite-playback>
+        <button type="button" disabled={editingDisabled} onClick={togglePlayback} aria-label={playing ? '暫停影片' : '播放影片'} className={styles.playbackButton}>
           {playing ? <AppIcon name="pause" className="h-4 w-4 fill-current" /> : <AppIcon name="play" className="ml-0.5 h-4 w-4 fill-current" />}
         </button>
         <span className="w-12 font-mono text-xs text-stone-400">{currentTime.toFixed(1)}s</span>
-        <input
-          aria-label="影片時間"
-          type="range"
-          min={0}
-          max={metadata?.duration ?? 0}
-          step={0.01}
-          value={Math.min(currentTime, metadata?.duration ?? 0)}
-          disabled={editingDisabled}
-          onChange={(event) => {
-            const time = Number(event.target.value)
-            setCurrentTime(time)
-            onTimeChange(time)
-            if (videoRef.current) videoRef.current.currentTime = time
-          }}
-          className="min-w-0 flex-1 accent-cyan-400"
-        />
+        <label
+          className={`${styles.specialControlHitArea} flex min-w-0 flex-1 items-center`}
+          data-live-composite-control-hit-area
+        >
+          <span className="sr-only">影片時間</span>
+          <input
+            aria-label="影片時間"
+            type="range"
+            min={0}
+            max={metadata?.duration ?? 0}
+            step={0.01}
+            value={Math.min(currentTime, metadata?.duration ?? 0)}
+            disabled={editingDisabled}
+            onChange={(event) => {
+              const time = Number(event.target.value)
+              setCurrentTime(time)
+              onTimeChange(time)
+              if (videoRef.current) videoRef.current.currentTime = time
+            }}
+            className="w-full accent-cyan-400"
+          />
+        </label>
         <span className="w-14 text-right font-mono text-xs text-stone-500">{(metadata?.duration ?? 0).toFixed(1)}s</span>
       </div>
     </div>

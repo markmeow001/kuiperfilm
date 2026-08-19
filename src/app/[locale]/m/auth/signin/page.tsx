@@ -15,8 +15,10 @@
  */
 import { useState } from 'react'
 import { signIn } from 'next-auth/react'
-import { useRouter, useParams } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
+import { resolvePostAuthPath } from '@/lib/auth/post-auth-url'
+import { ProductionBrand } from '@/components/v2/ProductionBrand'
 
 export default function MobileSignIn() {
   const [username, setUsername] = useState('')
@@ -25,8 +27,13 @@ export default function MobileSignIn() {
   const [error, setError] = useState('')
   const router = useRouter()
   const params = useParams<{ locale: string }>()
+  const searchParams = useSearchParams()
   const locale = params?.locale ?? 'zh'
   const t = useTranslations('auth')
+  const postAuthPath = resolvePostAuthPath(
+    searchParams?.get('callbackUrl'),
+    `/${locale}/m/projects`,
+  )
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -41,7 +48,7 @@ export default function MobileSignIn() {
       if (result?.error) {
         setError(t('loginFailed'))
       } else {
-        router.push(`/${locale}/m/projects`)
+        router.push(postAuthPath)
         router.refresh()
       }
     } catch {
@@ -52,31 +59,29 @@ export default function MobileSignIn() {
   }
 
   return (
-    <main className="flex min-h-[100svh] flex-col items-center justify-center px-6 py-10">
-      {/* Brand mark — minimal, no decorative chrome on mobile */}
-      <div className="mb-8 text-center">
-        <div className="font-mono text-[10px] tracking-[0.4em] text-amber-600/80">
-          KUIPER · AI · MANHUA · STUDIO
-        </div>
-        <div className="mt-2 flex items-baseline justify-center gap-1.5">
-          <span className="font-display text-3xl font-semibold italic tracking-tight text-amber-400">
-            Kuiper
-          </span>
-          <span className="font-serif-cn text-lg font-medium text-stone-100">影界</span>
-        </div>
-        <div className="mt-3 font-fraunces text-xs italic text-stone-500">
-          mobile review portal
-        </div>
-      </div>
+    <main className="relative flex min-h-[100svh] flex-col items-center justify-center overflow-x-hidden bg-[#070B0F] px-5 py-10 text-[#F2F6F7] [--primary-400:#55AFC0]">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(620px_420px_at_50%_-5%,rgba(85,175,192,0.14),transparent_68%)]" />
+      <ProductionBrand
+        locale={locale}
+        href={`/${locale}`}
+        tone="dark"
+        className="relative mb-8"
+      />
 
       <form
         onSubmit={handleSubmit}
-        className="w-full max-w-sm space-y-5 rounded-sm border border-amber-900/30 bg-stone-900/60 p-6 shadow-2xl backdrop-blur-sm"
+        className="relative w-full max-w-sm space-y-5 rounded-xl border border-[#263642] bg-[#111B24]/95 p-6 shadow-[0_28px_90px_rgba(0,0,0,0.42)] backdrop-blur-sm"
       >
+        <div className="pb-1 text-center">
+          <div className="font-mono text-[11px] tracking-[0.28em] text-[#55AFC0]">
+            MOBILE STUDIO ACCESS
+          </div>
+          <h1 className="mt-2 font-serif-cn text-2xl font-medium">{t('welcomeBack')}</h1>
+        </div>
         <div>
           <label
             htmlFor="username"
-            className="mb-2 block font-mono text-[10px] uppercase tracking-wider text-stone-500"
+            className="mb-2 block font-mono text-[11px] uppercase tracking-wider text-[#A7B3BC]"
           >
             {t('phoneNumber')}
           </label>
@@ -90,7 +95,7 @@ export default function MobileSignIn() {
             onChange={(e) => setUsername(e.target.value)}
             required
             autoFocus
-            className="h-12 w-full rounded-sm border border-stone-800 bg-stone-950 px-4 font-serif-cn text-base text-stone-100 transition-colors placeholder:text-stone-600 focus:border-amber-500/60 focus:outline-none"
+            className="min-h-12 w-full rounded-lg border border-[#263642] bg-[#0D141B] px-4 font-serif-cn text-base text-[#F2F6F7] transition-colors placeholder:text-[#657581] focus:border-[#55AFC0] focus:outline-none focus:ring-2 focus:ring-[#55AFC0]/25"
             placeholder={t('phoneNumberPlaceholder')}
           />
         </div>
@@ -98,7 +103,7 @@ export default function MobileSignIn() {
         <div>
           <label
             htmlFor="password"
-            className="mb-2 block font-mono text-[10px] uppercase tracking-wider text-stone-500"
+            className="mb-2 block font-mono text-[11px] uppercase tracking-wider text-[#A7B3BC]"
           >
             {t('password')}
           </label>
@@ -109,13 +114,13 @@ export default function MobileSignIn() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            className="h-12 w-full rounded-sm border border-stone-800 bg-stone-950 px-4 font-mono text-base text-stone-100 transition-colors placeholder:text-stone-600 focus:border-amber-500/60 focus:outline-none"
+            className="min-h-12 w-full rounded-lg border border-[#263642] bg-[#0D141B] px-4 font-mono text-base text-[#F2F6F7] transition-colors placeholder:text-[#657581] focus:border-[#55AFC0] focus:outline-none focus:ring-2 focus:ring-[#55AFC0]/25"
             placeholder={t('passwordPlaceholder')}
           />
         </div>
 
         {error ? (
-          <div className="rounded-sm border border-rose-500/30 bg-rose-500/10 px-3 py-2 font-serif-cn text-sm text-rose-300">
+          <div role="alert" className="rounded-lg border border-[#7F3F4B] bg-[#2A171D] px-4 py-3 font-serif-cn text-sm text-[#FFB4BE]">
             {error}
           </div>
         ) : null}
@@ -123,14 +128,14 @@ export default function MobileSignIn() {
         <button
           type="submit"
           disabled={loading}
-          className="h-12 w-full rounded-sm bg-amber-500 font-serif-cn text-base font-medium tracking-wide text-stone-950 transition-all hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
+          className="min-h-12 w-full rounded-lg bg-[#3E73B9] px-4 font-serif-cn text-base font-medium text-white transition-colors hover:bg-[#4B82C8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#55AFC0] focus-visible:ring-offset-2 focus-visible:ring-offset-[#111B24] disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {loading ? t('loginLoading') : t('login')}
+          {loading ? t('loginButtonLoading') : t('loginButton')}
         </button>
       </form>
 
-      <div className="mt-8 text-center font-mono text-[10px] tracking-wider text-stone-600">
-        review-only · author on desktop
+      <div className="relative mt-8 text-center font-mono text-[10px] tracking-wider text-[#7F909C]">
+        REVIEW · APPROVE · CONTINUE ON DESKTOP
       </div>
     </main>
   )

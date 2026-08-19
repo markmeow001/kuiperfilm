@@ -1,8 +1,12 @@
 import { logInfo as _ulogInfo } from '@/lib/logging/core'
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
 import { requireProjectAuthLight, isErrorResponse } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
+import {
+    findNovelPromotionStoryboardInProject,
+    NovelPromotionProjectScopeError,
+    updateNovelPromotionStoryboardInProject,
+} from '@/lib/novel-promotion/project-scope'
 
 /**
  * PUT /api/novel-promotion/[projectId]/photography-plan
@@ -26,9 +30,7 @@ export const PUT = apiHandler(async (
     }
 
     // 验证 storyboard 存在
-    const storyboard = await prisma.novelPromotionStoryboard.findUnique({
-        where: { id: storyboardId }
-    })
+    const storyboard = await findNovelPromotionStoryboardInProject(projectId, storyboardId)
 
     if (!storyboard) {
         throw new ApiError('NOT_FOUND')
@@ -37,10 +39,16 @@ export const PUT = apiHandler(async (
     // 更新摄影方案
     const photographyPlanJson = photographyPlan ? JSON.stringify(photographyPlan) : null
 
-    await prisma.novelPromotionStoryboard.update({
-        where: { id: storyboardId },
-        data: { photographyPlan: photographyPlanJson }
-    })
+    try {
+        await updateNovelPromotionStoryboardInProject(projectId, storyboard.id, {
+            photographyPlan: photographyPlanJson,
+        })
+    } catch (error) {
+        if (error instanceof NovelPromotionProjectScopeError) {
+            throw new ApiError('NOT_FOUND')
+        }
+        throw error
+    }
 
     _ulogInfo('[PUT /photography-plan] 更新成功, storyboardId:', storyboardId)
 

@@ -16,10 +16,12 @@
  *
  * Output zip layout:
  *   episode-{id}.zip
- *   ├── videos/01-{slug}.mp4 ... 17-{slug}.mp4   (in panel order)
- *   ├── images/01-{slug}.jpg ... 17-{slug}.jpg   (storyboard refs)
+ *   ├── videos/001-{slug}.{validated extension}  (global episode order)
+ *   ├── images/001-{slug}.{validated extension}  (global episode order)
+ *   ├── voices/001-{speaker}.{validated extension}
  *   ├── script.txt                                (dialogue + camera notes)
- *   └── README.txt                                (import-to-CapCut guide)
+ *   ├── README.txt                                (import-to-CapCut guide)
+ *   └── manifest.json                             (lineage + checksums)
  *
  * The output key is written to NovelPromotionEpisode.stitchedVideoUrl —
  * the column name is preserved for backward compat; semantically it now
@@ -30,26 +32,45 @@ import fs from 'fs'
 import os from 'os'
 import archiver from 'archiver'
 import type { Job } from 'bullmq'
-import { prisma } from '@/lib/prisma'
-import type { TaskJobData } from '@/lib/task/types'
+import { TASK_TYPE, type TaskJobData } from '@/lib/task/types'
 import { reportTaskProgress } from '../shared'
-import { assertTaskActive, toSignedUrlIfCos } from '../utils'
-import { uploadToCOS, generateUniqueKey } from '@/lib/cos'
-import { logWarn } from '@/lib/logging/core'
+import { assertTaskActive } from '../utils'
+import { getStorageObjectSize, uploadToCOS } from '@/lib/cos'
+import {
+  deliveryMediaFileExtension,
+  EPISODE_PACKAGE_ARCHIVE_MAX_SOURCE_BYTES,
+  fetchOwnedDeliveryStorageObjectWithMetadata,
+} from '@/lib/novel-promotion/final-delivery'
+import {
+  getEpisodeDeliveryInputSnapshot,
+  type EpisodeDeliveryMultiShotSnapshot,
+  type EpisodeDeliveryPanelSnapshot,
+} from '@/lib/novel-promotion/episode-delivery-snapshot'
+import {
+  episodePackageStorageKey,
+  sha256Buffer,
+  type EpisodeDeliveryManifestFile,
+  type EpisodeDeliveryManifestSummary,
+  type EpisodeDeliveryManifestV1,
+} from '@/lib/novel-promotion/episode-delivery-manifest'
+import {
+  fetchOwnedVoiceLineAudio,
+  voiceAudioFileExtension,
+} from '@/lib/novel-promotion/voice-line-audio-source'
+import {
+  cleanupEpisodePackageOutputAfterTermination,
+  persistEpisodePackagePreparedOutput,
+  readEpisodePackagePreparedOutput,
+  type EpisodePackagePreparedOutput,
+  type EpisodePackageTaskResult,
+} from '@/lib/novel-promotion/episode-package-publication'
 
 interface PackagePayload {
   episodeId?: string
+  sourceFingerprint?: string
 }
 
-interface PanelForZip {
-  id: string
-  panelIndex: number
-  description: string | null
-  imageUrl: string | null
-  videoUrl: string | null
-  cameraMove: string | null
-  shotType: string | null
-}
+type PanelForZip = EpisodeDeliveryPanelSnapshot
 
 interface DialogueLine {
   panelId: string | null
@@ -59,30 +80,32 @@ interface DialogueLine {
   lineIndex: number
 }
 
-const FETCH_TIMEOUT_MS = 60_000
+class EpisodePackageSourceBytesError extends Error {
+  constructor() {
+    super('EPISODE_PACKAGE_SOURCE_BYTES_EXCEEDED')
+    this.name = 'EpisodePackageSourceBytesError'
+  }
+}
 
 function slugifyForFilename(input: string | null, fallback: string): string {
   const base = (input ?? '').slice(0, 30).replace(/[\\/:*?"<>|\s]+/g, '_').replace(/^_+|_+$/g, '')
   return base.length > 0 ? base : fallback
 }
 
-async function fetchToBuffer(url: string): Promise<Buffer> {
-  const res = await fetch(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) })
-  if (!res.ok) {
-    throw new Error(`HTTP ${res.status} fetching ${url.slice(0, 80)}`)
-  }
-  return Buffer.from(await res.arrayBuffer())
-}
-
-function buildScriptText(panels: PanelForZip[], dialogueByPanelId: Map<string, DialogueLine[]>): string {
+function buildScriptText(
+  panels: PanelForZip[],
+  dialogueByPanelId: Map<string, DialogueLine[]>,
+  unassignedDialogue: DialogueLine[],
+): string {
   const lines: string[] = ['EPISODE SCRIPT', '', '']
   for (const panel of panels) {
-    const indexStr = String(panel.panelIndex).padStart(2, '0')
-    lines.push(`--- Panel ${indexStr} ---`)
+    const sequence = String(panel.sequence).padStart(3, '0')
+    const sourcePanel = String(panel.panelIndex).padStart(2, '0')
+    lines.push(`--- Panel ${sourcePanel} · Global ${sequence} · Storyboard ${panel.storyboardOrder} ---`)
     if (panel.shotType) lines.push(`Shot: ${panel.shotType}`)
     if (panel.cameraMove) lines.push(`Camera: ${panel.cameraMove}`)
     if (panel.description) lines.push(`Scene: ${panel.description}`)
-    const dialogues = dialogueByPanelId.get(panel.id) ?? []
+    const dialogues = dialogueByPanelId.get(panel.panelId) ?? []
     if (dialogues.length > 0) {
       lines.push('')
       for (const d of dialogues) {
@@ -91,38 +114,54 @@ function buildScriptText(panels: PanelForZip[], dialogueByPanelId: Map<string, D
     }
     lines.push('', '')
   }
+  if (unassignedDialogue.length > 0) {
+    lines.push('--- Unassigned dialogue ---', '')
+    for (const dialogue of unassignedDialogue) {
+      lines.push(`  ${dialogue.speaker}: ${dialogue.content}`)
+    }
+    lines.push('')
+  }
   return lines.join('\n')
 }
 
-function buildReadmeText(panelCount: number, multiShotCount: number): string {
+function buildReadmeText(
+  panelCount: number,
+  imageCount: number,
+  multiShotCount: number,
+  voiceCount: number,
+): string {
   const parts: string[] = []
   if (panelCount > 0) parts.push(`${panelCount} per-panel videos`)
-  if (multiShotCount > 0) parts.push(`${multiShotCount} multi-shot group videos`)
-  const summary = parts.join(' + ') || 'no videos'
+  if (imageCount > 0) parts.push(`${imageCount} storyboard images`)
+  if (multiShotCount > 0) parts.push(`${multiShotCount} multi-shot videos`)
+  if (voiceCount > 0) parts.push(`${voiceCount} generated voice files`)
+  const summary = parts.join(' + ') || 'no media'
   const lines = [
-    'KuiperAI Episode Package',
+    'Kuiper 影界 Episode Package',
     '========================',
     '',
-    `This zip contains ${summary} plus storyboard images and a dialogue script.`,
+    `This zip contains ${summary} plus a dialogue script.`,
     '',
     'Folder layout:',
   ]
   if (panelCount > 0) {
-    lines.push('  videos/      — per-panel mp4, named in scene order (01, 02, ...)')
+    lines.push('  videos/      — selected panel videos, named in global scene order (001, 002, ...)')
   }
   if (multiShotCount > 0) {
-    lines.push('  multi-shot/  — group-level Kling 3.0-Omni multi-shot mp4 (~5-15s each)')
+    lines.push('  multi-shot/  — generated group-level video clips, named in group order')
   }
   lines.push(
     '  images/      — storyboard reference images for each panel',
+    '  voices/      — generated dialogue audio, named in episode line order',
     '  script.txt   — dialogue + camera notes per panel',
+    '  manifest.json — source lineage, byte counts, and SHA-256 checksums',
     '',
     'Import workflow (CapCut / 剪映):',
     '  1. Drag the entire videos/ and/or multi-shot/ folder into your project.',
     '  2. Files are pre-numbered, so they sort correctly on the timeline.',
     '  3. Use script.txt as a reference for cuts, captions, and voiceover.',
     '',
-    'Generated by KuiperAI.',
+    'Generated by Kuiper 影界.',
     '',
   )
   return lines.join('\n')
@@ -131,199 +170,110 @@ function buildReadmeText(panelCount: number, multiShotCount: number): string {
 export async function handleEpisodePackageZipTask(job: Job<TaskJobData>) {
   const payload = (job.data.payload || {}) as PackagePayload
   const episodeId = typeof payload.episodeId === 'string' ? payload.episodeId : ''
-  if (!episodeId) {
-    throw new Error('EPISODE_PACKAGE_ZIP: missing episodeId in payload')
+  const submittedFingerprint = typeof payload.sourceFingerprint === 'string'
+    ? payload.sourceFingerprint
+    : ''
+  const projectId = typeof job.data.projectId === 'string' ? job.data.projectId.trim() : ''
+  const taskId = typeof job.data.taskId === 'string' ? job.data.taskId.trim() : ''
+  const jobId = typeof job.id === 'string' || typeof job.id === 'number' ? String(job.id) : ''
+  if (
+    !episodeId
+    || !projectId
+    || !taskId
+    || jobId !== taskId
+    || job.data.type !== TASK_TYPE.EPISODE_STITCH_MP4
+    || job.data.episodeId !== episodeId
+    || job.data.targetType !== 'NovelPromotionEpisode'
+    || job.data.targetId !== episodeId
+  ) {
+    throw new Error('EPISODE_PACKAGE_TASK_TARGET_INVALID')
+  }
+  if (!/^[a-f0-9]{64}$/.test(submittedFingerprint)) {
+    throw new Error('EPISODE_PACKAGE_SOURCE_FINGERPRINT_MISMATCH')
   }
 
   await reportTaskProgress(job, 5, { stage: 'load_panels' })
   await assertTaskActive(job, 'load_panels')
 
-  const episode = await prisma.novelPromotionEpisode.findUnique({
-    where: { id: episodeId },
-    include: {
-      storyboards: {
-        include: {
-          panels: { orderBy: { panelIndex: 'asc' } },
-        },
-        orderBy: { createdAt: 'asc' },
-      },
-      voiceLines: { orderBy: { lineIndex: 'asc' } },
-    },
-  })
-  if (!episode) {
-    throw new Error(`EPISODE_PACKAGE_ZIP: episode not found: ${episodeId}`)
-  }
-
-  const allPanels: PanelForZip[] = episode.storyboards.flatMap((sb) =>
-    sb.panels.map((p) => ({
-      id: p.id,
-      panelIndex: p.panelIndex,
-      description: p.description,
-      imageUrl: p.imageUrl,
-      videoUrl: p.videoUrl,
-      cameraMove: p.cameraMove,
-      shotType: p.shotType,
-    })),
-  )
-  const panelsWithVideo = allPanels.filter((p) => Boolean(p.videoUrl))
-
-  // 2026-05-02 — multi-shot B-path emits one video per group, not per
-  // panel; the URL is on the most recent completed video_multi_shot
-  // task's result, not on panel.videoUrl. Without this branch, episodes
-  // generated through the new path packaged as empty zips and the API
-  // route returned NO_PANEL_VIDEOS even though every group had a
-  // playable mp4 in COS. Pull each group's latest task and build a
-  // groupId → mp4 map so the zip includes both single-shot panel
-  // videos AND multi-shot group videos when both exist.
-  type GroupVideo = {
-    groupOrder: number  // 1-indexed across the episode in storyboard / first-panel order
-    storyboardOrder: number
-    firstPanelIndex: number
-    /**
-     * 2026-05-03 — a group can produce multiple clips when its dialogue
-     * exceeds Kling Omni's 15s per-call cap. Each clip is a complete
-     * mp4; the user stitches them in their NLE. Single-clip groups
-     * still ship as length-1 arrays so the loop below stays uniform.
-     */
-    cosKeys: string[]
-    cameraNote: string | null
-  }
-  const groupVideos: GroupVideo[] = []
-  {
-    type GroupSig = { storyboardOrder: number; firstPanelIndex: number; storyboardId: string; groupId: string }
-    const groupSigs: GroupSig[] = []
-    const seenGroupKeys = new Set<string>()
-    episode.storyboards.forEach((sb, sbIdx) => {
-      const panelsByGroup = new Map<string, number[]>()
-      for (const p of sb.panels) {
-        if (!p.multiShotGroupId) continue
-        const arr = panelsByGroup.get(p.multiShotGroupId) ?? []
-        arr.push(p.panelIndex)
-        panelsByGroup.set(p.multiShotGroupId, arr)
-      }
-      for (const [groupId, indices] of panelsByGroup.entries()) {
-        const key = `${sb.id}:${groupId}`
-        if (seenGroupKeys.has(key)) continue
-        seenGroupKeys.add(key)
-        groupSigs.push({
-          storyboardOrder: sbIdx,
-          firstPanelIndex: Math.min(...indices),
-          storyboardId: sb.id,
-          groupId,
-        })
-      }
-    })
-    groupSigs.sort((a, b) =>
-      a.storyboardOrder - b.storyboardOrder || a.firstPanelIndex - b.firstPanelIndex,
-    )
-
-    if (groupSigs.length > 0) {
-      const completedTasks = await prisma.task.findMany({
-        where: {
-          episodeId: episode.id,
-          type: 'video_multi_shot',
-          status: 'completed',
-        },
-        orderBy: { finishedAt: 'desc' },
-        select: { payload: true, result: true },
-      })
-
-      // panelId → group signature lookup so we can map each task's
-      // panelIds back to the group it produced.
-      const panelToGroupKey = new Map<string, string>()
-      for (const sig of groupSigs) {
-        const sbPanels = episode.storyboards.find((sb) => sb.id === sig.storyboardId)?.panels ?? []
-        for (const p of sbPanels) {
-          if (p.multiShotGroupId === sig.groupId) {
-            panelToGroupKey.set(p.id, `${sig.storyboardId}:${sig.groupId}`)
-          }
-        }
-      }
-
-      // Pick the most recent completed task per group.
-      const cosByGroupKey = new Map<string, string[]>()
-      for (const t of completedTasks) {
-        const payloadObj = (t.payload && typeof t.payload === 'object' ? t.payload : null) as
-          | { panelIds?: unknown }
-          | null
-        const panelIds = Array.isArray(payloadObj?.panelIds)
-          ? payloadObj.panelIds.filter((x): x is string => typeof x === 'string')
-          : []
-        if (panelIds.length === 0) continue
-        const groupKey = panelToGroupKey.get(panelIds[0])
-        if (!groupKey || cosByGroupKey.has(groupKey)) continue
-        const resultObj = (t.result && typeof t.result === 'object' ? t.result : null) as
-          | { multiShotVideoUrl?: unknown; multiShotClipUrls?: unknown }
-          | null
-        // Prefer the multi-clip array (new in 2026-05-03 chunked
-        // dispatch). Fall back to the legacy single string.
-        const cosKeys: string[] = (() => {
-          const arr = resultObj?.multiShotClipUrls
-          if (Array.isArray(arr)) {
-            const filtered = arr.filter(
-              (k): k is string => typeof k === 'string' && k.length > 0,
-            )
-            if (filtered.length > 0) return filtered
-          }
-          return typeof resultObj?.multiShotVideoUrl === 'string'
-            ? [resultObj.multiShotVideoUrl]
-            : []
-        })()
-        if (cosKeys.length > 0) cosByGroupKey.set(groupKey, cosKeys)
-      }
-
-      groupSigs.forEach((sig, i) => {
-        const cosKeys = cosByGroupKey.get(`${sig.storyboardId}:${sig.groupId}`)
-        if (!cosKeys || cosKeys.length === 0) return
-        // Brief note describing the group's shot range so the zip filename
-        // and script.txt reader can locate it without opening the file.
-        const sb = episode.storyboards.find((s) => s.id === sig.storyboardId)
-        const indices = (sb?.panels ?? [])
-          .filter((p) => p.multiShotGroupId === sig.groupId)
-          .map((p) => p.panelIndex)
-          .sort((a, b) => a - b)
-        const cameraNote = indices.length > 0
-          ? `panels ${indices[0]}-${indices[indices.length - 1]}`
-          : null
-        groupVideos.push({
-          groupOrder: i + 1,
-          storyboardOrder: sig.storyboardOrder,
-          firstPanelIndex: sig.firstPanelIndex,
-          cosKeys,
-          cameraNote,
-        })
-      })
+  const preparedOutput = await readEpisodePackagePreparedOutput(job)
+  if (preparedOutput) {
+    if (preparedOutput.state === 'cleanup_failed') {
+      throw Object.assign(new Error('EPISODE_PACKAGE_OUTPUT_CLEANUP_FAILED'), { code: 'EXTERNAL_ERROR' })
+    }
+    if (preparedOutput.state !== 'prepared') {
+      throw Object.assign(
+        new Error('EPISODE_PACKAGE_COMPLETION_RECONCILIATION_REQUIRED'),
+        { code: 'EXTERNAL_ERROR' },
+      )
+    }
+    let storedBytes: number | null
+    try {
+      storedBytes = await getStorageObjectSize(preparedOutput.outputUrl)
+    } catch (error) {
+      throw Object.assign(
+        new Error('EPISODE_PACKAGE_UPLOAD_RECONCILIATION_REQUIRED'),
+        { code: 'EXTERNAL_ERROR', cause: error },
+      )
+    }
+    if (storedBytes === preparedOutput.archiveBytes) {
+      await assertTaskActive(job, 'reconcile_uploaded_zip')
+      return preparedOutput.result
+    }
+    if (storedBytes !== null) {
+      throw Object.assign(
+        new Error('EPISODE_PACKAGE_OUTPUT_SIZE_MISMATCH'),
+        { code: 'EXTERNAL_ERROR' },
+      )
     }
   }
 
-  if (panelsWithVideo.length === 0 && groupVideos.length === 0) {
+  const snapshot = await getEpisodeDeliveryInputSnapshot(projectId, episodeId)
+  if (!snapshot) {
+    throw new Error(`EPISODE_PACKAGE_ZIP: episode not found in task project: ${episodeId}`)
+  }
+  if (snapshot.sourceFingerprint !== submittedFingerprint) {
+    throw new Error('EPISODE_PACKAGE_SOURCE_FINGERPRINT_MISMATCH')
+  }
+  const { episode } = snapshot
+  const allPanels: PanelForZip[] = snapshot.panels
+  const panelsWithVideo = allPanels.filter((panel) => panel.selectedVideoKey !== null)
+  const panelsWithImage = allPanels.filter((panel) => panel.imageKey !== null)
+  const groupVideos: EpisodeDeliveryMultiShotSnapshot[] = snapshot.multiShotVideos
+  const voiceAudios = snapshot.voiceAudios
+
+  if (!snapshot.input.canCreate) {
     throw new Error(
-      'EPISODE_PACKAGE_ZIP: no panel videos or multi-shot group videos yet — generate either before packaging',
+      'EPISODE_PACKAGE_ZIP: no panel videos, storyboard images, or multi-shot group videos yet',
     )
   }
 
   const dialogueByPanelId = new Map<string, DialogueLine[]>()
+  const panelIds = new Set(allPanels.map((panel) => panel.panelId))
+  const unassignedDialogue: DialogueLine[] = []
   for (const line of episode.voiceLines) {
-    if (!line.matchedPanelId) continue
-    const list = dialogueByPanelId.get(line.matchedPanelId) ?? []
-    list.push({
+    const dialogue: DialogueLine = {
       panelId: line.matchedPanelId,
       panelIndex: line.matchedPanelIndex,
       speaker: line.speaker,
       content: line.content,
       lineIndex: line.lineIndex,
-    })
+    }
+    if (!line.matchedPanelId || !panelIds.has(line.matchedPanelId)) {
+      unassignedDialogue.push(dialogue)
+      continue
+    }
+    const list = dialogueByPanelId.get(line.matchedPanelId) ?? []
+    list.push(dialogue)
     dialogueByPanelId.set(line.matchedPanelId, list)
   }
 
-  await prisma.novelPromotionEpisode.update({
-    where: { id: episodeId },
-    data: { stitchStatus: 'rendering' },
-  })
-
   await reportTaskProgress(job, 10, {
     stage: 'package_assets',
-    totalPanels: panelsWithVideo.length,
+    totalPanels: allPanels.length,
+    selectedVideoCount: snapshot.input.selectedVideoCount,
+    imageCount: snapshot.input.imageCount,
+    multiShotVideoCount: snapshot.input.multiShotVideoCount,
+    voiceAudioCount: snapshot.input.voiceAudioCount,
   })
 
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), `episode-pack-${episodeId}-`))
@@ -342,10 +292,45 @@ export async function handleEpisodePackageZipTask(job: Job<TaskJobData>) {
   })
   archiveDone.catch(() => undefined)
   archive.pipe(output)
+  let sourceBytes = 0
+
+  const fetchAndAccount = async (key: string, kind: 'image' | 'video') => {
+    const object = await fetchOwnedDeliveryStorageObjectWithMetadata(key, kind)
+    sourceBytes += object.data.byteLength
+    if (sourceBytes > EPISODE_PACKAGE_ARCHIVE_MAX_SOURCE_BYTES) {
+      throw new EpisodePackageSourceBytesError()
+    }
+    return object
+  }
 
   try {
-    archive.append(buildReadmeText(panelsWithVideo.length, groupVideos.length), { name: 'README.txt' })
-    archive.append(buildScriptText(allPanels, dialogueByPanelId), { name: 'script.txt' })
+    const manifestFiles: EpisodeDeliveryManifestFile[] = []
+    const manifestPaths = new Set<string>()
+    const appendFile = (
+      data: Buffer,
+      entry: Omit<EpisodeDeliveryManifestFile, 'bytes' | 'sha256'>,
+    ) => {
+      if (manifestPaths.has(entry.path)) {
+        throw new Error('EPISODE_PACKAGE_MANIFEST_PATH_COLLISION')
+      }
+      manifestPaths.add(entry.path)
+      archive.append(data, { name: entry.path })
+      manifestFiles.push({
+        ...entry,
+        bytes: data.byteLength,
+        sha256: sha256Buffer(data),
+      })
+    }
+
+    const readme = Buffer.from(buildReadmeText(
+      panelsWithVideo.length,
+      panelsWithImage.length,
+      snapshot.input.multiShotVideoCount,
+      snapshot.input.voiceAudioCount,
+    ))
+    appendFile(readme, { sourceId: episode.id, kind: 'readme', path: 'README.txt' })
+    const script = Buffer.from(buildScriptText(allPanels, dialogueByPanelId, unassignedDialogue))
+    appendFile(script, { sourceId: episode.id, kind: 'script', path: 'script.txt' })
 
     // Multi-shot group videos go into multi-shot/ alongside videos/ so
     // CapCut import keeps them on a separate track from per-panel cuts.
@@ -359,57 +344,36 @@ export async function handleEpisodePackageZipTask(job: Job<TaskJobData>) {
       await assertTaskActive(job, 'package_assets')
       const group = groupVideos[i]
       const indexStr = String(group.groupOrder).padStart(2, '0')
-      const isMultiClip = group.cosKeys.length > 1
-      for (let j = 0; j < group.cosKeys.length; j++) {
-        const cosKey = group.cosKeys[j]
-        const url = toSignedUrlIfCos(cosKey, 7200) || cosKey
+      const isMultiClip = group.storageKeys.length > 1
+      for (let j = 0; j < group.storageKeys.length; j++) {
+        const cosKey = group.storageKeys[j]
         const filename = isMultiClip
           ? `multi-shot/group${indexStr}-clip${j + 1}.mp4`
           : `multi-shot/group${indexStr}.mp4`
-        try {
-          const buf = await fetchToBuffer(url)
-          archive.append(buf, { name: filename })
-        } catch (err) {
-          // Best-effort — one broken clip shouldn't kill the whole zip.
-          logWarn('EPISODE_PACKAGE_ZIP: skipping multi-shot clip', {
-            groupOrder: group.groupOrder,
-            clipIndex: j + 1,
-            totalClips: group.cosKeys.length,
-            reason: (err as Error).message,
-          })
-        }
+        const media = await fetchAndAccount(cosKey, 'video')
+        const extension = deliveryMediaFileExtension('video', media.contentType)
+        const typedFilename = filename.replace(/\.mp4$/, `.${extension}`)
+        appendFile(media.data, {
+          sourceId: `${group.storyboardId}:${group.groupId}:clip${j + 1}`,
+          kind: 'multi_shot_video',
+          path: typedFilename,
+        })
       }
     }
 
     for (let i = 0; i < panelsWithVideo.length; i++) {
       await assertTaskActive(job, 'package_assets')
       const panel = panelsWithVideo[i]
-      const indexStr = String(panel.panelIndex).padStart(2, '0')
+      const indexStr = String(panel.sequence).padStart(3, '0')
       const slug = slugifyForFilename(panel.description, `panel${indexStr}`)
 
-      const videoUrl = toSignedUrlIfCos(panel.videoUrl, 7200) || panel.videoUrl
-      if (!videoUrl) {
-        throw new Error(`EPISODE_PACKAGE_ZIP: panel ${panel.id} has no resolvable video URL`)
-      }
-      const videoBuf = await fetchToBuffer(videoUrl)
-      archive.append(videoBuf, { name: `videos/${indexStr}-${slug}.mp4` })
-
-      if (panel.imageUrl) {
-        const imageUrl = toSignedUrlIfCos(panel.imageUrl, 7200) || panel.imageUrl
-        if (imageUrl) {
-          try {
-            const imageBuf = await fetchToBuffer(imageUrl)
-            archive.append(imageBuf, { name: `images/${indexStr}-${slug}.jpg` })
-          } catch (err) {
-            // Image failures are non-fatal — the video is the must-have asset.
-            // Log explicitly so the skip is visible in worker logs.
-            logWarn('EPISODE_PACKAGE_ZIP: skipping image', {
-              panelId: panel.id,
-              reason: (err as Error).message,
-            })
-          }
-        }
-      }
+      const video = await fetchAndAccount(panel.selectedVideoKey!, 'video')
+      const extension = deliveryMediaFileExtension('video', video.contentType)
+      appendFile(video.data, {
+        sourceId: panel.panelId,
+        kind: 'panel_selected_video',
+        path: `videos/${indexStr}-${slug}.${extension}`,
+      })
 
       const progress = 10 + Math.floor(((i + 1) / panelsWithVideo.length) * 75)
       await reportTaskProgress(job, progress, {
@@ -419,39 +383,123 @@ export async function handleEpisodePackageZipTask(job: Job<TaskJobData>) {
       })
     }
 
+    for (const panel of panelsWithImage) {
+      await assertTaskActive(job, 'package_assets')
+      const indexStr = String(panel.sequence).padStart(3, '0')
+      const slug = slugifyForFilename(panel.description, `panel${indexStr}`)
+      const image = await fetchAndAccount(panel.imageKey!, 'image')
+      const extension = deliveryMediaFileExtension('image', image.contentType)
+      appendFile(image.data, {
+        sourceId: panel.panelId,
+        kind: 'panel_image',
+        path: `images/${indexStr}-${slug}.${extension}`,
+      })
+    }
+
+    for (const voice of voiceAudios) {
+      await assertTaskActive(job, 'package_assets')
+      const indexStr = String(voice.sequence).padStart(3, '0')
+      const slug = slugifyForFilename(voice.speaker, `line${indexStr}`)
+      const audio = await fetchOwnedVoiceLineAudio(voice)
+      const extension = voiceAudioFileExtension(audio.contentType)
+      sourceBytes += audio.data.byteLength
+      if (sourceBytes > EPISODE_PACKAGE_ARCHIVE_MAX_SOURCE_BYTES) {
+        throw new EpisodePackageSourceBytesError()
+      }
+      appendFile(audio.data, {
+        sourceId: voice.lineId,
+        kind: 'voice_audio',
+        path: `voices/${indexStr}-${slug}.${extension}`,
+      })
+    }
+
+    const manifestSummary: EpisodeDeliveryManifestSummary = {
+      version: 1,
+      fileCount: manifestFiles.length,
+      selectedVideoCount: snapshot.input.selectedVideoCount,
+      multiShotVideoCount: snapshot.input.multiShotVideoCount,
+      imageCount: snapshot.input.imageCount,
+      voiceAudioCount: snapshot.input.voiceAudioCount,
+      excludedVoiceLineCount: snapshot.excludedVoiceLines.length,
+      scriptIncluded: true,
+      checksumAlgorithm: 'sha256',
+    }
+    const manifest: EpisodeDeliveryManifestV1 = {
+      version: 1,
+      episodeId,
+      taskId,
+      sourceFingerprint: snapshot.sourceFingerprint,
+      checksumAlgorithm: 'sha256',
+      files: manifestFiles,
+      excluded: snapshot.excludedVoiceLines.map((line) => ({
+        sourceId: line.lineId,
+        kind: 'voice_audio',
+        reason: line.reason,
+      })),
+      summary: manifestSummary,
+    }
+    archive.append(Buffer.from(JSON.stringify(manifest, null, 2)), { name: 'manifest.json' })
+
     await archive.finalize()
     await archiveDone
 
-    await assertTaskActive(job, 'upload_zip')
-    await reportTaskProgress(job, 90, { stage: 'upload_zip' })
-
     const zipBuffer = fs.readFileSync(zipPath)
-    const cosKey = generateUniqueKey(`episode-pack-${episodeId}`, 'zip')
-    await uploadToCOS(zipBuffer, cosKey)
-
-    await assertTaskActive(job, 'persist_result')
-    await reportTaskProgress(job, 97, { stage: 'persist_result' })
-
-    await prisma.novelPromotionEpisode.update({
-      where: { id: episodeId },
-      data: {
-        stitchedVideoUrl: cosKey,
-        stitchStatus: 'completed',
-        stitchedAt: new Date(),
-      },
-    })
-
-    return {
+    const cosKey = episodePackageStorageKey(episodeId, taskId)
+    const result: EpisodePackageTaskResult = {
       episodeId,
       outputUrl: cosKey,
       panelCount: panelsWithVideo.length,
+      sourceFingerprint: snapshot.sourceFingerprint,
+      manifest: manifestSummary,
     }
-  } catch (err) {
-    await prisma.novelPromotionEpisode.update({
-      where: { id: episodeId },
-      data: { stitchStatus: 'failed' },
-    })
-    throw err
+    const marker: EpisodePackagePreparedOutput = {
+      kind: 'episode_package_publication_v1',
+      state: 'prepared',
+      taskId,
+      projectId,
+      episodeId,
+      outputUrl: cosKey,
+      sourceFingerprint: snapshot.sourceFingerprint,
+      archiveSha256: sha256Buffer(zipBuffer),
+      archiveBytes: zipBuffer.byteLength,
+      result,
+    }
+    await persistEpisodePackagePreparedOutput(job, marker)
+    await assertTaskActive(job, 'upload_zip')
+    await reportTaskProgress(job, 90, { stage: 'upload_zip' })
+
+    try {
+      // One transport attempt only. A lost response is reconciled against the
+      // exact task-stable key and expected atomic object size below.
+      await uploadToCOS(zipBuffer, cosKey, 1)
+    } catch (uploadError) {
+      let storedBytes: number | null
+      try {
+        storedBytes = await getStorageObjectSize(cosKey)
+      } catch (readError) {
+        throw Object.assign(
+          new Error('EPISODE_PACKAGE_UPLOAD_RECONCILIATION_REQUIRED'),
+          { code: 'EXTERNAL_ERROR', cause: { uploadError, readError } },
+        )
+      }
+      if (storedBytes === null) throw uploadError
+      if (storedBytes !== zipBuffer.byteLength) {
+        throw Object.assign(
+          new Error('EPISODE_PACKAGE_OUTPUT_SIZE_MISMATCH'),
+          { code: 'EXTERNAL_ERROR', cause: uploadError },
+        )
+      }
+    }
+
+    try {
+      await assertTaskActive(job, 'persist_result')
+    } catch (error) {
+      const outcome = await cleanupEpisodePackageOutputAfterTermination(job, result)
+      if (outcome === 'published') return result
+      throw error
+    }
+    await reportTaskProgress(job, 97, { stage: 'persist_result' })
+    return result
   } finally {
     try {
       fs.rmSync(tmpDir, { recursive: true, force: true })

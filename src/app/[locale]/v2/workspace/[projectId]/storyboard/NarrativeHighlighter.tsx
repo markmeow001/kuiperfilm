@@ -213,27 +213,15 @@ export function NarrativeHighlighter({
   //   (often system-ui) can't produce divergent character widths.
   // - boxSizing border-box is also Tailwind preflight default; declared
   //   here to be explicit in case the preflight is overridden.
-  // Phase V (2026-05-28 round 3) — ROOT CAUSE: `font-serif-cn` Tailwind
-  // class is only defined inside src/app/[locale]/preview/page.tsx as a
-  // scoped <style> block; the rest of the app (including this editor)
-  // renders that class without any matching font-family rule. So each
-  // layer fell back to its UA default — <pre> to monospace, <textarea>
-  // to system-ui — producing DIFFERENT CJK glyph widths. After several
-  // characters the cursor visibly landed in the middle of a glyph.
-  //
-  // Inline style wins over class so this forces an identical font stack
-  // on both layers regardless of class resolution. PingFang SC is
-  // pre-installed on macOS; Hiragino Sans GB on macOS too; Microsoft
-  // YaHei on Windows; Noto Serif SC as a last named fallback before
-  // generic serif. CJK chars now share an identical glyph table between
-  // pre and textarea.
+  // Inline style wins over class so both synchronized layers use the same
+    // Shared Kuiper UI font metrics on every route and device.
   const sharedSyncStyle: React.CSSProperties = {
     scrollbarGutter: 'stable',
     fontKerning: 'normal',
     fontFeatureSettings: 'normal',
     boxSizing: 'border-box',
     fontFamily:
-      "'Noto Serif SC', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', serif",
+      "var(--font-kuiper-sans), 'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', sans-serif",
     // Lock font metrics so subpixel rounding in pre vs textarea can't
     // diverge — both should rasterize CJK glyphs to identical positions.
     fontVariantEastAsian: 'normal',

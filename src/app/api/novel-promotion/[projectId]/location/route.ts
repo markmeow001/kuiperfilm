@@ -11,10 +11,18 @@ import { requireProjectAuth, requireProjectAuthLight, isErrorResponse } from '@/
 import { apiHandler, ApiError } from '@/lib/api-errors'
 import { resolveTaskLocale } from '@/lib/task/resolve-locale'
 import { propagateLocationRename } from '@/lib/novel-promotion/rename-propagation'
+import {
+  deriveManualUploadIds,
+  normalizeManualUploadIdempotencyKey,
+} from '@/lib/novel-promotion/manual-upload-idempotency'
 
 function toObject(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
   return value as Record<string, unknown>
+}
+
+function throwManualUploadReplayConflict(): never {
+  throw new ApiError('CONFLICT', { code: 'MANUAL_UPLOAD_IDEMPOTENCY_CONFLICT' })
 }
 
 // 删除场景（级联删除关联的图片记录）
@@ -68,19 +76,44 @@ export const POST = apiHandler(async (
   const taskLocale = resolveTaskLocale(request, body)
   const bodyMeta = toObject((body as Record<string, unknown>).meta)
   const acceptLanguage = request.headers.get('accept-language') || ''
-  const { name, description, episodeId } = body
+  const {
+    name,
+    description,
+    episodeId,
+    idempotencyKey: rawIdempotencyKey,
+    skipImageGeneration: rawSkipImageGeneration,
+  } = body
 
-  if (!name) {
+  if (typeof name !== 'string' || !name.trim()) {
     throw new ApiError('INVALID_PARAMS')
   }
+  if (description !== undefined && typeof description !== 'string') {
+    throw new ApiError('INVALID_PARAMS')
+  }
+  if (body.summary !== undefined && typeof body.summary !== 'string') {
+    throw new ApiError('INVALID_PARAMS')
+  }
+  if (rawSkipImageGeneration !== undefined && typeof rawSkipImageGeneration !== 'boolean') {
+    throw new ApiError('INVALID_PARAMS')
+  }
+
+  let idempotencyKey: string | null
+  try {
+    idempotencyKey = normalizeManualUploadIdempotencyKey(rawIdempotencyKey)
+  } catch {
+    throw new ApiError('INVALID_PARAMS', { code: 'INVALID_IDEMPOTENCY_KEY' })
+  }
+  const skipImageGeneration = rawSkipImageGeneration === true
 
   // Phase 11.5: artStylePrompt 已 deprecated（被 styleProfile 三栏取代）。
   // 此处不再写入 artStylePrompt — 风格统一由 PATCH /api/projects/{id}/style-profile 管理。
 
   const trimmedDescription = typeof description === 'string' ? description.trim() : ''
   const cleanDescription = trimmedDescription ? removeLocationPromptSuffix(trimmedDescription) : ''
+  const normalizedName = name.trim()
+  const normalizedSummary = typeof body.summary === 'string' ? body.summary.trim() || null : null
   const normalizedEpisodeId = typeof episodeId === 'string' ? episodeId.trim() : ''
-  const location = await prisma.$transaction(async (tx) => {
+  const { location, isFirstCreate } = await prisma.$transaction(async (tx) => {
     if (normalizedEpisodeId) {
       const episode = await tx.novelPromotionEpisode.findFirst({
         where: { id: normalizedEpisodeId, novelPromotionProjectId: novelData.id },
@@ -89,11 +122,92 @@ export const POST = apiHandler(async (
       if (!episode) throw new ApiError('NOT_FOUND', { code: 'EPISODE_NOT_FOUND' })
     }
 
+    if (idempotencyKey) {
+      const ids = deriveManualUploadIds('location', novelData.id, idempotencyKey)
+      const inserted = await tx.novelPromotionLocation.createMany({
+        data: [{
+          id: ids.entityId,
+          novelPromotionProjectId: novelData.id,
+          name: normalizedName,
+          summary: normalizedSummary,
+        }],
+        skipDuplicates: true,
+      })
+      const replayLocation = await tx.novelPromotionLocation.findUnique({
+        where: { id: ids.entityId },
+      })
+      if (
+        !replayLocation
+        || replayLocation.novelPromotionProjectId !== novelData.id
+        || replayLocation.name !== normalizedName
+        || (replayLocation.summary ?? null) !== normalizedSummary
+      ) {
+        throwManualUploadReplayConflict()
+      }
+
+      const replayImage = await tx.locationImage.upsert({
+        where: { id: ids.primaryAssetId },
+        update: {},
+        create: {
+          id: ids.primaryAssetId,
+          locationId: ids.entityId,
+          imageIndex: 0,
+          description: cleanDescription,
+        },
+      })
+      if (
+        replayImage.locationId !== ids.entityId
+        || replayImage.imageIndex !== 0
+        || (replayImage.description ?? '') !== cleanDescription
+      ) {
+        throwManualUploadReplayConflict()
+      }
+
+      const existingBinding = await tx.episodeLocation.findUnique({
+        where: { id: ids.bindingId },
+      })
+      if (inserted.count === 0) {
+        if (normalizedEpisodeId) {
+          if (
+            !existingBinding
+            || existingBinding.episodeId !== normalizedEpisodeId
+            || existingBinding.locationId !== ids.entityId
+          ) {
+            throwManualUploadReplayConflict()
+          }
+        } else if (existingBinding) {
+          throwManualUploadReplayConflict()
+        }
+      }
+      if (normalizedEpisodeId) {
+        const binding = await tx.episodeLocation.upsert({
+          where: { id: ids.bindingId },
+          update: {},
+          create: {
+            id: ids.bindingId,
+            episodeId: normalizedEpisodeId,
+            locationId: ids.entityId,
+            role: 'manual',
+          },
+        })
+        if (
+          binding.episodeId !== normalizedEpisodeId
+          || binding.locationId !== ids.entityId
+        ) {
+          throwManualUploadReplayConflict()
+        }
+      }
+      return {
+        location: replayLocation,
+        isFirstCreate: inserted.count === 1,
+      }
+    }
+
     const created = await tx.novelPromotionLocation.create({
       data: {
         novelPromotionProjectId: novelData.id,
-        name: name.trim(),
-        summary: body.summary?.trim() || null,
+        name: normalizedName,
+        summary: normalizedSummary,
       },
     })
     await tx.locationImage.create({
@@ -108,12 +222,12 @@ export const POST = apiHandler(async (
         data: { episodeId: normalizedEpisodeId, locationId: created.id, role: 'manual' },
       })
     }
-    return created
+    return { location: created, isFirstCreate: true }
   })
 
   // 触发后台图片生成 — 仅当用户提供了 description 时。
-  // 手动上传（无 description）走 upload-asset-image 路径，跳过 AI gen。
-  if (cleanDescription) {
+  // 手动上传会明确传 skipImageGeneration，保留 description 但不触发 AI。
+  if (cleanDescription && !skipImageGeneration && isFirstCreate) {
     const { getBaseUrl } = await import('@/lib/env')
     const baseUrl = getBaseUrl()
     fetch(`${baseUrl}/api/novel-promotion/${projectId}/generate-image`, {

@@ -51,6 +51,11 @@ export interface ProjectAccessState {
   canView: boolean
   /** Initial load state. Pages can use this to skip flashing button-disabled. */
   isLoading: boolean
+  /** True only when the access request failed in transport/server handling.
+   *  A 403/404 remains a resolved permission result and does not set this. */
+  isError: boolean
+  /** Transport/server error for an explicit retry state. */
+  error: Error | null
   /** Refetch helper exposed for cases where role might have changed (e.g. after
    *  invite acceptance, request approval). */
   refetch: () => Promise<unknown>
@@ -88,6 +93,8 @@ export function useProjectAccess(projectId: string | null | undefined): ProjectA
       canEdit: query.data.canEdit,
       canView: query.data.canView,
       isLoading: false,
+      isError: query.isError,
+      error: query.error,
       refetch: query.refetch,
     }
   }
@@ -99,6 +106,8 @@ export function useProjectAccess(projectId: string | null | undefined): ProjectA
     canEdit: false,
     canView: false,
     isLoading: query.isLoading,
+    isError: query.isError,
+    error: query.error,
     refetch: query.refetch,
   }
 }

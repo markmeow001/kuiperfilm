@@ -82,6 +82,18 @@ export const REQUIREMENTS_MATRIX: ReadonlyArray<RequirementCoverageEntry> = [
     ],
   },
   {
+    id: 'REQ-NP-STORYBOARD-PANEL-EDIT',
+    feature: 'V2 storyboard manual panel insert, adjacent move, and delete',
+    userValue: '編輯者可在目前分鏡組精確補鏡、調序與刪鏡，viewer 不可寫入',
+    risk: '跨 project/episode 誤寫、重試重複插鏡、panel/group/voice 索引失真',
+    priority: 'P0',
+    tests: [
+      'tests/integration/api/storyboard-panel-edit-order.test.ts',
+      'tests/unit/components/StoryboardShotEditControls.test.tsx',
+      'tests/unit/components/V2StoryboardManualCreateContract.test.ts',
+    ],
+  },
+  {
     id: 'REQ-TASK-STATE-CONSISTENCY',
     feature: 'Task state and SSE consistency',
     userValue: '前端状态与任务真实状态一致',

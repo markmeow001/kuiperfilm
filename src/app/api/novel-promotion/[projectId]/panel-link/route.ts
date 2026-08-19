@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
 import { requireProjectAuthLight, isErrorResponse } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
+import {
+  findNovelPromotionPanelByStoryboardIndexInProject,
+  NovelPromotionProjectScopeError,
+  updateNovelPromotionPanelInProject,
+} from '@/lib/novel-promotion/project-scope'
 
 // POST - 更新 panel 的首尾帧链接状态
 export const POST = apiHandler(async (
@@ -21,18 +25,23 @@ export const POST = apiHandler(async (
     throw new ApiError('INVALID_PARAMS')
   }
 
-  // 更新 panel 的链接状态
-  await prisma.novelPromotionPanel.update({
-    where: {
-      storyboardId_panelIndex: {
-        storyboardId,
-        panelIndex
-      }
-    },
-    data: {
-      linkedToNextPanel: linked
+  const panel = await findNovelPromotionPanelByStoryboardIndexInProject(
+    projectId,
+    storyboardId,
+    panelIndex,
+  )
+  if (!panel) throw new ApiError('NOT_FOUND')
+
+  try {
+    await updateNovelPromotionPanelInProject(projectId, panel.id, {
+      linkedToNextPanel: linked,
+    })
+  } catch (error) {
+    if (error instanceof NovelPromotionProjectScopeError) {
+      throw new ApiError('NOT_FOUND')
     }
-  })
+    throw error
+  }
 
   return NextResponse.json({ success: true })
 })

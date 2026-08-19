@@ -3,14 +3,13 @@
 /**
  * Phase 12.4 — v2 SubjectsPage (劇本拆解 / Script Breakdown) client implementation.
  *
- * Tabs across 角色 / 場景 / 道具.  For now 道具 is a stub
- * because Phase 11.3 (props as first-class assets) is still ⏸ —
- * the tab is shown but the grid says "coming Phase 11.3".
+ * Tabs across 角色 / 世界與場景 / 道具. All three surfaces use
+ * the existing first-class asset and episode-binding contracts.
  *
  * Each character / location card shows the primary appearance
  * image (from EpisodeCharacter junction or DB), the role / desc,
- * and on hover surfaces "重新生成" + "鎖定" actions. Both routes
- * to existing endpoints.
+ * and on hover surfaces "重新生成" + "定稿" actions. Finalizing is a
+ * synchronous metadata update; it does not submit an AI task.
  */
 
 import Link from 'next/link'
@@ -19,6 +18,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
 import { AppIcon } from '@/components/ui/icons'
+import { DarkMediaLightbox } from '@/components/v2/DarkMediaLightbox'
 import { useProjectAccess } from '@/lib/query/hooks/useProjectAccess'
 import { useProjectCharacters, useProjectLocations, useProjectProps } from '@/lib/query/hooks/useProjectAssets'
 import {
@@ -45,7 +45,7 @@ import {
   useUpdateProjectCharacterName,
 } from '@/lib/query/mutations/character-base-mutations'
 import {
-  useConfirmProjectCharacterProfile,
+  useFinalizeProjectCharacterVisual,
   useUpdateProjectCharacterIntroduction,
 } from '@/lib/query/mutations/character-profile-mutations'
 import {
@@ -54,6 +54,7 @@ import {
 } from '@/lib/query/mutations/character-image-ops-mutations'
 import { useAnalyzeProjectAssets, useAnalyzeAllEpisodes } from '@/lib/query/mutations/useProjectConfigMutations'
 import { V2CharacterEditModal } from './V2CharacterEditModal'
+import { V2CharacterAppearanceRecoveryModal } from './V2CharacterAppearanceRecoveryModal'
 import { V2LocationEditModal } from './V2LocationEditModal'
 import { useRegisterArkAsset } from '@/lib/query/mutations/useRegisterArkAsset'
 import { V2ManualAddSubjectModal, type ManualAddSubjectType } from './V2ManualAddSubjectModal'
@@ -68,7 +69,6 @@ import {
 import { useTaskSnapshot, useActiveTasks } from '@/lib/query/hooks/useTaskStatus'
 import { useStoryboards } from '@/lib/query/hooks/useStoryboards'
 import {
-  useCreateCharacterAppearance,
   useEpisodeCharacterBindings,
   useEpisodeLocationBindings,
   useEpisodePropBindings,
@@ -81,17 +81,44 @@ import {
   type Tab,
   type V2SubjectsClientProps,
   type CharacterLike,
+  type CharacterAppearanceLike,
   type LocationLike,
-  pickCharacterImage,
+  type SubjectItem,
+  pickCharacterAppearanceImage,
   pickLocationImage,
 } from './subjects-client-helpers'
+import {
+  resolveActiveCharacterAppearance,
+  type ActiveCharacterAppearanceBindingState,
+  type ActiveCharacterAppearanceResolution,
+} from './active-character-appearance'
 import { SubjectGrid } from './SubjectGrid'
+import { EntityWorkstation, type EntityWorkstationCopy } from './EntityWorkstation'
+import {
+  getManualSubjectCreateInvalidationKeys,
+  runManualLocationCreateWithUpload,
+  runManualPropCreateWithUpload,
+  type ManualLocationCreateParams,
+  type ManualPropCreateParams,
+} from './manual-subject-create-flow'
+import {
+  createSubjectUploadRequestId,
+  type SubjectUploadTarget,
+} from './subject-create-upload-flow'
+
+type ManualUploadRecovery = SubjectUploadTarget & { kind: 'scene' | 'prop' }
+type ManualCreateRequest = { kind: 'scene' | 'prop'; id: string }
 
 export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
   const t = useTranslations('v2Subjects')
   const queryClient = useQueryClient()
   // Phase 12.5 — viewer-role users see disabled mutation buttons.
-  const { canEdit } = useProjectAccess(projectId)
+  const {
+    allowed,
+    canEdit,
+    isLoading: accessLoading,
+    refetch: refetchAccess,
+  } = useProjectAccess(projectId)
   const viewerTip = canEdit ? undefined : t('viewerHint')
   // Tab persisted in URL ?tab= so F5 + bookmarks + cross-project
   // navigation 都能落到對的 tab。Earlier we kept it in React state and
@@ -129,13 +156,12 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
   const regenLocGroup = useRegenerateLocationGroup(projectId)
   const uploadCharImage = useUploadProjectCharacterImage(projectId)
   const uploadLocImage = useUploadProjectLocationImage(projectId)
-  const confirmProfile = useConfirmProjectCharacterProfile(projectId)
+  const finalizeProfile = useFinalizeProjectCharacterVisual(projectId)
   const updateAppearanceDesc = useUpdateProjectAppearanceDescription(projectId)
   const updateLocBasics = useUpdateProjectLocationBasics(projectId)
   const updateLocDescription = useUpdateProjectLocationDescription(projectId)
   const createLocationView = useCreateLocationView(projectId)
   const deleteLocationView = useDeleteLocationView(projectId)
-  const createCharAppearance = useCreateCharacterAppearance(projectId)
   const updateCharIntro = useUpdateProjectCharacterIntroduction(projectId)
   const updateCharName = useUpdateProjectCharacterName(projectId)
   const deleteCharacter = useDeleteProjectCharacter(projectId)
@@ -183,6 +209,8 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
   const [uploadInFlight, setUploadInFlight] = useState<Set<string>>(new Set())
   // Keyed by appearanceId — same scope the redescribe button targets.
   const [redescribeInFlight, setRedescribeInFlight] = useState<Set<string>>(new Set())
+  const [finalizingCharacterIds, setFinalizingCharacterIds] = useState<Set<string>>(new Set())
+  const [finalizeErrors, setFinalizeErrors] = useState<Map<string, string>>(new Map())
   const [zoomImage, setZoomImage] = useState<string | null>(null)
   const [editingDescId, setEditingDescId] = useState<string | null>(null) // appearanceId
   const [editingDescDraft, setEditingDescDraft] = useState<string>('')
@@ -191,6 +219,27 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
   const [editingPropId, setEditingPropId] = useState<string | null>(null)
   const [manualAddOpen, setManualAddOpen] = useState<ManualAddSubjectType | null>(null)
   const [manualAddSubmitting, setManualAddSubmitting] = useState(false)
+  const [manualUploadRecovery, setManualUploadRecovery] = useState<ManualUploadRecovery | null>(null)
+  const [manualUploadError, setManualUploadError] = useState<string | null>(null)
+  const manualCreateRequestRef = useRef<ManualCreateRequest | null>(null)
+
+  // Access can change while the page is open. Close every mutation surface
+  // immediately when edit access is absent so stale modal state cannot become
+  // actionable if a viewer's permissions are revoked mid-session.
+  useEffect(() => {
+    if (canEdit) return
+    setEditingDescId(null)
+    setEditingDescDraft('')
+    setEditingCharacterId(null)
+    setEditingLocationId(null)
+    setEditingPropId(null)
+    setManualAddOpen(null)
+    setManualUploadRecovery(null)
+    setManualUploadError(null)
+    setFinalizingCharacterIds(new Set())
+    setFinalizeErrors(new Map())
+    manualCreateRequestRef.current = null
+  }, [canEdit])
 
   function markRegenStart(targetId: string) {
     setRegenInFlight((prev) => {
@@ -427,11 +476,20 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
   // that episode — the empty-hint banner from SubjectGrid points users
   // there.
   const episodeBindingsQuery = useEpisodeCharacterBindings(projectId, currentEpisodeId)
-  const episodeBindingIds = useMemo(() => {
-    const set = new Set<string>()
-    for (const b of episodeBindingsQuery.data ?? []) set.add(b.characterId)
-    return set
+  const episodeAppearanceBindingMap = useMemo<ReadonlyMap<string, string | null>>(() => {
+    const map = new Map<string, string | null>()
+    for (const binding of episodeBindingsQuery.data ?? []) {
+      map.set(binding.characterId, binding.appearanceId)
+    }
+    return map
   }, [episodeBindingsQuery.data])
+  const episodeAppearanceBindingState: ActiveCharacterAppearanceBindingState = !currentEpisodeId
+    ? { status: 'ready', bindingMap: episodeAppearanceBindingMap }
+    : episodeBindingsQuery.error
+      ? { status: 'error' }
+      : episodeBindingsQuery.isPending || episodeBindingsQuery.isFetching
+        ? { status: 'loading' }
+        : { status: 'ready', bindingMap: episodeAppearanceBindingMap }
   const episodeLocationBindingsQuery = useEpisodeLocationBindings(projectId, currentEpisodeId)
   const episodeLocationBindingIds = useMemo(() => {
     const set = new Set<string>()
@@ -445,7 +503,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
     return set
   }, [episodePropBindingsQuery.data])
   const characters: CharacterLike[] = currentEpisodeId
-    ? allCharacters.filter((c) => episodeBindingIds.has(c.id))
+    ? allCharacters.filter((c) => episodeAppearanceBindingMap.has(c.id))
     : allCharacters
   const locations: LocationLike[] = currentEpisodeId
     ? allLocations.filter((l) => episodeLocationBindingIds.has(l.id))
@@ -454,6 +512,30 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
   const hiddenInThisEpisodeCount = isFilteringByEpisode
     ? allCharacters.length - characters.length
     : 0
+  const activeAppearanceResolutionByCharacterId = new Map<
+    string,
+    ActiveCharacterAppearanceResolution
+  >(
+    characters.map((character) => [
+      character.id,
+      resolveActiveCharacterAppearance({
+        characterId: character.id,
+        appearances: character.appearances,
+        episodeId: currentEpisodeId,
+        bindingState: episodeAppearanceBindingState,
+      }),
+    ]),
+  )
+
+  function getActiveAppearanceResolution(character: CharacterLike) {
+    return activeAppearanceResolutionByCharacterId.get(character.id)
+      ?? resolveActiveCharacterAppearance({
+        characterId: character.id,
+        appearances: character.appearances,
+        episodeId: currentEpisodeId,
+        bindingState: episodeAppearanceBindingState,
+      })
+  }
 
   function handleAnalyze() {
     if (!currentEpisodeId) {
@@ -518,22 +600,20 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
     }
   }
 
-  function handleRegenChar(c: CharacterLike) {
-    const appearanceId = c.appearances?.[0]?.id
-    if (!appearanceId) {
-      alert(t('alerts.needAppearanceFirst'))
-      return
-    }
-    markRegenStart(appearanceId)
-    regenChar.mutate({ characterId: c.id, appearanceId, imageIndex: 0 })
+  function handleRegenChar(c: CharacterLike, appearance: CharacterAppearanceLike) {
+    if (!canEdit) return
+    markRegenStart(appearance.id)
+    regenChar.mutate({ characterId: c.id, appearanceId: appearance.id, imageIndex: 0 })
   }
 
   function handleRegenLoc(l: LocationLike) {
+    if (!canEdit) return
     markRegenStart(l.id)
     regenLoc.mutate({ locationId: l.id, imageIndex: 0 })
   }
 
   function handleOpenCharacterModal(c: CharacterLike) {
+    if (!canEdit) return
     setEditingCharacterId(c.id)
   }
 
@@ -542,6 +622,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
   }
 
   function handleSaveIntroduction(characterId: string, introduction: string) {
+    if (!canEdit) return
     updateCharIntro.mutate(
       { characterId, introduction },
       {
@@ -560,6 +641,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
   // all downstream multi-shot ref lookups will already see the new
   // name on next regenerate.
   function handleSaveCharacterName(characterId: string, name: string) {
+    if (!canEdit) return
     const trimmed = name.trim()
     if (!trimmed) return
     updateCharName.mutate(
@@ -575,6 +657,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
   // Phase R-3 — prop edit handlers. PATCH route runs
   // propagatePropRename atomically (same shape as character rename).
   function handleSavePropName(propId: string, name: string) {
+    if (!canEdit) return
     const trimmed = name.trim()
     if (!trimmed) return
     updatePropName.mutate(
@@ -585,6 +668,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
     )
   }
   function handleSavePropSummary(propId: string, summary: string) {
+    if (!canEdit) return
     updatePropSummary.mutate(
       { propId, summary },
       {
@@ -593,6 +677,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
     )
   }
   function handleDeletePropFromModal(propId: string) {
+    if (!canEdit) return
     deleteProp.mutate(
       { propId },
       {
@@ -603,6 +688,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
   }
 
   function handleSaveVisualPromptFromModal(characterId: string, appearanceId: string, visualPrompt: string) {
+    if (!canEdit) return
     updateAppearanceDesc.mutate(
       { characterId, appearanceId, description: visualPrompt, descriptionIndex: 0 },
       {
@@ -613,19 +699,19 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
     )
   }
 
-  function handleUploadAndExpandToMultiView(c: CharacterLike, file: File) {
-    const ap = c.appearances?.[0]
-    if (!ap?.id) {
-      alert(t('alerts.needAppearanceRegen'))
-      return
-    }
+  function handleUploadAndExpandToMultiView(
+    c: CharacterLike,
+    appearance: CharacterAppearanceLike,
+    file: File,
+  ) {
+    if (!canEdit) return
     // Track via the same regen overlay since the worker generates 3
     // images (~ 60-180s on Tencent VOD). The poll loop on /assets will
     // pick up the new imageUrls and the overlay clears via the 5min
     // safety timeout or sooner once images surface.
-    markRegenStart(ap.id)
+    markRegenStart(appearance.id)
     uploadExpand.mutate(
-      { file, characterId: c.id, appearanceId: ap.id },
+      { file, characterId: c.id, appearanceId: appearance.id },
       {
         onError: (err) => {
           alert(t('alerts.multiViewFailed', { reason: (err as Error)?.message ?? t('alerts.unknown') }))
@@ -635,6 +721,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
   }
 
   function handleDeleteCharacterFromModal(characterId: string) {
+    if (!canEdit) return
     deleteCharacter.mutate(characterId, {
       onSuccess: () => setEditingCharacterId(null),
       onError: (err) => {
@@ -643,14 +730,10 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
     })
   }
 
-  function handleEditDescStart(c: CharacterLike) {
-    const ap = c.appearances?.[0]
-    if (!ap) {
-      alert(t('alerts.needAppearanceMultiView'))
-      return
-    }
-    setEditingDescId(ap.id)
-    setEditingDescDraft(ap.description ?? c.description ?? '')
+  function handleEditDescStart(c: CharacterLike, appearance: CharacterAppearanceLike) {
+    if (!canEdit) return
+    setEditingDescId(appearance.id)
+    setEditingDescDraft(appearance.description ?? c.description ?? '')
   }
 
   function handleEditDescCancel() {
@@ -658,16 +741,15 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
     setEditingDescDraft('')
   }
 
-  function handleEditDescSave(c: CharacterLike) {
-    const ap = c.appearances?.[0]
-    if (!ap) return
+  function handleEditDescSave(c: CharacterLike, appearance: CharacterAppearanceLike) {
+    if (!canEdit) return
     const description = editingDescDraft.trim()
     if (!description) {
       alert(t('alerts.descCannotEmpty'))
       return
     }
     updateAppearanceDesc.mutate(
-      { characterId: c.id, appearanceId: ap.id, description, descriptionIndex: 0 },
+      { characterId: c.id, appearanceId: appearance.id, description, descriptionIndex: 0 },
       {
         onSuccess: () => {
           setEditingDescId(null)
@@ -677,21 +759,55 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
     )
   }
 
-  function handleConfirmProfile(c: CharacterLike) {
-    if (c.profileConfirmed) return // already locked — no-op (un-lock not exposed yet)
-    confirmProfile.mutate({ characterId: c.id, generateImage: false })
+  async function handleFinalizeProfile(
+    character: CharacterLike,
+    appearance: CharacterAppearanceLike,
+  ) {
+    if (!canEdit || character.profileConfirmed || finalizingCharacterIds.has(character.id)) return
+
+    setFinalizingCharacterIds((previous) => {
+      const next = new Set(previous)
+      next.add(character.id)
+      return next
+    })
+    setFinalizeErrors((previous) => {
+      if (!previous.has(character.id)) return previous
+      const next = new Map(previous)
+      next.delete(character.id)
+      return next
+    })
+
+    try {
+      await finalizeProfile.mutateAsync({
+        characterId: character.id,
+        appearanceId: appearance.id,
+      })
+    } catch {
+      setFinalizeErrors((previous) => {
+        const next = new Map(previous)
+        next.set(character.id, t('alerts.finalizeFailed'))
+        return next
+      })
+    } finally {
+      setFinalizingCharacterIds((previous) => {
+        if (!previous.has(character.id)) return previous
+        const next = new Set(previous)
+        next.delete(character.id)
+        return next
+      })
+    }
   }
 
-  // Manually re-describe an asset from its current image. Shared by
-  // character / location / prop cards. Same intent everywhere: the
-  // upload-time auto-rewrite is the happy path; this is the escape
-  // hatch for legacy uploads (data that predates auto-rewrite) and
-  // for refreshing description when the selected image changes.
+  // Explicitly re-describe an asset from its current image. Shared by
+  // character / location / prop cards. Plain uploads only persist the
+  // image; this user action is the sole path that invokes vision analysis
+  // and may replace the description.
   async function callRedescribe(
     endpoint: string,
     body: Record<string, string>,
     inFlightKey: string,
   ): Promise<boolean> {
+    if (!canEdit) return false
     if (redescribeInFlight.has(inFlightKey)) return false
     setRedescribeInFlight((prev) => {
       const next = new Set(prev)
@@ -724,13 +840,11 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
     }
   }
 
-  async function handleRedescribe(c: CharacterLike) {
-    const ap = c.appearances?.[0]
-    if (!ap) return
+  async function handleRedescribe(appearance: CharacterAppearanceLike) {
     await callRedescribe(
       `/api/novel-promotion/${projectId}/character/appearance/redescribe`,
-      { appearanceId: ap.id },
-      ap.id,
+      { appearanceId: appearance.id },
+      appearance.id,
     )
   }
 
@@ -768,9 +882,18 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
   }
 
   async function handleBatchRegenCharacters() {
+    if (!canEdit) return
     if (batchGenInFlight) return
     if (characters.length === 0) {
       alert(t('alerts.noCharsAnalyze'))
+      return
+    }
+    const targets = characters.map((character) => ({
+      character,
+      resolution: getActiveAppearanceResolution(character),
+    }))
+    if (targets.some(({ resolution }) => resolution.status !== 'resolved')) {
+      alert(t('activeAppearance.batchUnavailable'))
       return
     }
     setBatchGenInFlight('characters')
@@ -779,18 +902,15 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
       let done = 0
       // Sequential to avoid hammering the image provider; switch to
       // Promise.all if user wants pure parallel later.
-      for (const c of characters) {
-        const appearanceId = c.appearances?.[0]?.id
-        if (!appearanceId) {
-          done++
-          setBatchProgress({ done, total: characters.length })
-          continue
-        }
+      for (const { character, resolution } of targets) {
+        if (resolution.status !== 'resolved') continue
         try {
-          await regenCharGroup.mutateAsync({ characterId: c.id, appearanceId })
+          await regenCharGroup.mutateAsync({
+            characterId: character.id,
+            appearanceId: resolution.appearance.id,
+          })
         } catch (err) {
-           
-          console.warn('[batch-regen] character', c.id, err)
+          console.warn('[batch-regen] character', character.id, err)
         }
         done++
         setBatchProgress({ done, total: characters.length })
@@ -802,6 +922,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
   }
 
   async function handleBatchRegenLocations() {
+    if (!canEdit) return
     if (batchGenInFlight) return
     if (locations.length === 0) {
       alert(t('alerts.noScenesAnalyze'))
@@ -828,6 +949,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
   }
 
   async function handleBatchGenProps() {
+    if (!canEdit) return
     if (batchGenInFlight) return
     if (props.length === 0) {
       alert(t('alerts.noPropsAnalyze'))
@@ -861,42 +983,20 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
     }
   }
 
-  async function handleUploadChar(c: CharacterLike, file: File) {
-    // Multi-appearance schema stores images on CharacterAppearance rows,
-    // not directly on the character. When the script-extraction pipeline
-    // creates a character it doesn't pre-seed an appearance — that gets
-    // built on first generate / regenerate. So if the user hits "上傳替換"
-    // before ever generating, we need to materialize a default appearance
-    // ourselves before the upload-asset-image call has a row to attach to.
-    let appearanceId = c.appearances?.[0]?.id
-    let appearanceChangeReason = c.appearances?.[0]?.changeReason ?? t('appearanceLabel.default')
-    if (!appearanceId) {
-      try {
-        const created = (await createCharAppearance.mutateAsync({
-          characterId: c.id,
-          changeReason: t('appearanceLabel.original'),
-          description: c.description ?? '',
-        })) as { appearance?: { id?: string } } | undefined
-        const newId = created?.appearance?.id
-        if (!newId) {
-          alert(t('alerts.uploadAppearanceNoId'))
-          return
-        }
-        appearanceId = newId
-        appearanceChangeReason = t('appearanceLabel.original')
-      } catch (err) {
-        alert(t('alerts.uploadAppearanceFailed', { reason: (err as Error)?.message ?? t('alerts.unknown') }))
-        return
-      }
-    }
-    setUploadInFlight((prev) => new Set(prev).add(appearanceId!))
+  async function handleUploadChar(
+    c: CharacterLike,
+    appearance: CharacterAppearanceLike,
+    file: File,
+  ) {
+    if (!canEdit) return
+    setUploadInFlight((prev) => new Set(prev).add(appearance.id))
     // labelText is required by /upload-asset-image. Use a deterministic
     // human-readable label so it appears the same way generated images do.
-    const labelText = `${c.name ?? t('entityNames.character')} - ${appearanceChangeReason}`
+    const labelText = `${c.name ?? t('entityNames.character')} - ${appearance.changeReason ?? t('appearanceLabel.default')}`
     uploadCharImage.mutate(
-      { file, characterId: c.id, appearanceId: appearanceId!, imageIndex: 0, labelText },
+      { file, characterId: c.id, appearanceId: appearance.id, imageIndex: 0, labelText },
       {
-        onSettled: () => markUploadDone(appearanceId!),
+        onSettled: () => markUploadDone(appearance.id),
         onError: (err) => {
           alert(t('alerts.uploadFailed', { reason: (err as Error)?.message ?? t('alerts.unknown') }))
         },
@@ -905,6 +1005,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
   }
 
   function handleUploadLoc(l: LocationLike, file: File) {
+    if (!canEdit) return
     setUploadInFlight((prev) => new Set(prev).add(l.id))
     const labelText = `${l.name ?? t('entityNames.scene')}`
     uploadLocImage.mutate(
@@ -919,6 +1020,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
   }
 
   function handleUploadProp(p: { id: string; name: string }, file: File) {
+    if (!canEdit) return
     setUploadInFlight((prev) => new Set(prev).add(p.id))
     const labelText = `${p.name ?? t('entityNames.prop')}`
     uploadPropImage.mutate(
@@ -938,45 +1040,46 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
   // No description = no auto AI gen (見 character/route.ts:202 +
   // location/route.ts:90 跳過邏輯)。
 
-  async function handleManualAddLocation(params: {
-    name: string
-    description: string
-    summary?: string | null
-    file: File | null
-  }) {
+  async function handleManualAddLocation(params: ManualLocationCreateParams) {
+    if (!canEdit) return
     setManualAddSubmitting(true)
     try {
-      const res = await fetch(`/api/novel-promotion/${projectId}/location`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          name: params.name,
-          description: params.description || undefined,
-          summary: params.summary || undefined,
-          episodeId: currentEpisodeId || undefined,
-        }),
+      const existingTarget = manualUploadRecovery?.kind === 'scene'
+        ? {
+            createdId: manualUploadRecovery.createdId,
+            targetId: manualUploadRecovery.targetId,
+          }
+        : null
+      const createRequestId = manualCreateRequestRef.current?.kind === 'scene'
+        ? manualCreateRequestRef.current.id
+        : createSubjectUploadRequestId()
+      if (manualCreateRequestRef.current?.kind !== 'scene') {
+        manualCreateRequestRef.current = { kind: 'scene', id: createRequestId }
+      }
+      const result = await runManualLocationCreateWithUpload({
+        projectId,
+        episodeId: currentEpisodeId,
+        createRequestId,
+        params,
+        existingTarget,
+        onCreated: async () => {
+          await Promise.all(
+            getManualSubjectCreateInvalidationKeys('location', projectId, currentEpisodeId)
+              .map((queryKey) => queryClient.invalidateQueries({ queryKey, exact: true })),
+          )
+        },
+        upload: async (uploadParams) => await uploadLocImage.mutateAsync(uploadParams),
       })
-      if (!res.ok) {
-        const text = await res.text().catch(() => '')
-        throw new Error(`HTTP ${res.status} ${text}`)
+
+      if (result.status === 'upload-failed') {
+        setManualUploadRecovery({ kind: 'scene', ...result.target })
+        setManualUploadError(t('uploadRecovery.message'))
+        return
       }
-      const data = (await res.json()) as { location?: { id: string } }
-      const locId = data.location?.id
-      if (params.file && locId) {
-        await uploadLocImage.mutateAsync({
-          file: params.file,
-          locationId: locId,
-          imageIndex: 0,
-          labelText: params.name,
-        })
-      }
-      await queryClient.invalidateQueries({ queryKey: queryKeys.projectAssets.locations(projectId) })
-      if (currentEpisodeId) {
-        await queryClient.invalidateQueries({
-          queryKey: [...queryKeys.tasks.all(projectId), 'episode-location-bindings', currentEpisodeId],
-        })
-      }
+
+      setManualUploadRecovery(null)
+      setManualUploadError(null)
+      manualCreateRequestRef.current = null
       setManualAddOpen(null)
     } catch (err) {
       alert(t('alerts.createFailed', { reason: (err as Error)?.message ?? t('alerts.unknown') }))
@@ -985,42 +1088,46 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
     }
   }
 
-  async function handleManualAddProp(params: {
-    name: string
-    description: string
-    file: File | null
-  }) {
+  async function handleManualAddProp(params: ManualPropCreateParams) {
+    if (!canEdit) return
     setManualAddSubmitting(true)
     try {
-      const res = await fetch(`/api/novel-promotion/${projectId}/prop`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          name: params.name,
-          summary: params.description || undefined,
-          episodeId: currentEpisodeId || undefined,
-        }),
+      const existingTarget = manualUploadRecovery?.kind === 'prop'
+        ? {
+            createdId: manualUploadRecovery.createdId,
+            targetId: manualUploadRecovery.targetId,
+          }
+        : null
+      const createRequestId = manualCreateRequestRef.current?.kind === 'prop'
+        ? manualCreateRequestRef.current.id
+        : createSubjectUploadRequestId()
+      if (manualCreateRequestRef.current?.kind !== 'prop') {
+        manualCreateRequestRef.current = { kind: 'prop', id: createRequestId }
+      }
+      const result = await runManualPropCreateWithUpload({
+        projectId,
+        episodeId: currentEpisodeId,
+        createRequestId,
+        params,
+        existingTarget,
+        onCreated: async () => {
+          await Promise.all(
+            getManualSubjectCreateInvalidationKeys('prop', projectId, currentEpisodeId)
+              .map((queryKey) => queryClient.invalidateQueries({ queryKey, exact: true })),
+          )
+        },
+        upload: async (uploadParams) => await uploadPropImage.mutateAsync(uploadParams),
       })
-      if (!res.ok) {
-        const text = await res.text().catch(() => '')
-        throw new Error(`HTTP ${res.status} ${text}`)
+
+      if (result.status === 'upload-failed') {
+        setManualUploadRecovery({ kind: 'prop', ...result.target })
+        setManualUploadError(t('uploadRecovery.message'))
+        return
       }
-      const data = (await res.json()) as { prop?: { id: string } }
-      const propId = data.prop?.id
-      if (params.file && propId) {
-        await uploadPropImage.mutateAsync({
-          file: params.file,
-          propId,
-          labelText: params.name,
-        })
-      }
-      await queryClient.invalidateQueries({ queryKey: queryKeys.projectAssets.props(projectId) })
-      if (currentEpisodeId) {
-        await queryClient.invalidateQueries({
-          queryKey: [...queryKeys.tasks.all(projectId), 'episode-prop-bindings', currentEpisodeId],
-        })
-      }
+
+      setManualUploadRecovery(null)
+      setManualUploadError(null)
+      manualCreateRequestRef.current = null
       setManualAddOpen(null)
     } catch (err) {
       alert(t('alerts.createFailed', { reason: (err as Error)?.message ?? t('alerts.unknown') }))
@@ -1049,12 +1156,13 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
   // briefly returns [] during the binding-query inflight window and the
   // grid flashes "empty" before the real cast/scenes arrive.
   const isLoading =
-    charactersQuery.isLoading
-    || locationsQuery.isLoading
+    (tab === 'character' ? charactersQuery.isLoading : tab === 'scene' ? locationsQuery.isLoading : propsQuery.isLoading)
     || (!!currentEpisodeId && (
-      episodeBindingsQuery.isLoading
-      || episodeLocationBindingsQuery.isLoading
-      || episodePropBindingsQuery.isLoading
+      tab === 'character'
+        ? episodeBindingsQuery.isLoading
+        : tab === 'scene'
+          ? episodeLocationBindingsQuery.isLoading
+          : episodePropBindingsQuery.isLoading
     ))
 
   // 2026-05-21 — replaced the always-on amber CTA strip with two
@@ -1084,7 +1192,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
         type="button"
         onClick={handleAnalyze}
         disabled={analyzeDisabled}
-        className="kuiper-primary-button flex min-h-10 items-center gap-1.5 rounded-input px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-40"
+        className="kuiper-dashboard-primary flex min-h-11 items-center gap-1.5 px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-40"
       >
         <AppIcon name="sparklesAlt" className="h-3 w-3" />
         {analyzeLabel} {currentEpisode ? `· ${currentEpisode.name}` : ''}
@@ -1094,14 +1202,14 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
         onClick={handleAnalyzeAllEpisodes}
         disabled={!canEdit || analyzeAll.isPending}
         title={t('analyzeAll.confirm')}
-        className="flex min-h-10 items-center gap-1.5 rounded-input border border-accent-500/40 bg-accent-500/10 px-4 py-2 text-sm text-accent-400 transition-all hover:bg-accent-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+        className="kuiper-dashboard-secondary flex min-h-11 items-center gap-1.5 px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-40"
       >
         <AppIcon name="sparklesAlt" className="h-3 w-3" />
         {analyzeAll.isPending ? t('analyzeAll.submitting') : t('analyzeAll.button')}
       </button>
       <Link
         href={`/${locale}/workspace/asset-hub`}
-        className="px-2 text-sm text-text-secondary transition-colors hover:text-primary-300"
+        className="kuiper-dashboard-secondary inline-flex min-h-11 items-center px-4 text-sm"
       >
         {t('header.importFromLibrary')}
       </Link>
@@ -1114,355 +1222,427 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
         type="button"
         onClick={handleAnalyze}
         disabled={analyzeDisabled}
-        className="kuiper-primary-button flex min-h-11 items-center gap-2 rounded-input px-6 py-3 font-medium disabled:cursor-not-allowed disabled:opacity-50"
+        className="kuiper-dashboard-primary flex min-h-11 items-center gap-2 px-6 py-3 font-medium disabled:cursor-not-allowed disabled:opacity-50"
       >
         <AppIcon name="sparklesAlt" className="h-5 w-5" />
         {currentEpisode
           ? t('analyze.ctaWithEpisode', { label: analyzeLabel, episode: currentEpisode.name })
           : t('analyze.ctaWithoutEpisode', { label: analyzeLabel })}
       </button>
-      <div className="text-sm text-text-tertiary">
+      <div className="text-sm text-[var(--production-ink-muted)]">
         {t('header.aiAnalyzeHelp')}
       </div>
       <Link
         href={`/${locale}/workspace/asset-hub`}
-        className="text-sm text-text-secondary transition-colors hover:text-primary-300"
+        className="inline-flex min-h-11 items-center text-sm font-semibold text-[var(--production-tool)] hover:underline"
       >
         {t('header.orFromLibrary')}
       </Link>
     </div>
   )
 
-  return (
-    <div className="kuiper-workspace-page">
-      {/* Compact analyze toolbar — replaces the deleted amber CTA strip.
-          Ambient access to 重新分析 when the grid already has items.
-          When grid is empty, SubjectGrid renders the bigger emptyStateCta
-          inside its empty card so the user has a clearer next action. */}
-      <div className="kuiper-workspace-toolbar mb-6 flex-wrap pb-4">
-        <div>
-          <h1 className="font-heading text-xl font-semibold text-text-primary">{t('pageTitle')}</h1>
-          <p className="mt-1 text-sm text-text-tertiary">
-            {t('pageSubtitle')}{currentEpisode ? ` · ${currentEpisode.name}` : ''}
-          </p>
-        </div>
-        {compactAnalyzeButton}
-      </div>
+  function getAppearanceStatus(
+    resolution: ActiveCharacterAppearanceResolution,
+  ): NonNullable<SubjectItem['appearanceStatus']> {
+    if (resolution.status === 'resolved') {
+      const name = resolution.appearance.changeReason
+        ?? t('appearanceLabel.default')
+      return {
+        label: resolution.source === 'episode'
+          ? t('activeAppearance.episode', { name })
+          : t('activeAppearance.default', { name }),
+        tone: 'info',
+      }
+    }
+    if (resolution.status === 'loading') {
+      return { label: t('activeAppearance.loading'), tone: 'warning' }
+    }
+    if (resolution.status === 'error') {
+      return { label: t('activeAppearance.error'), tone: 'error' }
+    }
+    if (resolution.status === 'no-appearance') {
+      return { label: t('activeAppearance.noAppearance'), tone: 'warning' }
+    }
+    return {
+      label: resolution.reason === 'stale-binding'
+        ? t('activeAppearance.staleBinding')
+        : t('activeAppearance.bindingMissing'),
+      tone: 'error',
+    }
+  }
 
-      {/* Status banner — reads from server task snapshot, persists across navigation */}
-      {analyze.isError ? (
-        <div className="mb-6 rounded-sm border border-rose-500/30 bg-rose-500/10 px-4 py-3 font-serif-cn text-sm text-rose-300">
-          {t('analyze.submitFailed', { reason: (analyze.error as Error)?.message ?? t('analyze.submitFailedUnknown') })}
-        </div>
-      ) : taskStatus === 'failed' ? (
-        <div
-          className="mb-6 rounded-sm border border-rose-500/30 bg-rose-500/10 px-4 py-3 font-serif-cn text-sm text-rose-300"
-          title={taskError ?? undefined}
+  const characterItems: SubjectItem[] = characters.map((character) => {
+    const resolution = getActiveAppearanceResolution(character)
+    const appearance = resolution.status === 'resolved' ? resolution.appearance : null
+    const appearanceId = appearance?.id ?? ''
+    const roleSummary = character.introduction ?? character.description ?? null
+    return {
+      id: character.id,
+      targetId: appearanceId,
+      name: character.name ?? t('entityNames.untitledCharacter'),
+      caption: character.role ?? t('entityNames.character'),
+      description: roleSummary,
+      visualPrompt: appearance?.description ?? null,
+      imageUrl: pickCharacterAppearanceImage(appearance),
+      appearanceStatus: getAppearanceStatus(resolution),
+      onRegenerate: canEdit && resolution.status === 'resolved'
+        ? () => handleRegenChar(character, resolution.appearance)
+        : undefined,
+      isRegenerating: regenInFlight.has(appearanceId) || serverInflightIds.has(appearanceId),
+      isLocked: Boolean(character.profileConfirmed),
+      onLock: canEdit && resolution.status === 'resolved'
+        ? () => { void handleFinalizeProfile(character, resolution.appearance) }
+        : undefined,
+      isLocking: finalizingCharacterIds.has(character.id),
+      lockError: finalizeErrors.get(character.id) ?? null,
+      onUpload: canEdit && resolution.status === 'resolved'
+        ? (file) => handleUploadChar(character, resolution.appearance, file)
+        : undefined,
+      isUploading: uploadInFlight.has(appearanceId),
+      onZoom: (url) => setZoomImage(url),
+      onOpenEditor: canEdit && (
+        resolution.status === 'resolved' || resolution.status === 'no-appearance'
+      )
+        ? () => handleOpenCharacterModal(character)
+        : undefined,
+      onEditDescription: canEdit && resolution.status === 'resolved'
+        ? () => handleEditDescStart(character, resolution.appearance)
+        : undefined,
+      isEditingDescription: editingDescId === appearanceId && appearanceId.length > 0,
+      descriptionDraft: editingDescId === appearanceId ? editingDescDraft : '',
+      onDescriptionDraftChange: setEditingDescDraft,
+      onDescriptionSave: canEdit && resolution.status === 'resolved'
+        ? () => handleEditDescSave(character, resolution.appearance)
+        : undefined,
+      onDescriptionCancel: handleEditDescCancel,
+      isSavingDescription: updateAppearanceDesc.isPending,
+      onRedescribe: canEdit
+        && resolution.status === 'resolved'
+        && (resolution.appearance.imageUrl || resolution.appearance.imageUrls)
+        ? () => { void handleRedescribe(resolution.appearance) }
+        : undefined,
+      isRedescribing: redescribeInFlight.has(appearanceId),
+      arkTargetType: 'CharacterAppearance' as const,
+      arkTargetId: appearanceId || null,
+      arkAssetId: appearance?.arkAssetId ?? null,
+      arkAssetStatus: appearance?.arkAssetStatus ?? null,
+      arkAssetSourceUrl: appearance?.arkAssetSourceUrl ?? null,
+      arkAssetError: appearance?.arkAssetError ?? null,
+      ...(canEdit && resolution.status === 'resolved' && handleArkRegister
+        ? { onArkRegister: handleArkRegister }
+        : {}),
+    }
+  })
+
+  const locationItems: SubjectItem[] = locations.map((location) => {
+    const images = (location.images as Array<{ id: string; imageUrl?: string | null }> | undefined) ?? []
+    const selectedId = (location as { selectedImageId?: string | null }).selectedImageId ?? null
+    const targetImage =
+      (selectedId ? images.find((image) => image.id === selectedId) : null)
+      ?? images.find((image) => Boolean(image.imageUrl))
+    return {
+      id: location.id,
+      targetId: location.id,
+      name: location.name ?? t('entityNames.untitledLocation'),
+      caption: t('entityNames.scene'),
+      description: location.description ?? null,
+      imageUrl: pickLocationImage(location),
+      onRegenerate: canEdit ? () => handleRegenLoc(location) : undefined,
+      isRegenerating: regenInFlight.has(location.id) || serverInflightIds.has(location.id),
+      onUpload: canEdit ? (file) => handleUploadLoc(location, file) : undefined,
+      isUploading: uploadInFlight.has(location.id),
+      onZoom: (url) => setZoomImage(url),
+      onOpenEditor: canEdit ? () => setEditingLocationId(location.id) : undefined,
+      onRedescribe: canEdit && targetImage?.imageUrl
+        ? () => { void handleRedescribeLoc(location) }
+        : undefined,
+      isRedescribing: targetImage ? redescribeInFlight.has(targetImage.id) : false,
+    }
+  })
+
+  const propItems: SubjectItem[] = props.map((prop) => ({
+    id: prop.id,
+    targetId: prop.id,
+    name: prop.name ?? t('entityNames.untitledProp'),
+    caption: t('entityNames.prop'),
+    description: prop.summary ?? null,
+    imageUrl: prop.imageUrl ?? null,
+    onRegenerate: canEdit ? () => {
+      markRegenStart(prop.id)
+      const mutation = prop.imageUrl ? regenProp : generateProp
+      mutation.mutate({ propId: prop.id })
+    } : undefined,
+    isRegenerating: regenInFlight.has(prop.id) || serverInflightIds.has(prop.id),
+    onUpload: canEdit ? (file) => handleUploadProp(prop, file) : undefined,
+    isUploading: uploadInFlight.has(prop.id),
+    onZoom: (url) => setZoomImage(url),
+    onRedescribe: canEdit && prop.imageUrl
+      ? () => { void handleRedescribeProp(prop) }
+      : undefined,
+    isRedescribing: redescribeInFlight.has(prop.id),
+    onOpenEditor: canEdit ? () => setEditingPropId(prop.id) : undefined,
+  }))
+
+  const activeItems = tab === 'character' ? characterItems : tab === 'scene' ? locationItems : propItems
+  const characterMutationsBlocked = characters.some(
+    (character) => getActiveAppearanceResolution(character).status !== 'resolved',
+  )
+  const activeTabRow = tabs.find((row) => row.id === tab) ?? tabs[0]
+  const activeAssetError = tab === 'character'
+    ? charactersQuery.error
+    : tab === 'scene'
+      ? locationsQuery.error
+      : propsQuery.error
+  const activeBindingError = !currentEpisodeId
+    ? null
+    : tab === 'character'
+      ? episodeBindingsQuery.error
+      : tab === 'scene'
+        ? episodeLocationBindingsQuery.error
+        : episodePropBindingsQuery.error
+  const hasActiveError = Boolean(activeAssetError || activeBindingError)
+  const hasStaleData = hasActiveError && activeItems.length > 0
+  const missingImageCount = activeItems.filter((item) => !item.imageUrl).length
+  const activeEntity = tab === 'character'
+    ? t('entityNames.character')
+    : tab === 'scene'
+      ? t('entityNames.scene')
+      : t('entityNames.prop')
+
+  function refetchActiveEntity() {
+    if (tab === 'character') void charactersQuery.refetch()
+    else if (tab === 'scene') void locationsQuery.refetch()
+    else void propsQuery.refetch()
+    if (!currentEpisodeId) return
+    if (tab === 'character') void episodeBindingsQuery.refetch()
+    else if (tab === 'scene') void episodeLocationBindingsQuery.refetch()
+    else void episodePropBindingsQuery.refetch()
+  }
+
+  const retryAction = (
+    <button
+      type="button"
+      onClick={() => {
+        void refetchAccess()
+        refetchActiveEntity()
+      }}
+      className="kuiper-dashboard-primary min-h-11 px-4 text-sm"
+    >
+      {t('workstation.retry')}
+    </button>
+  )
+
+  const workstationCopy: EntityWorkstationCopy = {
+    listTitle: t('workstation.listTitle', { entity: activeTabRow?.label ?? activeEntity }),
+    searchLabel: t('workstation.searchLabel', { entity: activeEntity }),
+    searchPlaceholder: t('workstation.searchPlaceholder', { entity: activeEntity }),
+    countLabel: t('workstation.count', { count: activeItems.length, entity: activeEntity }),
+    backToList: t('workstation.backToList', { entity: activeEntity }),
+    detailRegionLabel: t('workstation.detailRegion', { entity: activeEntity }),
+    ready: t('workstation.status.ready'),
+    needsImage: t('workstation.status.needsImage'),
+    generating: t('workstation.status.generating'),
+    approved: t('workstation.status.approved'),
+    readOnly: t('workstation.status.readOnly'),
+    loadingTitle: t('workstation.states.loadingTitle', { entity: activeEntity }),
+    loadingDescription: t('workstation.states.loadingDescription'),
+    emptyTitle: t('workstation.states.emptyTitle', { entity: activeEntity }),
+    emptyDescription: t('workstation.states.emptyDescription'),
+    errorTitle: t('workstation.states.errorTitle', { entity: activeEntity }),
+    errorDescription: t('workstation.states.errorDescription'),
+    staleTitle: t('workstation.states.staleTitle', { entity: activeEntity }),
+    staleDescription: t('workstation.states.staleDescription'),
+    permissionTitle: t('workstation.states.permissionTitle'),
+    permissionDescription: t('workstation.states.permissionDescription'),
+    partialTitle: t('workstation.states.partialTitle', { count: missingImageCount, entity: activeEntity }),
+    partialDescription: t('workstation.states.partialDescription'),
+  }
+
+  const workstationToolbarActions = (
+    <>
+      <button
+        type="button"
+        disabled={!canEdit}
+        onClick={() => {
+          if (canEdit) setManualAddOpen(tab)
+        }}
+        className="kuiper-dashboard-secondary flex min-h-11 items-center gap-2 px-4 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+        title={!canEdit ? viewerTip : t('manualAdd.titleByTab', { entity: activeEntity })}
+      >
+        <AppIcon name="plus" className="h-4 w-4" />
+        {t('manualAdd.button')}
+      </button>
+      {tab === 'character' && characters.length > 0 ? (
+        <button
+          type="button"
+          onClick={handleBatchRegenCharacters}
+          disabled={!!batchGenInFlight || !canEdit || characterMutationsBlocked}
+          title={characterMutationsBlocked ? t('activeAppearance.batchUnavailable') : viewerTip}
+          className="kuiper-dashboard-secondary flex min-h-11 items-center gap-2 px-4 text-sm disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {t('analyze.taskFailed', { message: taskErrorDisplay?.message ?? t('analyze.taskFailedNoMsg') })}
-        </div>
-      ) : isAnalyzing ? (
-        <div className="mb-6 rounded-sm border border-primary-500/30 bg-primary-500/10 px-4 py-3 font-serif-cn text-sm text-primary-300">
-          {t('analyze.inProgress', { progress: taskProgress })}
-        </div>
-      ) : taskStatus === 'completed' && serverInflightIds.size > 0 ? (
-        <div className="mb-6 rounded-sm border border-primary-500/30 bg-primary-500/10 px-4 py-3 font-serif-cn text-sm text-primary-300">
-          {t('analyze.completeBackground')}
-          {(() => {
-            // Localised comma-joined breakdown — "3 character images,
-            // 1 scene image" in en, "3 張角色圖、1 張場景圖" in zh.
-            const parts: string[] = []
-            if (serverInflightCounts.character > 0) {
-              parts.push(t('analyze.inflightCounts.character', { count: serverInflightCounts.character }))
-            }
-            if (serverInflightCounts.location > 0) {
-              parts.push(t('analyze.inflightCounts.location', { count: serverInflightCounts.location }))
-            }
-            if (serverInflightCounts.prop > 0) {
-              parts.push(t('analyze.inflightCounts.prop', { count: serverInflightCounts.prop }))
-            }
-            const text = parts.length > 0 ? parts.join('、') : t('analyze.inflightCounts.generic', { count: serverInflightIds.size })
-            return <strong> {text}</strong>
-          })()}
-          {t('analyze.inflightCounts.tail')}
-        </div>
-      ) : taskStatus === 'completed' && hasStoryboardPanels ? (
-        <div className="mb-6 flex flex-col gap-3 rounded-sm border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="font-serif-cn text-sm text-emerald-300">
-            {t.rich('analyze.doneFullPipeline', {
-              when: taskUpdatedAt ? t('analyze.whenAt', { time: new Date(taskUpdatedAt).toLocaleTimeString() }) : '',
-              panelCount: storyboardPanelCount,
-              strong: (chunks) => <strong>{chunks}</strong>,
-            })}
-          </div>
-          <Link
-            href={buildHref(`/${locale}/v2/workspace/${projectId}/storyboard`)}
-            className="flex flex-shrink-0 items-center gap-1.5 rounded-sm border border-emerald-500/40 bg-emerald-500/20 px-4 py-1.5 font-mono text-[14px] tracking-wider text-emerald-200 transition-all hover:bg-emerald-500/30"
-          >
-            {t('analyze.doneFullPipelineLink')} <AppIcon name="chevronRight" className="h-3 w-3" />
-          </Link>
-        </div>
-      ) : taskStatus === 'completed' ? (
-        <div className="mb-6 rounded-sm border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 font-serif-cn text-sm text-emerald-300">
-          {t('analyze.doneAssetsOnly', {
-            when: taskUpdatedAt ? t('analyze.whenAt', { time: new Date(taskUpdatedAt).toLocaleTimeString() }) : '',
-          })}
-        </div>
+          <AppIcon name="sparklesAlt" className="h-4 w-4" />
+          {batchGenInFlight === 'characters' && batchProgress
+            ? t('batch.generating', { done: batchProgress.done, total: batchProgress.total })
+            : t('batch.allChars')}
+        </button>
       ) : null}
+      {tab === 'scene' && locations.length > 0 ? (
+        <button
+          type="button"
+          onClick={handleBatchRegenLocations}
+          disabled={!!batchGenInFlight || !canEdit}
+          title={viewerTip}
+          className="kuiper-dashboard-secondary flex min-h-11 items-center gap-2 px-4 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <AppIcon name="sparklesAlt" className="h-4 w-4" />
+          {batchGenInFlight === 'locations' && batchProgress
+            ? t('batch.generating', { done: batchProgress.done, total: batchProgress.total })
+            : t('batch.allScenes')}
+        </button>
+      ) : null}
+      {tab === 'prop' && props.length > 0 ? (
+        <button
+          type="button"
+          onClick={handleBatchGenProps}
+          disabled={!!batchGenInFlight || !canEdit}
+          title={viewerTip}
+          className="kuiper-dashboard-secondary flex min-h-11 items-center gap-2 px-4 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <AppIcon name="sparklesAlt" className="h-4 w-4" />
+          {batchGenInFlight === 'props' && batchProgress
+            ? t('batch.generating', { done: batchProgress.done, total: batchProgress.total })
+            : t('batch.allProps')}
+        </button>
+      ) : null}
+      <Link
+        href={buildHref(`/${locale}/v2/workspace/${projectId}/storyboard`)}
+        className="kuiper-dashboard-secondary inline-flex min-h-11 items-center gap-2 px-4 text-sm"
+      >
+        {t('nextStep')} <AppIcon name="chevronRight" className="h-4 w-4" />
+      </Link>
+    </>
+  )
 
-      <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div className="kuiper-segmented-control w-fit max-w-full overflow-x-auto">
-          {tabs.map((tabRow) => (
-            <button
-              key={tabRow.id}
-              type="button"
-              onClick={() => setTab(tabRow.id)}
-              className={`min-h-10 rounded-input px-5 py-2 text-sm transition-all ${
-                tab === tabRow.id
-                  ? 'bg-primary-500/15 text-primary-300 shadow-elev-1'
-                  : 'text-text-secondary hover:bg-overlay hover:text-text-primary'
-              }`}
-            >
-              {tabRow.label}
-              <span className="ml-2 font-mono text-[14px] opacity-60">{tabRow.count}</span>
-            </button>
-          ))}
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {/* 手動新增 — 三個 tab 都顯示,用「+」icon 區分。
-              點開 V2ManualAddSubjectModal,filled in 後 POST + 上傳,
-              既不依賴劇本分析,也不阻擋自動分析流程。 */}
-          <button
-            type="button"
-            disabled={!canEdit}
-            onClick={() =>
-              setManualAddOpen(
-                tab === 'character' ? 'character' : tab === 'scene' ? 'scene' : 'prop',
-              )
-            }
-            className="kuiper-secondary-button flex items-center gap-2 px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
-            title={!canEdit ? viewerTip : t('manualAdd.titleByTab', { entity: tab === 'character' ? t('entityNames.character') : tab === 'scene' ? t('entityNames.scene') : t('entityNames.prop') })}
-          >
-            <AppIcon name="plus" className="h-4 w-4" />
-            {t('manualAdd.button')}
-          </button>
-          {tab === 'character' && characters.length > 0 ? (
-            <button
-              type="button"
-              onClick={handleBatchRegenCharacters}
-              disabled={!!batchGenInFlight || !canEdit}
-              title={viewerTip}
-              className="flex items-center gap-2 rounded-sm border border-primary-500/40 bg-primary-500/10 px-4 py-2 font-serif-cn text-sm text-primary-300 transition-all hover:border-primary-500 hover:bg-primary-500/20 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <AppIcon name="sparklesAlt" className="h-4 w-4" />
-              {batchGenInFlight === 'characters' && batchProgress
-                ? t('batch.generating', { done: batchProgress.done, total: batchProgress.total })
-                : t('batch.allChars')}
-            </button>
-          ) : null}
-          {tab === 'scene' && locations.length > 0 ? (
-            <button
-              type="button"
-              onClick={handleBatchRegenLocations}
-              disabled={!!batchGenInFlight || !canEdit}
-              title={viewerTip}
-              className="flex items-center gap-2 rounded-sm border border-primary-500/40 bg-primary-500/10 px-4 py-2 font-serif-cn text-sm text-primary-300 transition-all hover:border-primary-500 hover:bg-primary-500/20 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <AppIcon name="sparklesAlt" className="h-4 w-4" />
-              {batchGenInFlight === 'locations' && batchProgress
-                ? t('batch.generating', { done: batchProgress.done, total: batchProgress.total })
-                : t('batch.allScenes')}
-            </button>
-          ) : null}
-          {tab === 'prop' && props.length > 0 ? (
-            <button
-              type="button"
-              onClick={handleBatchGenProps}
-              disabled={!!batchGenInFlight || !canEdit}
-              title={viewerTip}
-              className="flex items-center gap-2 rounded-sm border border-primary-500/40 bg-primary-500/10 px-4 py-2 font-serif-cn text-sm text-primary-300 transition-all hover:border-primary-500 hover:bg-primary-500/20 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <AppIcon name="sparklesAlt" className="h-4 w-4" />
-              {batchGenInFlight === 'props' && batchProgress
-                ? t('batch.generating', { done: batchProgress.done, total: batchProgress.total })
-                : t('batch.allProps')}
-            </button>
-          ) : null}
-          <Link
-            href={buildHref(`/${locale}/v2/workspace/${projectId}/storyboard`)}
-            className="kuiper-secondary-button flex items-center gap-2 px-4 py-2 text-sm"
-          >
-            {t('nextStep')} <AppIcon name="chevronRight" className="h-4 w-4" />
-          </Link>
-        </div>
+  const analysisNotice = analyze.isError ? (
+    <div className="rounded-[12px] border border-[var(--production-danger)]/30 bg-[var(--production-surface)] px-4 py-3 text-sm text-[var(--production-danger)]" role="alert">
+      {t('analyze.submitFailed', { reason: (analyze.error as Error)?.message ?? t('analyze.submitFailedUnknown') })}
+    </div>
+  ) : taskStatus === 'failed' ? (
+    <div className="rounded-[12px] border border-[var(--production-danger)]/30 bg-[var(--production-surface)] px-4 py-3 text-sm text-[var(--production-danger)]" role="alert" title={taskError ?? undefined}>
+      {t('analyze.taskFailed', { message: taskErrorDisplay?.message ?? t('analyze.taskFailedNoMsg') })}
+    </div>
+  ) : isAnalyzing ? (
+    <div className="rounded-[12px] border border-[var(--production-border)] bg-[var(--production-tool-soft)] px-4 py-3 text-sm text-[var(--production-tool)]" role="status">
+      {t('analyze.inProgress', { progress: taskProgress })}
+    </div>
+  ) : taskStatus === 'completed' && serverInflightIds.size > 0 ? (
+    <div className="rounded-[12px] border border-[var(--production-border)] bg-[var(--production-tool-soft)] px-4 py-3 text-sm text-[var(--production-tool)]" role="status">
+      {t('analyze.completeBackground')}{' '}
+      <strong>
+        {t('analyze.inflightCounts.generic', { count: serverInflightCounts.total })}
+      </strong>
+      {t('analyze.inflightCounts.tail')}
+    </div>
+  ) : taskStatus === 'completed' && hasStoryboardPanels ? (
+    <div className="flex flex-col gap-3 rounded-[12px] border border-[var(--production-border)] bg-[var(--production-surface)] px-4 py-3 text-sm text-[var(--production-ink)] sm:flex-row sm:items-center sm:justify-between" role="status">
+      <div>
+        {t.rich('analyze.doneFullPipeline', {
+          when: taskUpdatedAt ? t('analyze.whenAt', { time: new Date(taskUpdatedAt).toLocaleTimeString() }) : '',
+          panelCount: storyboardPanelCount,
+          strong: (chunks) => <strong>{chunks}</strong>,
+        })}
       </div>
+      <Link href={buildHref(`/${locale}/v2/workspace/${projectId}/storyboard`)} className="inline-flex min-h-11 items-center gap-1.5 font-semibold text-[var(--production-tool)] hover:underline">
+        {t('analyze.doneFullPipelineLink')} <AppIcon name="chevronRight" className="h-4 w-4" />
+      </Link>
+    </div>
+  ) : taskStatus === 'completed' ? (
+    <div className="rounded-[12px] border border-[var(--production-border)] bg-[var(--production-surface)] px-4 py-3 text-sm text-[var(--production-ink)]" role="status">
+      {t('analyze.doneAssetsOnly', {
+        when: taskUpdatedAt ? t('analyze.whenAt', { time: new Date(taskUpdatedAt).toLocaleTimeString() }) : '',
+      })}
+    </div>
+  ) : null
 
-      {tab === 'character' && currentEpisode && isFilteringByEpisode && hiddenInThisEpisodeCount > 0 ? (
-        <div className="mb-4 rounded-sm border border-border-soft/50 bg-raised/40 px-3 py-2 font-mono text-[14px] tracking-wider text-text-secondary">
-          {t('filteredHint', {
-            episode: currentEpisode.name,
-            visibleCount: characters.length,
-            hiddenCount: hiddenInThisEpisodeCount,
-          })}
-        </div>
-      ) : null}
+  return (
+    <div>
+      <EntityWorkstation
+        locale={locale}
+        eyebrow={t('pageTitle')}
+        title={activeTabRow?.label ?? activeEntity}
+        description={t(`workstation.descriptions.${tab}`)}
+        context={currentEpisode ? t('workstation.episodeScope', { episode: currentEpisode.name }) : t('workstation.projectScope')}
+        headerActions={compactAnalyzeButton}
+        tabs={tabs}
+        activeTab={tab}
+        onTabChange={setTab}
+        items={activeItems}
+        copy={workstationCopy}
+        scopeStatus={currentEpisode?.name}
+        toolbarActions={workstationToolbarActions}
+        notice={(
+          <>
+            {analysisNotice}
+            {tab === 'character' && currentEpisode && isFilteringByEpisode && hiddenInThisEpisodeCount > 0 ? (
+              <div className="rounded-[12px] border border-[var(--production-border)] bg-[var(--production-surface)] px-4 py-3 text-sm text-[var(--production-ink-muted)]">
+                {t('filteredHint', {
+                  episode: currentEpisode.name,
+                  visibleCount: characters.length,
+                  hiddenCount: hiddenInThisEpisodeCount,
+                })}
+              </div>
+            ) : null}
+          </>
+        )}
+        loading={isLoading}
+        error={hasActiveError}
+        stale={hasStaleData}
+        accessLoading={accessLoading}
+        accessDenied={!accessLoading && !allowed}
+        readOnly={allowed && !canEdit}
+        missingImageCount={missingImageCount}
+        retryAction={retryAction}
+        emptyAction={emptyStateCta}
+        renderDetail={(item) => (
+          <SubjectGrid
+            items={[item]}
+            aspect={tab === 'scene' ? 'wide' : 'portrait'}
+            layout="detail"
+            emptyHint={workstationCopy.emptyDescription}
+          />
+        )}
+      />
 
-      {isLoading ? (
-        <p className="font-mono text-xs tracking-wider text-text-tertiary">{t('loading')}</p>
-      ) : tab === 'character' ? (
-        <SubjectGrid
-          items={characters.map((c) => {
-            const ap = c.appearances?.[0]
-            const apId = ap?.id ?? ''
-            // Role description (身份/關係) prefers Character.introduction
-            // — that's the human-readable LLM tagline. Visual prompt
-            // (used by image regen) lives on appearance.description and
-            // is what the inline editor mutates.
-            const roleSummary = c.introduction ?? c.description ?? null
-            const visualPrompt = ap?.description ?? null
-            // Phase 3 — 火山 asset state on the primary appearance.
-            // useProjectCharacters already pulls all appearance columns
-            // via prisma `include: { appearances: true }`; cast to widen
-            // the type to include the new ARK fields.
-            const apWithArk = ap as typeof ap & {
-              arkAssetId?: string | null
-              arkAssetStatus?: string | null
-              arkAssetSourceUrl?: string | null
-              arkAssetError?: string | null
-            } | undefined
-            return {
-              id: c.id,
-              targetId: apId,
-              name: c.name ?? t('entityNames.untitledCharacter'),
-              caption: c.role ?? t('entityNames.character'),
-              description: roleSummary,
-              visualPrompt,
-              imageUrl: pickCharacterImage(c),
-              // Phase 12.5 — mutation handlers undefined for viewers
-              // so SubjectGrid card buttons render disabled / hidden.
-              onRegenerate: canEdit ? () => handleRegenChar(c) : undefined,
-              isRegenerating: regenInFlight.has(apId) || serverInflightIds.has(apId),
-              isLocked: Boolean(c.profileConfirmed),
-              onLock: canEdit ? () => handleConfirmProfile(c) : undefined,
-              isLocking: confirmProfile.isPending,
-              onUpload: canEdit ? (file) => handleUploadChar(c, file) : undefined,
-              isUploading: uploadInFlight.has(apId),
-              onZoom: (url) => setZoomImage(url),
-              // Open editor stays available — opens read-only modal for viewers
-              onOpenEditor: () => handleOpenCharacterModal(c),
-              // Inline description editing is local-only UI state until save fires
-              onEditDescription: canEdit ? () => handleEditDescStart(c) : undefined,
-              isEditingDescription: editingDescId === apId && apId.length > 0,
-              descriptionDraft: editingDescId === apId ? editingDescDraft : '',
-              onDescriptionDraftChange: setEditingDescDraft,
-              onDescriptionSave: canEdit ? () => handleEditDescSave(c) : undefined,
-              onDescriptionCancel: handleEditDescCancel,
-              isSavingDescription: updateAppearanceDesc.isPending,
-              // "從圖抽描述" — only meaningful when the appearance has
-              // an image to look at. Skip otherwise so the button
-              // doesn't render dead.
-              onRedescribe: canEdit && (ap?.imageUrl || ap?.imageUrls)
-                ? () => { void handleRedescribe(c) }
-                : undefined,
-              isRedescribing: redescribeInFlight.has(apId),
-              // 2026-05-23 Phase 3 — ARK asset chip for the primary
-              // appearance. apId guards: no appearance → chip doesn't
-              // render (caller checks arkTargetId truthy). Multi-
-              // appearance characters surface the [0] chip here;
-              // the per-appearance chips inside V2CharacterEditModal
-              // handle the rest.
-              arkTargetType: 'CharacterAppearance' as const,
-              arkTargetId: apId || null,
-              arkAssetId: apWithArk?.arkAssetId ?? null,
-              arkAssetStatus: apWithArk?.arkAssetStatus ?? null,
-              arkAssetSourceUrl: apWithArk?.arkAssetSourceUrl ?? null,
-              arkAssetError: apWithArk?.arkAssetError ?? null,
-              ...(handleArkRegister ? { onArkRegister: handleArkRegister } : {}),
-            }
-          })}
-          emptyHint={currentEpisode ? t('card.emptyDefault', { episode: currentEpisode.name }) : t('card.emptyDefaultNoEpisode')}
-          emptyAction={emptyStateCta}
-        />
-      ) : tab === 'scene' ? (
-        <SubjectGrid
-          aspect="wide"
-          items={locations.map((l) => {
-            const images = (l.images as Array<{ id: string; imageUrl?: string | null }> | undefined) ?? []
-            const selectedId = (l as { selectedImageId?: string | null }).selectedImageId ?? null
-            const targetImage =
-              (selectedId ? images.find((img) => img.id === selectedId) : null)
-              ?? images.find((img) => Boolean(img.imageUrl))
-            return {
-              id: l.id,
-              targetId: l.id,
-              name: l.name ?? t('entityNames.untitledLocation'),
-              caption: t('entityNames.scene'),
-              description: l.description ?? null,
-              imageUrl: pickLocationImage(l),
-              onRegenerate: canEdit ? () => handleRegenLoc(l) : undefined,
-              isRegenerating: regenInFlight.has(l.id) || serverInflightIds.has(l.id),
-              onUpload: canEdit ? (file) => handleUploadLoc(l, file) : undefined,
-              isUploading: uploadInFlight.has(l.id),
-              onZoom: (url) => setZoomImage(url),
-              onOpenEditor: () => setEditingLocationId(l.id),
-              onRedescribe: canEdit && targetImage?.imageUrl
-                ? () => { void handleRedescribeLoc(l) }
-                : undefined,
-              isRedescribing: targetImage ? redescribeInFlight.has(targetImage.id) : false,
-            }
-          })}
-          emptyHint={currentEpisode ? t('card.emptySceneDefault', { episode: currentEpisode.name }) : t('card.emptySceneDefaultNoEpisode')}
-          emptyAction={emptyStateCta}
-        />
-      ) : (
-        <SubjectGrid
-          aspect="portrait"
-          items={props.map((p) => ({
-            id: p.id,
-            targetId: p.id,
-            name: p.name ?? t('entityNames.untitledProp'),
-            caption: t('entityNames.prop'),
-            description: p.summary ?? null,
-            imageUrl: p.imageUrl ?? null,
-            onRegenerate: canEdit ? () => {
-              markRegenStart(p.id)
-              const mut = p.imageUrl ? regenProp : generateProp
-              mut.mutate({ propId: p.id })
-            } : undefined,
-            isRegenerating: regenInFlight.has(p.id) || serverInflightIds.has(p.id),
-            onUpload: canEdit ? (file) => handleUploadProp(p, file) : undefined,
-            isUploading: uploadInFlight.has(p.id),
-            onZoom: (url) => setZoomImage(url),
-            onRedescribe: canEdit && p.imageUrl
-              ? () => { void handleRedescribeProp(p) }
-              : undefined,
-            isRedescribing: redescribeInFlight.has(p.id),
-            onOpenEditor: () => setEditingPropId(p.id),
-          }))}
-          emptyHint={
-            currentEpisode
-              ? t('card.emptyPropDefault', { episode: currentEpisode.name })
-              : t('card.emptyPropDefaultNoEpisode')
-          }
-          emptyAction={emptyStateCta}
-        />
-      )}
-
-      {editingCharacterId ? (() => {
+      {canEdit && editingCharacterId ? (() => {
         const c = characters.find((ch) => ch.id === editingCharacterId)
         if (!c) return null
-        const ap = c.appearances?.[0]
-        const apId = ap?.id ?? ''
+        const resolution = getActiveAppearanceResolution(c)
+        if (resolution.status === 'no-appearance') {
+          return (
+            <V2CharacterAppearanceRecoveryModal
+              projectId={projectId}
+              currentEpisodeId={currentEpisodeId}
+              characterId={c.id}
+              onClose={handleCloseCharacterModal}
+            />
+          )
+        }
+        if (resolution.status !== 'resolved') return null
+        const ap = resolution.appearance
+        const apId = ap.id
         return (
           <V2CharacterEditModal
             projectId={projectId}
+            currentEpisodeId={currentEpisodeId}
             character={c}
-            imageUrl={pickCharacterImage(c)}
+            activeAppearance={ap}
+            activeAppearanceSource={resolution.source}
+            imageUrl={pickCharacterAppearanceImage(ap)}
             onClose={handleCloseCharacterModal}
             onZoomImage={(url) => setZoomImage(url)}
-            onRegenerate={() => handleRegenChar(c)}
-            onUploadFile={(file) => handleUploadChar(c, file)}
-            onUploadAndExpandToMultiView={(file) => handleUploadAndExpandToMultiView(c, file)}
+            onRegenerate={() => handleRegenChar(c, ap)}
+            onUploadFile={(file) => handleUploadChar(c, ap, file)}
+            onUploadAndExpandToMultiView={(file) => handleUploadAndExpandToMultiView(c, ap, file)}
             isRegenerating={regenInFlight.has(apId)}
             isUploading={uploadInFlight.has(apId)}
             isExpanding={uploadExpand.isPending}
@@ -1478,17 +1658,18 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
             isSavingName={updateCharName.isPending}
             isSavingIntroduction={updateCharIntro.isPending}
             isSavingVisualPrompt={updateAppearanceDesc.isPending}
-            onRedescribe={apId ? () => handleRedescribe(c) : undefined}
-            isRedescribing={apId ? redescribeInFlight.has(apId) : false}
-            onToggleLock={() => handleConfirmProfile(c)}
-            isLocking={confirmProfile.isPending}
+            onRedescribe={() => handleRedescribe(ap)}
+            isRedescribing={redescribeInFlight.has(apId)}
+            onToggleLock={() => { void handleFinalizeProfile(c, ap) }}
+            isLocking={finalizingCharacterIds.has(c.id)}
+            lockError={finalizeErrors.get(c.id) ?? null}
             onDelete={() => handleDeleteCharacterFromModal(c.id)}
             isDeleting={deleteCharacter.isPending}
           />
         )
       })() : null}
 
-      {editingLocationId ? (() => {
+      {canEdit && editingLocationId ? (() => {
         const l = locations.find((loc) => loc.id === editingLocationId)
         if (!l) return null
         return (
@@ -1508,6 +1689,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
             isRegenerating={regenInFlight.has(l.id) || serverInflightIds.has(l.id)}
             isUploading={uploadInFlight.has(l.id)}
             onSaveBasics={(params) => {
+              if (!canEdit) return
               updateLocBasics.mutate(
                 {
                   locationId: l.id,
@@ -1524,6 +1706,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
             }}
             isSavingBasics={updateLocBasics.isPending}
             onSaveDescription={(description) => {
+              if (!canEdit) return
               updateLocDescription.mutate(
                 { locationId: l.id, description, imageIndex: 0 },
                 {
@@ -1540,6 +1723,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
               )
               .sort((a, b) => a.imageIndex - b.imageIndex)}
             onCreateView={async (params) => {
+              if (!canEdit) return
               try {
                 const res = await createLocationView.mutateAsync({
                   locationId: l.id,
@@ -1561,10 +1745,12 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
             }}
             isCreatingView={createLocationView.isPending}
             onRegenerateView={(imageIndex) => {
+              if (!canEdit) return
               markRegenStart(l.id)
               regenLoc.mutate({ locationId: l.id, imageIndex })
             }}
             onDeleteView={async (imageIndex) => {
+              if (!canEdit) return
               try {
                 await deleteLocationView.mutateAsync({ locationId: l.id, imageIndex })
               } catch (err) {
@@ -1577,7 +1763,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
         )
       })() : null}
 
-      {editingPropId ? (() => {
+      {canEdit && editingPropId ? (() => {
         const p = props.find((pp) => pp.id === editingPropId)
         if (!p) return null
         return (
@@ -1596,6 +1782,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
             isSavingName={updatePropName.isPending}
             isSavingSummary={updatePropSummary.isPending}
             onRegenerate={() => {
+              if (!canEdit) return
               markRegenStart(p.id)
               const mut = p.imageUrl ? regenProp : generateProp
               mut.mutate({ propId: p.id })
@@ -1609,70 +1796,58 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
         )
       })() : null}
 
-      {zoomImage ? (
-        <button
-          type="button"
-          aria-label={t('lightbox.closeAria')}
-          onClick={() => setZoomImage(null)}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-canvas/90 p-6 backdrop-blur-md"
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={zoomImage}
-            alt={t('lightbox.alt')}
-            className="max-h-full max-w-full object-contain shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          />
-          <span className="absolute right-6 top-6 rounded-sm border border-border-strong bg-raised/80 px-3 py-1.5 font-mono text-[14px] tracking-wider text-text-secondary">
-            {t('lightbox.escHint')}
-          </span>
-        </button>
-      ) : null}
+      <DarkMediaLightbox
+        src={zoomImage}
+        alt={t('lightbox.alt')}
+        closeLabel={t('lightbox.closeAria')}
+        dismissHint={t('lightbox.escHint')}
+        onClose={() => setZoomImage(null)}
+      />
 
       {/* 角色 — V2 stone/amber 風格,3 模式: 提示詞/參考圖/上傳四視圖。
           後端邏輯複用 useCharacterCreationSubmit hook(跟舊玻璃版同一份),
           只是 UI 重刻。 */}
-      {manualAddOpen === 'character' ? (
+      {canEdit && manualAddOpen === 'character' ? (
         <V2CharacterCreationModal
           projectId={projectId}
           episodeId={currentEpisodeId}
           onClose={() => setManualAddOpen(null)}
-          onSuccess={() => {
-            setManualAddOpen(null)
-            void queryClient.invalidateQueries({
-              queryKey: queryKeys.projectAssets.characters(projectId),
-            })
-            if (currentEpisodeId) {
-              void queryClient.invalidateQueries({
-                queryKey: [...queryKeys.tasks.all(projectId), 'episode-bindings', currentEpisodeId],
-              })
-            }
-          }}
+          onSuccess={() => setManualAddOpen(null)}
         />
       ) : null}
 
       {/* 場景 — 自定的 V2LocationCreationModal,鏡像 V2LocationEditModal 的 metadata + 上傳/AI 生成入口 */}
-      {manualAddOpen === 'scene' ? (
+      {canEdit && manualAddOpen === 'scene' ? (
         <V2LocationCreationModal
           isSubmitting={manualAddSubmitting}
           onClose={() => {
             if (manualAddSubmitting) return
             setManualAddOpen(null)
+            setManualUploadRecovery(null)
+            setManualUploadError(null)
+            manualCreateRequestRef.current = null
           }}
           onSubmit={(params) => handleManualAddLocation(params)}
+          uploadRecovery={manualUploadRecovery?.kind === 'scene' ? manualUploadRecovery : null}
+          uploadError={manualUploadError}
         />
       ) : null}
 
       {/* 道具 — 暫用簡版 V2ManualAddSubjectModal(name + 描述 + 圖片足以) */}
-      {manualAddOpen === 'prop' ? (
+      {canEdit && manualAddOpen === 'prop' ? (
         <V2ManualAddSubjectModal
           subjectType="prop"
           onClose={() => {
             if (manualAddSubmitting) return
             setManualAddOpen(null)
+            setManualUploadRecovery(null)
+            setManualUploadError(null)
+            manualCreateRequestRef.current = null
           }}
           isSubmitting={manualAddSubmitting}
           onSubmit={(params) => handleManualAddProp(params)}
+          uploadRecovery={manualUploadRecovery?.kind === 'prop' ? manualUploadRecovery : null}
+          uploadError={manualUploadError}
         />
       ) : null}
     </div>

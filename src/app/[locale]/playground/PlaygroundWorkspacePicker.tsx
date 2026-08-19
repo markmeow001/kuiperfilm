@@ -28,7 +28,19 @@ function normalizeWorkspaces(payload: unknown): WorkspaceOption[] {
   return result
 }
 
-export function PlaygroundWorkspacePicker({ workspaceId }: { workspaceId: string | null }) {
+interface PlaygroundWorkspacePickerProps {
+  workspaceId: string | null
+  label: string
+  historyLabel: string
+  personalLabel: string
+}
+
+export function PlaygroundWorkspacePicker({
+  workspaceId,
+  label,
+  historyLabel,
+  personalLabel,
+}: PlaygroundWorkspacePickerProps) {
   const router = useRouter()
   const [options, setOptions] = useState<WorkspaceOption[]>([])
   const [error, setError] = useState(false)
@@ -55,16 +67,16 @@ export function PlaygroundWorkspacePicker({ workspaceId }: { workspaceId: string
   }
 
   return (
-    <label className="flex items-center gap-2 text-xs text-text-tertiary">
-      <span className="hidden md:inline">生成记录</span>
+    <label className="flex min-w-0 items-center gap-2 text-[13px] text-[var(--darkroom-muted)]">
+      <span className="hidden lg:inline">{historyLabel}</span>
       <select
-        aria-label="Playground 工作区"
+        aria-label={label}
         value={workspaceId ?? ''}
         disabled={error}
         onChange={(event) => select(event.target.value)}
-        className="h-9 max-w-44 rounded-xl border border-white/[0.09] bg-white/[0.04] px-3 text-sm text-text-primary outline-none transition-colors focus:border-primary-500/50 disabled:opacity-40"
+        className="min-h-11 min-w-0 max-w-44 rounded-lg border border-[var(--darkroom-border)] bg-[var(--darkroom-raised)] px-3 text-[13px] text-[var(--darkroom-text)] outline-none transition-colors focus-visible:border-[var(--process-cyan)] focus-visible:ring-2 focus-visible:ring-[rgba(85,175,192,0.24)] disabled:opacity-40"
       >
-        <option value="">个人</option>
+        <option value="">{personalLabel}</option>
         {options.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}
       </select>
     </label>

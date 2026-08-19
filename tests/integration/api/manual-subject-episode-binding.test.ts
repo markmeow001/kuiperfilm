@@ -64,6 +64,52 @@ describe('manual subject creation binds the active episode atomically', () => {
     })
   })
 
+  it('角色含 introduction -> 在建立交易中寫入角色且不依賴後續 PATCH', async () => {
+    prismaMock.novelPromotionCharacter.create.mockResolvedValue({
+      id: 'character-with-intro',
+      name: '林醫師',
+      introduction: '冷靜的急診醫師',
+    })
+    prismaMock.characterAppearance.create.mockResolvedValue({ id: 'appearance-with-intro' })
+    prismaMock.episodeCharacter.create.mockResolvedValue({ id: 'episode-character-with-intro' })
+    prismaMock.novelPromotionCharacter.findUnique.mockResolvedValue({
+      id: 'character-with-intro',
+      name: '林醫師',
+      introduction: '冷靜的急診醫師',
+      appearances: [{ id: 'appearance-with-intro' }],
+    })
+
+    const { POST } = await import('@/app/api/novel-promotion/[projectId]/character/route')
+    const response = await callRoute(POST as never, {
+      path: '/api/novel-promotion/project-1/character',
+      method: 'POST',
+      body: {
+        name: '林醫師',
+        introduction: '冷靜的急診醫師',
+        episodeId: 'episode-1',
+      },
+      context: { params: Promise.resolve({ projectId: 'project-1' }) } as never,
+    })
+
+    expect(response.status).toBe(200)
+    expect(prismaMock.novelPromotionCharacter.create).toHaveBeenCalledWith({
+      data: {
+        novelPromotionProjectId: 'novel-data-id',
+        name: '林醫師',
+        aliases: null,
+        introduction: '冷靜的急診醫師',
+      },
+    })
+    expect(prismaMock.episodeCharacter.create).toHaveBeenCalledWith({
+      data: {
+        episodeId: 'episode-1',
+        characterId: 'character-with-intro',
+        appearanceId: 'appearance-with-intro',
+        role: 'manual',
+      },
+    })
+  })
+
   it('creates location, initial image row and EpisodeLocation in one transaction', async () => {
     prismaMock.novelPromotionLocation.create.mockResolvedValue({ id: 'location-1', name: '屋顶' })
     prismaMock.locationImage.create.mockResolvedValue({ id: 'location-image-1' })

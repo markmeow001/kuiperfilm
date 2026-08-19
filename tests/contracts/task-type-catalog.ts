@@ -18,6 +18,7 @@ const TASK_TYPE_OWNER_MAP = {
   [TASK_TYPE.VOICE_LINE]: 'tests/unit/worker/voice-worker.test.ts',
   [TASK_TYPE.VOICE_DESIGN]: 'tests/unit/worker/voice-worker.test.ts',
   [TASK_TYPE.ASSET_HUB_VOICE_DESIGN]: 'tests/unit/worker/voice-worker.test.ts',
+  [TASK_TYPE.AUTO_GROUP_MULTI_SHOT]: 'tests/unit/worker/auto-group-multi-shot.test.ts',
   [TASK_TYPE.REGENERATE_STORYBOARD_TEXT]: 'tests/unit/worker/script-to-storyboard.test.ts',
   [TASK_TYPE.INSERT_PANEL]: 'tests/unit/worker/script-to-storyboard.test.ts',
   [TASK_TYPE.PANEL_VARIANT]: 'tests/unit/worker/panel-variant-task-handler.test.ts',

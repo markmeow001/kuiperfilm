@@ -11,7 +11,7 @@
  * custom widget like color picker / file dropzone). It provides:
  *
  *   - consistent vertical spacing between label / control / helper
- *   - optional required indicator (* in primary-500)
+ *   - optional required indicator (* in the semantic danger colour)
  *   - optional tooltip-style description below label
  *   - optional error message that recolors the helper line
  *   - htmlFor wiring via useId when child is a labelable control
@@ -35,7 +35,7 @@ export interface FieldV2Props {
   helper?: ReactNode
   /** Error text — when present, overrides helper + tints both red. */
   error?: ReactNode
-  /** Show a primary-tinted * after the label. */
+  /** Show a semantic required marker after the label. */
   required?: boolean
   /** The actual form control. */
   children: ReactNode
@@ -66,7 +66,7 @@ export function Field({
         >
           {label}
           {required ? (
-            <span className="ml-1 text-primary-500" aria-hidden="true">
+            <span className="ml-1 text-[var(--production-danger)]" aria-hidden="true">
               *
             </span>
           ) : null}

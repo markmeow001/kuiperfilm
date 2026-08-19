@@ -1,5 +1,9 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Poppins, Open_Sans } from "next/font/google";
+import {
+    Cormorant_Garamond,
+    Geist_Mono,
+    Noto_Sans_TC,
+} from "next/font/google";
 import { NextIntlClientProvider } from 'next-intl';
 import { getMessages, getTranslations } from 'next-intl/server';
 import { notFound } from 'next/navigation';
@@ -7,27 +11,22 @@ import "../globals.css";
 import { Providers } from "./providers";
 import { locales } from '@/i18n/routing';
 
-const geistSans = Geist({
-    variable: "--font-geist-sans",
-    subsets: ["latin"],
-});
-
 const geistMono = Geist_Mono({
     variable: "--font-geist-mono",
     subsets: ["latin"],
 });
 
-// UI/UX Pro Max typography: Modern Professional
-const poppins = Poppins({
-    variable: "--font-heading",
-    subsets: ["latin"],
-    weight: ["400", "500", "600", "700"],
+const kuiperSans = Noto_Sans_TC({
+    variable: "--font-kuiper-sans",
+    weight: "variable",
+    preload: false,
 });
 
-const openSans = Open_Sans({
-    variable: "--font-body",
+const kuiperBrand = Cormorant_Garamond({
+    variable: "--font-kuiper-brand",
+    weight: "variable",
+    style: ["normal", "italic"],
     subsets: ["latin"],
-    weight: ["300", "400", "500", "600", "700"],
 });
 
 type SupportedLocale = (typeof locales)[number]
@@ -82,7 +81,7 @@ export default async function LocaleLayout({
                 <script dangerouslySetInnerHTML={{ __html: themeBootstrap }} />
             </head>
             <body
-                className={`${geistSans.variable} ${geistMono.variable} ${poppins.variable} ${openSans.variable} antialiased`}
+                className={`${geistMono.variable} ${kuiperSans.variable} ${kuiperBrand.variable} antialiased`}
             >
                 <NextIntlClientProvider messages={messages}>
                     <Providers>

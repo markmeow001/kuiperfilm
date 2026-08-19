@@ -13,10 +13,19 @@
   },
   "loading": "Loading…",
   "rail": {
+    "primaryNav": "Primary tools",
+    "mobileNav": "Mobile primary tools",
+    "productionGroup": "Production",
+    "creativeLabGroup": "Creative Lab",
+    "accountTeamGroup": "Account & Team",
     "projects": "Projects",
     "projectsLabel": "Project overview",
     "new": "New",
     "newLabel": "Create a project",
+    "jobs": "Jobs",
+    "jobsLabel": "Generation job center",
+    "assets": "Assets",
+    "assetsLabel": "Asset library",
     "canvas": "Canvas",
     "canvasLabel": "Infinite Canvas",
     "playground": "Create",
@@ -27,7 +36,26 @@
     "compositeLabel": "AI Live-Action Remake",
     "skills": "Skills",
     "skillsLabel": "Skill library",
+    "workspaces": "Workspaces",
+    "workspacesLabel": "Workspaces and team",
+    "settings": "Settings",
+    "settingsLabel": "Settings center",
+    "more": "More",
+    "moreLabel": "Open more tools",
+    "morePanel": "More tools",
     "studio": "STUDIO"
+  },
+  "userMenu": {
+    "signIn": "Sign in",
+    "fallbackUser": "User",
+    "accountMenu": "Account and team menu",
+    "workspaces": "Workspaces and team",
+    "workspacesHint": "Manage organizations and members",
+    "settings": "Settings",
+    "settingsHint": "Provider keys and default models",
+    "admin": "Admin console",
+    "adminHint": "Users, jobs, and invitation codes",
+    "signOut": "Sign out"
   },
   "title": {
     "kicker": "MY PROJECTS",
@@ -72,14 +100,28 @@
   "grid": {
     "recentProjects": "Recent projects",
     "newProject": "New project",
+    "openOverview": "Open overview",
+    "continueProject": "Continue production",
     "deleteTitle": "Delete project",
-    "deleteConfirm": "Delete project \"{name}\"? This cannot be undone.",
+    "deleteConfirm": "Move project \"{name}\" to the recovery queue? An administrator can restore it for 30 days.",
     "deleteFailed": "Delete failed",
-    "untitledDraft": "Untitled draft"
+    "untitledDraft": "No project description yet",
+    "roleOwner": "Project owner",
+    "roleAdmin": "Administrator",
+    "roleWorkspaceOwner": "Workspace owner",
+    "roleEditor": "Editor",
+    "roleViewer": "Viewer",
+    "roleUnknown": "Project member"
   },
   "empty": {
     "noMatch": "No matching projects",
     "noneYet": "No projects yet — click \"New project\" above to start"
+  },
+  "errors": {
+    "loadTitle": "Could not load projects",
+    "loadDescription": "Your existing project list was not cleared. Reload the list before continuing.",
+    "retry": "Reload",
+    "unknown": "The project request failed without an error message."
   },
   "projectHome": {
     "overviewKicker": "Project Overview",
@@ -101,6 +143,8 @@
     "personal": "Personal",
     "checked": "✓",
     "loading": "Loading…",
+    "loadError": "Could not load workspaces. Try again.",
+    "retry": "Reload",
     "noJoinable": "No workspaces available",
     "header": "Switch workspace",
     "manageLink": "Manage workspaces →",

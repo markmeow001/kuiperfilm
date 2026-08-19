@@ -1,0 +1,98 @@
+{
+  "header": {
+    "eyebrow": "OPERATIONS",
+    "title": "生成任務中心",
+    "description": "查看真實任務狀態、模型、費用與退款結果；這裡不會自動重送失敗任務。",
+    "topbar": "生成任務",
+    "tagline": "TASKS · COST · STATUS"
+  },
+  "scope": {
+    "label": "任務範圍",
+    "personal": "我的所有任務",
+    "personalHelp": "只顯示由你送出的任務。",
+    "projectHelp": "顯示此專案中所有協作者送出的任務。",
+    "loading": "正在載入專案…",
+    "loadError": "專案清單載入失敗；仍可查看你的所有任務。"
+  },
+  "filters": {
+    "label": "篩選任務",
+    "all": "全部",
+    "active": "進行中",
+    "completed": "已完成",
+    "failed": "失敗",
+    "cancelled": "已取消",
+    "type": "任務類型",
+    "allTypes": "所有類型",
+    "episode": "劇集",
+    "allEpisodes": "所有劇集",
+    "clear": "清除篩選",
+    "loadedCount": "已載入 {count} 筆"
+  },
+  "states": {
+    "loadingTitle": "正在讀取生成任務",
+    "loadingDescription": "任務只會被讀取，不會建立新的生成或產生費用。",
+    "errorTitle": "任務清單載入失敗",
+    "errorDescription": "既有任務沒有被修改。請重新載入後再繼續。",
+    "retry": "重新載入",
+    "emptyTitle": "目前沒有生成任務",
+    "emptyDescription": "完成第一筆生圖、影片或語音送出後，真實狀態會顯示在這裡。",
+    "filteredEmptyTitle": "沒有符合篩選的任務",
+    "filteredEmptyDescription": "清除部分篩選即可查看其他任務。",
+    "permissionTitle": "無法讀取這個專案的任務",
+    "permissionDescription": "你目前沒有此專案的檢視權限；沒有任何任務資料被修改。"
+  },
+  "card": {
+    "status": {
+      "estimated": "費用試算",
+      "queued": "排隊中",
+      "running": "生成中",
+      "succeeded": "已完成",
+      "failed": "失敗",
+      "cancelled": "已取消",
+      "refunded": "已退款"
+    },
+    "category": {
+      "image": "影像生成",
+      "video": "影片生成",
+      "voice": "聲音生成",
+      "analysis": "AI 分析",
+      "text": "內容處理",
+      "other": "系統任務"
+    },
+    "model": "模型",
+    "notRecorded": "未記錄",
+    "progress": "任務進度",
+    "waitingProgress": "等待工作節點回報",
+    "cost": "費用",
+    "estimatedCost": "預估 {amount}",
+    "actualCost": "實扣 {amount}",
+    "free": "免費",
+    "errorPrefix": "錯誤：",
+    "defaultError": "任務失敗，但系統沒有提供更詳細的原因。",
+    "refundPrefix": "退款：",
+    "refundComplete": "已回滾預留費用",
+  "refundAmount": "已回滾預留費用 {amount}",
+  "refundFailed": "任務已停止，但預留費用回滾失敗，請聯絡管理員檢查帳務。",
+    "createdAt": "建立",
+    "startedAt": "開始",
+    "finishedAt": "結束",
+    "duration": "耗時",
+    "attempt": "嘗試次數",
+    "stage": "目前階段",
+    "target": "來源 {type} · {id}",
+    "technicalDetails": "技術資料",
+    "taskId": "Task ID",
+    "taskType": "任務代碼",
+    "episodeId": "Episode ID",
+    "cancel": "取消任務",
+    "confirmCancel": "確認取消",
+    "keepRunning": "繼續執行",
+    "cancelling": "正在取消…",
+    "cancelError": "取消失敗；任務狀態可能已改變，請重新整理。"
+  },
+  "pagination": {
+    "loadMore": "載入更早的任務",
+    "loading": "正在載入…",
+    "end": "已顯示全部任務"
+  }
+}

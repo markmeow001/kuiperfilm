@@ -18,11 +18,13 @@ const authState = vi.hoisted<AuthState>(() => ({
 
 const prismaMock = vi.hoisted(() => ({
   globalCharacter: {
+    findFirst: vi.fn(),
     findUnique: vi.fn(),
     update: vi.fn(),
     delete: vi.fn(),
   },
   globalAssetFolder: {
+    findFirst: vi.fn(),
     findUnique: vi.fn(),
   },
   characterAppearance: {
@@ -193,7 +195,15 @@ describe('api contract - crud routes (behavior)', () => {
       id: 'character-1',
       userId: 'user-1',
     })
+    prismaMock.globalCharacter.findFirst.mockResolvedValue({
+      id: 'character-1',
+      userId: 'user-1',
+    })
     prismaMock.globalAssetFolder.findUnique.mockResolvedValue({
+      id: 'folder-1',
+      userId: 'user-1',
+    })
+    prismaMock.globalAssetFolder.findFirst.mockResolvedValue({
       id: 'folder-1',
       userId: 'user-1',
     })
@@ -285,7 +295,7 @@ describe('api contract - crud routes (behavior)', () => {
     const res = await mod.PATCH(req, { params: Promise.resolve({ characterId: 'character-1' }) })
     expect(res.status).toBe(200)
     expect(prismaMock.globalCharacter.update).toHaveBeenCalledWith(expect.objectContaining({
-      where: { id: 'character-1' },
+      where: { id: 'character-1', userId: 'user-1' },
       data: expect.objectContaining({
         name: 'Alice',
         aliases: ['A'],
@@ -299,7 +309,7 @@ describe('api contract - crud routes (behavior)', () => {
     authState.authenticated = true
     const mod = await import('@/app/api/asset-hub/characters/[characterId]/route')
 
-    prismaMock.globalCharacter.findUnique.mockResolvedValueOnce({
+    prismaMock.globalCharacter.findFirst.mockResolvedValueOnce({
       id: 'character-1',
       userId: 'user-1',
     })
@@ -309,9 +319,15 @@ describe('api contract - crud routes (behavior)', () => {
     })
     const okRes = await mod.DELETE(okReq, { params: Promise.resolve({ characterId: 'character-1' }) })
     expect(okRes.status).toBe(200)
-    expect(prismaMock.globalCharacter.delete).toHaveBeenCalledWith({ where: { id: 'character-1' } })
+    expect(prismaMock.globalCharacter.findFirst).toHaveBeenCalledWith({
+      where: { id: 'character-1', userId: 'user-1' },
+      select: { id: true },
+    })
+    expect(prismaMock.globalCharacter.delete).toHaveBeenCalledWith({
+      where: { id: 'character-1', userId: 'user-1' },
+    })
 
-    prismaMock.globalCharacter.findUnique.mockResolvedValueOnce(null)
+    prismaMock.globalCharacter.findFirst.mockResolvedValueOnce(null)
     const missingReq = buildMockRequest({
       path: '/api/asset-hub/characters/missing-1',
       method: 'DELETE',

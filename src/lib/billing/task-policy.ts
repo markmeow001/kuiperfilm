@@ -10,6 +10,7 @@ import { BillingOperationError } from './errors'
 import { BUILTIN_PRICING_VERSION } from '@/lib/model-pricing/version'
 import { TASK_TYPE, type TaskType } from '@/lib/task/types'
 import type { TaskBillingInfo } from './types'
+import { countUnicodeCodePoints } from '@/lib/voice/atlascloud-seed-audio-input'
 
 type AnyPayload = Record<string, unknown> | null | undefined
 
@@ -22,6 +23,7 @@ const BILLABLE_TASK_TYPES = new Set<TaskType>([
   TASK_TYPE.VOICE_LINE,
   TASK_TYPE.VOICE_DESIGN,
   TASK_TYPE.ASSET_HUB_VOICE_DESIGN,
+  TASK_TYPE.AUTO_GROUP_MULTI_SHOT,
   TASK_TYPE.REGENERATE_STORYBOARD_TEXT,
   TASK_TYPE.INSERT_PANEL,
   TASK_TYPE.PANEL_VARIANT,
@@ -217,20 +219,25 @@ function buildVideoTaskInfo(taskType: TaskType, payload: AnyPayload): TaskBillin
   }
 }
 
-function buildVoiceTaskInfo(taskType: TaskType, payload: AnyPayload): TaskBillingInfo {
-  const maxSeconds = Math.max(1, Math.floor(toNumber(payload?.maxSeconds, 5)))
+function buildVoiceTaskInfo(taskType: TaskType, payload: AnyPayload): TaskBillingInfo | null {
+  const model = readString(payload?.audioModel)
+  const providerText = typeof payload?.providerText === 'string' && payload.providerText.length > 0
+    ? payload.providerText
+    : null
+  if (!model || providerText === null) return null
+  const submittedCharacters = countUnicodeCodePoints(providerText)
   return {
     billable: true,
     source: 'task',
     taskType,
     apiType: 'voice',
-    model: 'index-tts2',
-    quantity: maxSeconds,
-    unit: 'second',
-    maxFrozenCost: calcVoice(maxSeconds),
+    model,
+    quantity: submittedCharacters,
+    unit: 'character',
+    maxFrozenCost: calcVoice(model, submittedCharacters),
     pricingVersion: BUILTIN_PRICING_VERSION,
     action: String(taskType),
-    metadata: { maxSeconds },
+    metadata: { submittedCharacters },
     status: 'quoted',
   }
 }
@@ -296,6 +303,7 @@ export function buildDefaultTaskBillingInfo(taskType: TaskType, payload: AnyPayl
     case TASK_TYPE.VOICE_DESIGN:
     case TASK_TYPE.ASSET_HUB_VOICE_DESIGN:
       return buildVoiceDesignTaskInfo(taskType)
+    case TASK_TYPE.AUTO_GROUP_MULTI_SHOT:
     case TASK_TYPE.REGENERATE_STORYBOARD_TEXT:
     case TASK_TYPE.INSERT_PANEL:
     case TASK_TYPE.ANALYZE_NOVEL:

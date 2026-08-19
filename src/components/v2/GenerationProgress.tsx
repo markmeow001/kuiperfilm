@@ -9,7 +9,7 @@
  * The spec:
  *   - Full-bleed dark canvas
  *   - 9:16 frame centered
- *   - accent-500 violet glow border in 2s slow breathing loop
+ *   - process-cyan border in a slow 2s breathing loop
  *   - One line of ghost-typing scene description
  *   - NO spinner
  *   - NO percentage
@@ -122,7 +122,7 @@ export function GenerationProgress({
         className="relative overflow-hidden rounded-card border-2"
         style={{
           ...frameStyle,
-          borderColor: 'rgba(124, 92, 255, 0.4)',
+          borderColor: 'rgba(85, 175, 192, 0.4)',
           animation: paused ? 'none' : 'kvBreathe 2s ease-in-out infinite',
         }}
       >
@@ -131,7 +131,7 @@ export function GenerationProgress({
           className="absolute inset-0"
           style={{
             background:
-              'radial-gradient(circle at 50% 60%, rgba(124, 92, 255, 0.10), transparent 60%)',
+              'radial-gradient(circle at 50% 60%, rgba(85, 175, 192, 0.10), transparent 60%)',
           }}
         />
       </div>
@@ -155,16 +155,16 @@ export function GenerationProgress({
       <style jsx>{`
         @keyframes kvBreathe {
           0%, 100% {
-            border-color: rgba(124, 92, 255, 0.25);
+            border-color: rgba(85, 175, 192, 0.25);
             box-shadow:
-              0 0 0 2px rgba(124, 92, 255, 0.0),
-              0 0 48px rgba(124, 92, 255, 0.18);
+              0 0 0 2px rgba(85, 175, 192, 0.0),
+              0 0 48px rgba(85, 175, 192, 0.18);
           }
           50% {
-            border-color: rgba(124, 92, 255, 0.65);
+            border-color: rgba(85, 175, 192, 0.65);
             box-shadow:
-              0 0 0 2px rgba(124, 92, 255, 0.35),
-              0 0 72px rgba(124, 92, 255, 0.45);
+              0 0 0 2px rgba(85, 175, 192, 0.35),
+              0 0 72px rgba(85, 175, 192, 0.45);
           }
         }
         @keyframes kvCaret {

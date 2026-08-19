@@ -131,7 +131,7 @@ export function CandidatePromptControlModal({
             </div>
           </aside>
 
-          <main className="min-w-0 space-y-5 p-4 sm:p-5">
+          <section className="min-w-0 space-y-5 p-4 sm:p-5" aria-label={t('regenerateTitle')}>
             <label htmlFor={`candidate-prompt-${candidate.id}`} className="block">
               <span className="flex flex-wrap items-center justify-between gap-2">
                 <span className="font-mono text-[9px] tracking-[0.14em] text-primary-300">{t('regenerateTitle')}</span>
@@ -199,7 +199,7 @@ export function CandidatePromptControlModal({
                 {t('canonLockedHint')}
               </p>
             )}
-          </main>
+          </section>
         </div>
       </Modal.Body>
 

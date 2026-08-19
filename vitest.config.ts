@@ -16,6 +16,14 @@ export default defineConfig({
   test: {
     environment: 'node',
     css: false,
+    // next-intl's ESM middleware imports the Next.js `next/server`
+    // subpath. Inline it so behavior tests execute the real middleware
+    // through Vite's resolver instead of Node externalizing the package.
+    server: {
+      deps: {
+        inline: [/next-intl/],
+      },
+    },
     pool: 'forks',
     poolOptions: {
       forks: {

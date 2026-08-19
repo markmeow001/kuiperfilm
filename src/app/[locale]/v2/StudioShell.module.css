@@ -1,0 +1,172 @@
+.studioRoot {
+  /* The dashboard and every workspace now share one calibrated darkroom.
+   * Keep the three solid neutrals explicit: canvas, surface, raised. */
+  --production-paper: #070b0f;
+  --production-surface: #111b24;
+  --production-muted: #17232d;
+  --production-ink: #f2f6f7;
+  --production-ink-muted: #a7b3bc;
+  --production-border: #263642;
+  --production-border-dark: #354956;
+  --production-blue: #3e73b9;
+  --production-blue-hover: #315f98;
+  --production-blue-soft: rgba(62, 115, 185, 0.18);
+  --production-focus: #55afc0;
+  --studio-chrome: #0d141b;
+  --darkroom-canvas: #070b0f;
+  --darkroom-surface: #111b24;
+  --darkroom-raised: #17232d;
+  --surface-canvas: var(--darkroom-canvas);
+  --surface-raised: var(--darkroom-surface);
+  --surface-overlay: var(--darkroom-raised);
+  --surface-inset: color-mix(in srgb, var(--darkroom-canvas) 76%, black);
+  --text-primary: var(--production-ink);
+  --text-secondary: var(--production-ink-muted);
+  --text-tertiary: #7f9099;
+  --border-soft: var(--production-border);
+  --border-strong: var(--production-border-dark);
+  --border-primary: color-mix(in srgb, var(--process-cyan) 58%, transparent);
+  /* Tailwind's legacy `primary-*` utilities are still used throughout the
+   * V2 production tools. Scope the complete scale to the studio so those
+   * controls resolve to the cyan process language without recolouring the
+   * isolated legacy playground routes that still use the magenta root scale. */
+  --primary-100: #e2f5f8;
+  --primary-200: #b7e2e9;
+  --primary-300: #91d2dc;
+  --primary-400: var(--process-cyan-strong);
+  --primary-500: var(--process-cyan);
+  --primary-600: #4b98a7;
+  --primary-700: var(--process-cyan-deep);
+  --primary-900: #153941;
+  color-scheme: dark;
+  background-color: #070b0f;
+}
+
+.studioRoot :global(.kuiper-dashboard-topbar),
+.studioRoot :global(.kuiper-shell-topbar) {
+  background: color-mix(in srgb, #111b24 95%, transparent);
+}
+
+.studioRoot :global(.kuiper-dashboard-card) {
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.18);
+}
+
+.studioRoot :global(.kuiper-dashboard-card:hover) {
+  box-shadow: 0 22px 56px rgba(0, 0, 0, 0.28);
+}
+
+.studioRoot :global(.kuiper-dashboard-kicker) {
+  color: var(--process-cyan-strong);
+}
+
+.studioRoot :global(.kuiper-dashboard-primary) {
+  min-height: 44px;
+  box-shadow: 0 8px 24px rgba(42, 95, 147, 0.2);
+}
+
+.studioRoot :global(.kuiper-dashboard-secondary) {
+  min-height: 44px;
+}
+
+.studioRoot :global(.kuiper-dashboard-input),
+.studioRoot input:not([type='radio']):not([type='checkbox']):not([type='file']),
+.studioRoot textarea,
+.studioRoot select {
+  caret-color: var(--process-cyan-strong);
+}
+
+.studioRoot :global(.kuiper-dashboard-input)::placeholder,
+.studioRoot input::placeholder,
+.studioRoot textarea::placeholder {
+  color: #71818a;
+  opacity: 1;
+}
+
+.studioRoot :focus-visible {
+  outline: 2px solid var(--process-cyan);
+  outline-offset: 2px;
+}
+
+.canvasAtmosphere {
+  background:
+    radial-gradient(circle at 80% -12%, rgba(62, 115, 185, 0.13), transparent 34rem),
+    linear-gradient(rgba(85, 175, 192, 0.025) 1px, transparent 1px),
+    #070b0f;
+  background-size: auto, 100% 32px, auto;
+}
+
+.raisedSurface {
+  border-color: var(--production-border);
+  background: #17232d;
+}
+
+.toolSurface {
+  border-color: color-mix(in srgb, var(--process-cyan) 42%, transparent);
+  background: var(--process-cyan-soft);
+  color: var(--process-cyan-strong);
+}
+
+.selectableSurface {
+  min-height: 64px;
+  border-color: var(--production-border);
+  background: #17232d;
+  color: var(--production-ink);
+}
+
+.selectableSurface:hover {
+  border-color: color-mix(in srgb, var(--process-cyan) 58%, transparent);
+  background: color-mix(in srgb, #17232d 88%, var(--process-cyan));
+}
+
+.selectableSurfaceActive {
+  border-color: var(--process-cyan);
+  background: var(--process-cyan-soft);
+  box-shadow: inset 3px 0 0 var(--process-cyan);
+}
+
+.inputSurface {
+  min-height: 44px;
+  border-color: var(--production-border);
+  background: #17232d;
+  color: var(--production-ink);
+}
+
+.inputSurface:focus {
+  border-color: var(--process-cyan);
+  box-shadow: 0 0 0 3px rgba(85, 175, 192, 0.16);
+  outline: none;
+}
+
+.mutedText {
+  color: var(--production-ink-muted);
+}
+
+.toolText {
+  color: var(--process-cyan-strong);
+}
+
+.dangerControl {
+  color: #c98d89;
+}
+
+.dangerControl:hover {
+  background: rgba(184, 67, 62, 0.14);
+  color: #f0aaa5;
+}
+
+@media (max-width: 390px) {
+  .studioRoot :global(.kuiper-dashboard-main) {
+    padding-inline: 12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .studioRoot *,
+  .studioRoot *::before,
+  .studioRoot *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

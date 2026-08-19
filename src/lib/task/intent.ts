@@ -31,6 +31,7 @@ const TASK_INTENT_BY_TYPE: Record<TaskType, TaskIntent> = {
   [TASK_TYPE.VOICE_LINE]: 'generate',
   [TASK_TYPE.VOICE_DESIGN]: 'generate',
   [TASK_TYPE.ASSET_HUB_VOICE_DESIGN]: 'generate',
+  [TASK_TYPE.AUTO_GROUP_MULTI_SHOT]: 'analyze',
   [TASK_TYPE.REGENERATE_STORYBOARD_TEXT]: 'regenerate',
   [TASK_TYPE.INSERT_PANEL]: 'build',
   [TASK_TYPE.PANEL_VARIANT]: 'regenerate',

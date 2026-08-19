@@ -19,10 +19,15 @@ export interface LocalizedDevelopmentStage extends VisualDevelopmentStageDefinit
 interface DevelopmentRailProps {
   activeStageId: VisualDevelopmentStageId
   groups: Record<VisualDevelopmentGroupId, string>
+  labels: {
+    title: string
+    kicker: string
+    phase: string
+    playground: string
+  }
   locale: string
   onSelect: (stageId: VisualDevelopmentStageId) => void
   stages: LocalizedDevelopmentStage[]
-  title: string
 }
 
 const GROUP_ORDER: readonly VisualDevelopmentGroupId[] = [
@@ -35,22 +40,22 @@ const GROUP_ORDER: readonly VisualDevelopmentGroupId[] = [
 export function DevelopmentRail({
   activeStageId,
   groups,
+  labels,
   locale,
   onSelect,
   stages,
-  title,
 }: DevelopmentRailProps) {
   return (
-    <aside className="border-b border-white/[0.07] bg-[#09090b] lg:min-h-0 lg:border-b-0 lg:border-r xl:h-full xl:overflow-hidden">
+    <aside className="border-b border-[var(--darkroom-border)] bg-[var(--studio-chrome)] lg:min-h-0 lg:border-b-0 lg:border-r xl:h-full xl:overflow-hidden">
       <div className="hidden h-full min-h-0 flex-col lg:flex">
-        <div className="border-b border-white/[0.07] px-5 py-5">
-          <div className="font-mono text-[9px] tracking-[0.2em] text-text-tertiary">
-            DEVELOPMENT SPINE
+        <div className="border-b border-[var(--darkroom-border)] px-5 py-5">
+          <div className="font-mono text-[9px] tracking-[0.2em] text-[var(--process-cyan-strong)]">
+            {labels.kicker}
           </div>
-          <h2 className="mt-1.5 font-serif-cn text-sm font-semibold text-white">{title}</h2>
+          <h2 className="mt-1.5 font-serif-cn text-sm font-semibold text-[var(--darkroom-text)]">{labels.title}</h2>
         </div>
 
-        <nav aria-label={title} className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-3 py-4">
+        <nav aria-label={labels.title} className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-3 py-4">
           {GROUP_ORDER.map((groupId) => {
             const groupStages = stages.filter((stage) => stage.group === groupId)
             return (
@@ -67,17 +72,17 @@ export function DevelopmentRail({
                         type="button"
                         onClick={() => onSelect(stage.id)}
                         aria-current={active ? 'step' : undefined}
-                        className={`group relative flex w-full items-center gap-3 rounded-xl border px-2.5 py-2 text-left transition-colors ${
+                        className={`group relative flex min-h-11 w-full items-center gap-3 rounded-xl border px-2.5 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--process-cyan)] ${
                           active
-                            ? 'border-primary-500/30 bg-primary-500/[0.08] text-white'
-                            : 'border-transparent text-text-secondary hover:border-white/[0.06] hover:bg-white/[0.035] hover:text-white'
+                            ? 'border-[var(--process-cyan)]/35 bg-[var(--process-cyan-soft)] text-[var(--darkroom-text)]'
+                            : 'border-transparent text-[var(--darkroom-muted)] hover:border-white/[0.06] hover:bg-white/[0.035] hover:text-[var(--darkroom-text)]'
                         }`}
                       >
                         <span
                           className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg font-mono text-[9px] ${
                             active
-                              ? 'bg-primary-500 text-black'
-                              : 'border border-white/[0.08] bg-white/[0.03] text-text-tertiary'
+                              ? 'bg-[var(--process-cyan)] text-[#071014]'
+                              : 'border border-[var(--darkroom-border)] bg-[var(--darkroom-raised)] text-[var(--darkroom-muted)]'
                           }`}
                         >
                           {stage.code}
@@ -87,13 +92,13 @@ export function DevelopmentRail({
                             {stage.shortTitle}
                           </span>
                           <span className="mt-0.5 block truncate font-mono text-[8px] uppercase tracking-[0.12em] text-text-tertiary">
-                            Phase {stage.code}
+                            {labels.phase} {stage.code}
                           </span>
                         </span>
                         <AppIcon
                           name={stage.icon}
                           className={`h-3.5 w-3.5 shrink-0 ${
-                            active ? 'text-primary-400' : 'text-text-tertiary'
+                            active ? 'text-[var(--process-cyan-strong)]' : 'text-[var(--darkroom-muted)]'
                           }`}
                         />
                       </button>
@@ -105,14 +110,14 @@ export function DevelopmentRail({
           })}
         </nav>
 
-        <div className="border-t border-white/[0.07] p-3">
+        <div className="border-t border-[var(--darkroom-border)] p-3">
           <Link
             href={`/${locale}/playground`}
-            className="flex items-center justify-between rounded-xl border border-white/[0.07] bg-white/[0.025] px-3 py-2.5 text-[10px] text-text-secondary transition-colors hover:border-white/[0.14] hover:text-white"
+            className="flex min-h-11 items-center justify-between rounded-xl border border-[var(--darkroom-border)] bg-[var(--darkroom-raised)] px-3 py-2.5 text-[10px] text-[var(--darkroom-muted)] transition-colors hover:border-[var(--process-cyan)]/45 hover:text-[var(--darkroom-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--process-cyan)]"
           >
             <span className="flex items-center gap-2">
-              <AppIcon name="sparklesAlt" className="h-3.5 w-3.5 text-primary-400" />
-              Playground
+              <AppIcon name="sparklesAlt" className="h-3.5 w-3.5 text-[var(--process-cyan-strong)]" />
+              {labels.playground}
             </span>
             <AppIcon name="externalLink" className="h-3 w-3 text-text-tertiary" />
           </Link>
@@ -120,8 +125,8 @@ export function DevelopmentRail({
       </div>
 
       <nav
-        aria-label={title}
-        className="flex snap-x gap-2 overflow-x-auto px-4 py-3 lg:hidden"
+        aria-label={labels.title}
+        className="flex max-w-full snap-x gap-2 overflow-x-auto px-4 py-3 lg:hidden"
       >
         {stages.map((stage) => {
           const active = stage.id === activeStageId
@@ -131,13 +136,13 @@ export function DevelopmentRail({
               type="button"
               onClick={() => onSelect(stage.id)}
               aria-current={active ? 'step' : undefined}
-              className={`flex shrink-0 snap-start items-center gap-2 rounded-xl border px-3 py-2 text-[10px] ${
+              className={`flex min-h-11 shrink-0 snap-start items-center gap-2 rounded-xl border px-3 py-2 text-[10px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--process-cyan)] ${
                 active
-                  ? 'border-primary-500/30 bg-primary-500/[0.09] text-white'
-                  : 'border-white/[0.07] bg-white/[0.025] text-text-tertiary'
+                  ? 'border-[var(--process-cyan)]/35 bg-[var(--process-cyan-soft)] text-[var(--darkroom-text)]'
+                  : 'border-[var(--darkroom-border)] bg-[var(--darkroom-raised)] text-[var(--darkroom-muted)]'
               }`}
             >
-              <span className="font-mono text-[9px] text-primary-400">{stage.code}</span>
+              <span className="font-mono text-[9px] text-[var(--process-cyan-strong)]">{stage.code}</span>
               <span>{stage.shortTitle}</span>
             </button>
           )

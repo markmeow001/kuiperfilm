@@ -11,12 +11,12 @@ import { VirtualCharacterPanel } from './VirtualCharacterPanel'
 import { OcclusionPanel } from './OcclusionPanel'
 import { BackgroundGeneratorPanel } from './BackgroundGeneratorPanel'
 import { LiveCompositeWorkflowGuide, type LiveCompositeWorkflowStep } from './LiveCompositeWorkflowGuide'
-import { LiveCompositeModeSelector, type LiveCompositeMode } from './LiveCompositeModeSelector'
+import type { LiveCompositeMode } from './LiveCompositeModeSelector'
 import { MaterialReadinessCard } from './MaterialReadinessCard'
+import styles from './LiveCompositeShell.module.css'
 
 interface CompositeAssetPanelProps {
   mode: LiveCompositeMode
-  onModeChange: (mode: LiveCompositeMode) => void
   depthRebuild: ReactNode
   metadata: VideoMetadata | null
   backgroundColor: string
@@ -76,14 +76,22 @@ interface StepNavigationProps {
 
 function StepNavigation({ back, next, nextLabel = '下一步', onStepChange }: StepNavigationProps) {
   return (
-    <div className="flex gap-2 border-t border-white/10 px-4 py-4">
+    <div className={styles.stepNavigation}>
       {back ? (
-        <button type="button" onClick={() => onStepChange(back)} className="h-10 rounded-lg border border-white/10 px-3 text-sm text-stone-400 hover:bg-white/[0.05] hover:text-white">
+        <button
+          type="button"
+          onClick={() => onStepChange(back)}
+          className={styles.stepBack}
+        >
           上一步
         </button>
       ) : null}
       {next ? (
-        <button type="button" onClick={() => onStepChange(next)} className="h-10 flex-1 rounded-lg bg-cyan-400 px-3 text-sm font-medium text-stone-950 hover:bg-cyan-300">
+        <button
+          type="button"
+          onClick={() => onStepChange(next)}
+          className={styles.stepNext}
+        >
           {nextLabel}
         </button>
       ) : null}
@@ -91,11 +99,9 @@ function StepNavigation({ back, next, nextLabel = '下一步', onStepChange }: S
   )
 }
 
-export function CompositeAssetPanel({ mode, onModeChange, depthRebuild, metadata, backgroundColor, hasBackgroundImage, canExport, currentTime, analysisProgress, exportProgress, interactionDisabled, virtualCharacter, maskKeyframes, occlusionPicking, occlusionBusy, occlusionMessage, occlusionKeyframeCount, onVideoSelect, onBackgroundSelect, onBackgroundColorChange, onVirtualCharacterSelect, onVirtualCharacterChange, onVirtualCharacterRemove, onVirtualCharacterAutoMatch, motionBusy, motionMessage, onAnalyzeMotionCurrent, onAnalyzeMotionClip, onStartOcclusionPicking, onCancelOcclusionPicking, onExportMask, onExportFrame, onExportVideo, onCancelVideoExport, onAnalyzeCurrent, onAnalyzeClip, onCancelAnalysis, canAnalyzeFace, faceProgress, faceTrack, videoHasAudio, onAnalyzeFace, onCancelFaceAnalysis, onClearFaceTrack, lastExportLabel = null, onSaveToLibrary, workflowStep, completedWorkflowSteps, onWorkflowStepChange }: CompositeAssetPanelProps) {
+export function CompositeAssetPanel({ mode, depthRebuild, metadata, backgroundColor, hasBackgroundImage, canExport, currentTime, analysisProgress, exportProgress, interactionDisabled, virtualCharacter, maskKeyframes, occlusionPicking, occlusionBusy, occlusionMessage, occlusionKeyframeCount, onVideoSelect, onBackgroundSelect, onBackgroundColorChange, onVirtualCharacterSelect, onVirtualCharacterChange, onVirtualCharacterRemove, onVirtualCharacterAutoMatch, motionBusy, motionMessage, onAnalyzeMotionCurrent, onAnalyzeMotionClip, onStartOcclusionPicking, onCancelOcclusionPicking, onExportMask, onExportFrame, onExportVideo, onCancelVideoExport, onAnalyzeCurrent, onAnalyzeClip, onCancelAnalysis, canAnalyzeFace, faceProgress, faceTrack, videoHasAudio, onAnalyzeFace, onCancelFaceAnalysis, onClearFaceTrack, lastExportLabel = null, onSaveToLibrary, workflowStep, completedWorkflowSteps, onWorkflowStepChange }: CompositeAssetPanelProps) {
   return (
-    <aside className="flex min-h-0 w-[min(360px,100vw)] max-w-full shrink-0 flex-col overflow-y-auto overscroll-contain border-r border-white/10 bg-stone-950/80">
-      <LiveCompositeModeSelector value={mode} onChange={onModeChange} disabled={interactionDisabled} />
-
+    <aside className={styles.assetPanel}>
       {mode === 'depth-rebuild' ? (
         depthRebuild
       ) : (
@@ -164,7 +170,10 @@ export function CompositeAssetPanel({ mode, onModeChange, depthRebuild, metadata
           <section className="border-b border-white/10 px-4 py-5">
             <p className="mb-4 text-sm leading-6 text-stone-400">選擇一張現成背景、使用純色，或生成一張「背景概念圖」作為構圖預覽／概念參考。</p>
             <UploadFileButton disabled={interactionDisabled} label={hasBackgroundImage ? '更換背景圖片' : '上傳背景圖片'} accept="image/*" kind="image" onSelect={onBackgroundSelect} />
-            <label className="mt-3 flex items-center justify-between rounded-lg border border-white/10 px-3 py-2 text-sm text-stone-400">
+            <label
+              className="mt-3 flex items-center justify-between rounded-lg border border-[var(--darkroom-border)] bg-[var(--darkroom-inset)] px-3 py-2 text-sm text-[var(--darkroom-muted)]"
+              data-live-composite-touch-target
+            >
               使用純色背景
               <input type="color" value={backgroundColor} disabled={interactionDisabled} onChange={(event) => onBackgroundColorChange(event.target.value)} className="h-7 w-10 cursor-pointer rounded border-0 bg-transparent disabled:cursor-not-allowed" />
             </label>

@@ -8,16 +8,18 @@
 
 import Link from 'next/link'
 import { useSession, signOut } from 'next-auth/react'
-import { useTranslations } from 'next-intl'
+import { useLocale, useTranslations } from 'next-intl'
 import LanguageSwitcher from './LanguageSwitcher'
 import ThemeToggle from './ThemeToggle'
 import { AppIcon } from '@/components/ui/icons'
 import { isAdmin as checkIsAdmin } from '@/lib/auth/user-role'
+import { ProductionBrand } from '@/components/v2/ProductionBrand'
 
 export default function Navbar() {
   const { data: session } = useSession()
   const t = useTranslations('nav')
   const tc = useTranslations('common')
+  const locale = useLocale()
   // session.user is loosely typed by next-auth — narrow to read role.
   const role = (session?.user as { role?: string } | undefined)?.role
   const isAdmin = checkIsAdmin(role)
@@ -26,25 +28,22 @@ export default function Navbar() {
     <nav className="sticky top-0 z-50 border-b border-primary-900/20 bg-stone-950/95 backdrop-blur-sm">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex h-16 items-center justify-between">
-          {/* Brand — Kuiper 影界 logo treatment matching the V2 sidebar */}
-          <Link
-            href={session ? '/zh/v2' : '/'}
-            className="group flex items-baseline gap-1.5"
-          >
-            <span className="font-display text-2xl font-semibold italic tracking-tight text-primary-400 transition-colors group-hover:text-primary-300">
-              Kuiper
-            </span>
-            <span className="font-serif-cn text-base font-medium text-stone-100">影界</span>
-            <span className="ml-3 hidden font-mono text-[9px] uppercase tracking-[0.3em] text-stone-600 sm:inline">
+          <div className="flex items-center gap-3">
+            <ProductionBrand
+              locale={locale}
+              href={session ? `/${locale}/v2` : `/${locale}`}
+              tone="dark"
+            />
+            <span className="hidden font-mono text-[9px] uppercase tracking-[0.3em] text-stone-600 sm:inline">
               {tc('betaVersion')}
             </span>
-          </Link>
+          </div>
 
           <div className="flex items-center gap-5">
             {session ? (
               <>
                 <Link
-                  href="/zh/v2"
+                  href={`/${locale}/v2`}
                   className="font-mono text-xs uppercase tracking-wider text-stone-300 transition-colors hover:text-primary-400"
                 >
                   {t('workspace')}
@@ -53,12 +52,12 @@ export default function Navbar() {
                     所有登入 user 可見:member 看自己加入的工作區(read-
                     only)、editor 看自己擁有的、admin 看全平台。 */}
                 <Link
-                  href="/zh/workspaces"
+                  href={`/${locale}/workspaces`}
                   className="flex items-center gap-1.5 font-mono text-xs uppercase tracking-wider text-stone-300 transition-colors hover:text-primary-400"
-                  title="工作區 / 團隊管理"
+                  title={t('workspaces')}
                 >
                   <AppIcon name="userAlt" className="h-4 w-4" />
-                  <span className="hidden sm:inline">團隊</span>
+                  <span className="hidden sm:inline">{t('workspaces')}</span>
                 </Link>
                 {/* 資產中心 — admin only. K3b made this team-shared, but for
                     demo phase regular users get distracted by an empty hub
@@ -66,7 +65,7 @@ export default function Navbar() {
                     keep access; the URL still works for them when typed. */}
                 {isAdmin ? (
                   <Link
-                    href="/workspace/asset-hub"
+                    href={`/${locale}/workspace/asset-hub`}
                     className="flex items-center gap-1.5 font-mono text-xs uppercase tracking-wider text-stone-300 transition-colors hover:text-primary-400"
                   >
                     <AppIcon name="folderHeart" className="h-4 w-4" />
@@ -81,7 +80,7 @@ export default function Navbar() {
                     their own image generation. */}
                 {isAdmin ? (
                   <Link
-                    href="/profile"
+                    href={`/${locale}/profile`}
                     className="flex items-center gap-1.5 font-mono text-xs uppercase tracking-wider text-stone-300 transition-colors hover:text-primary-400"
                     title={t('profile')}
                   >
@@ -92,7 +91,7 @@ export default function Navbar() {
                 <ThemeToggle />
                 {isAdmin ? (
                   <Link
-                    href="/admin"
+                    href={`/${locale}/admin`}
                     className="flex items-center gap-1.5 rounded-sm border border-primary-500/40 bg-primary-500/10 px-3 py-1.5 font-mono text-[11px] uppercase tracking-wider text-primary-400 transition-colors hover:bg-primary-500/20"
                     title={t('admin')}
                   >
@@ -106,25 +105,25 @@ export default function Navbar() {
                     way out. */}
                 <button
                   type="button"
-                  onClick={() => void signOut({ callbackUrl: '/' })}
+                  onClick={() => void signOut({ callbackUrl: `/${locale}` })}
                   className="flex items-center gap-1.5 font-mono text-xs uppercase tracking-wider text-stone-400 transition-colors hover:text-primary-400"
-                  title="登出"
+                  title={t('logout')}
                 >
                   <AppIcon name="logout" className="h-4 w-4" />
-                  <span className="hidden sm:inline">登出</span>
+                  <span className="hidden sm:inline">{t('logout')}</span>
                 </button>
               </>
             ) : (
               <>
                 <ThemeToggle />
                 <Link
-                  href="/auth/signin"
+                  href={`/${locale}/auth/signin`}
                   className="font-mono text-[11px] uppercase tracking-wider text-stone-400 transition-colors hover:text-primary-400"
                 >
                   {t('signin')}
                 </Link>
                 <Link
-                  href="/auth/signup"
+                  href={`/${locale}/auth/signup`}
                   className="rounded-sm bg-primary-500 px-4 py-2 font-serif-cn text-sm font-medium text-stone-950 transition-all hover:bg-primary-400"
                 >
                   {t('signup')}

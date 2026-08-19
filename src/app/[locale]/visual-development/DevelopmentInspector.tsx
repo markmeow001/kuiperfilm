@@ -5,6 +5,7 @@ import type { CastingBatchView } from './visual-development-types'
 interface DevelopmentInspectorProps {
   candidateCount: 4 | 8 | 10
   labels: {
+    kicker: string
     title: string
     canon: string
     promptStack: string
@@ -37,14 +38,14 @@ export function DevelopmentInspector({
   stage,
 }: DevelopmentInspectorProps) {
   return (
-    <aside className="border-t border-white/[0.07] bg-[#09090b] xl:h-full xl:min-h-0 xl:overflow-y-auto xl:overscroll-y-contain xl:border-l xl:border-t-0 xl:[scrollbar-gutter:stable]">
-      <div className="border-b border-white/[0.07] px-5 py-5">
-        <div className="font-mono text-[9px] tracking-[0.2em] text-text-tertiary">
-          SYSTEM INSPECTOR
+    <aside className="border-t border-[var(--darkroom-border)] bg-[var(--studio-chrome)] xl:h-full xl:min-h-0 xl:overflow-y-auto xl:overscroll-y-contain xl:border-l xl:border-t-0 xl:[scrollbar-gutter:stable]">
+      <div className="border-b border-[var(--darkroom-border)] px-5 py-5">
+        <div className="font-mono text-[9px] tracking-[0.2em] text-[var(--process-cyan-strong)]">
+          {labels.kicker}
         </div>
         <div className="mt-1.5 flex items-center justify-between gap-3">
-          <h2 className="font-serif-cn text-sm font-semibold text-white">{labels.title}</h2>
-          <span className="rounded-md border border-white/[0.08] bg-white/[0.03] px-2 py-1 font-mono text-[8px] text-text-tertiary">
+          <h2 className="font-serif-cn text-sm font-semibold text-[var(--darkroom-text)]">{labels.title}</h2>
+          <span className="rounded-md border border-[var(--darkroom-border)] bg-[var(--darkroom-raised)] px-2 py-1 font-mono text-[8px] text-[var(--darkroom-muted)]">
             {stage.code}
           </span>
         </div>
@@ -71,10 +72,10 @@ export function DevelopmentInspector({
 
         <section className="border-t border-white/[0.07] pt-5">
           <SectionHeading icon="lock" label={labels.canon} />
-          <div className="mt-3 rounded-xl border border-primary-500/20 bg-primary-500/[0.045] p-3.5">
+          <div className="mt-3 rounded-xl border border-[var(--process-cyan)]/25 bg-[var(--process-cyan-soft)] p-3.5">
             <div className="flex items-center gap-2">
-              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary-500/[0.12]">
-                <AppIcon name="badgeCheck" className="h-3.5 w-3.5 text-primary-400" />
+              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[var(--process-cyan-soft)]">
+                <AppIcon name="badgeCheck" className="h-3.5 w-3.5 text-[var(--process-cyan-strong)]" />
               </span>
               <span className="text-[11px] font-medium text-white">{labels.lockPolicy}</span>
             </div>
@@ -116,7 +117,7 @@ export function DevelopmentInspector({
 function SectionHeading({ icon, label }: { icon: 'brain' | 'lock' | 'bookmark'; label: string }) {
   return (
     <div className="flex items-center gap-2 font-mono text-[9px] tracking-[0.18em] text-text-tertiary">
-      <AppIcon name={icon} className="h-3.5 w-3.5 text-primary-400" />
+      <AppIcon name={icon} className="h-3.5 w-3.5 text-[var(--process-cyan-strong)]" />
       {label}
     </div>
   )
@@ -141,7 +142,7 @@ function StackRow({
       </span>
       <span
         className={`shrink-0 font-mono text-[7px] tracking-[0.08em] ${
-          tone === 'ready' ? 'text-primary-400' : 'text-text-tertiary'
+          tone === 'ready' ? 'text-[var(--process-cyan-strong)]' : 'text-text-tertiary'
         }`}
       >
         {status}

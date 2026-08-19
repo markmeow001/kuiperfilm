@@ -39,6 +39,8 @@ export default defineConfig({
     setupFiles: ['./tests/setup/dom-setup.ts'],
     include: [
       'tests/unit/components/**/*.test.{ts,tsx}',
+      'tests/unit/query/character-finalize-mutation.test.tsx',
+      'tests/unit/query/auto-group-multi-shot-mutation.test.tsx',
       'tests/integration/workspace-page.test.tsx',
     ],
     testTimeout: 10_000,

@@ -170,6 +170,18 @@ export {
     type PanelCandidate,
 } from './useStoryboards'
 
+export {
+    useEpisodeDelivery,
+    parseEpisodeDeliveryResponse,
+    resolveSafeDeliveryDownloadUrl,
+    type EpisodeDeliveryManifestSummary,
+    type EpisodeDeliveryInput,
+    type EpisodeDeliveryResponse,
+    type ReadyEpisodeDelivery,
+    type ReadyEpisodeDeliveryLegacy,
+    type ReadyEpisodeDeliveryV1,
+} from './useEpisodeDelivery'
+
 // 语音
 export {
     useVoiceLines,

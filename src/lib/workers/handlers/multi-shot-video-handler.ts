@@ -38,6 +38,12 @@ import {
   type KlingElement,
   type MultiShotPromptItem,
 } from '@/lib/generators/video/kieai-kling'
+import {
+  requireNovelPromotionPanelSetInProject,
+  requireNovelPromotionStoryboardInProject,
+  updateNovelPromotionStoryboardInProject,
+} from '@/lib/novel-promotion/project-scope'
+import { canonicalizeEpisodeCharacterAppearances } from '@/lib/novel-promotion/episode-appearance'
 
 type AnyObj = Record<string, unknown>
 
@@ -239,9 +245,38 @@ export async function handleMultiShotVideoTask(job: Job<TaskJobData>) {
       ? resolutionRaw
       : undefined
 
-  if (!Array.isArray(panelIds) || panelIds.length < 1) {
+  if (
+    !Array.isArray(panelIds)
+    || panelIds.length < 1
+    || panelIds.some((id) => typeof id !== 'string' || !id.trim())
+    || new Set(panelIds).size !== panelIds.length
+  ) {
     throw new Error('MULTI_SHOT_PANEL_IDS_INVALID')
   }
+
+  // Durable queue payloads are an untrusted boundary. Resolve the complete
+  // ordered panel set through the project-scoped DAL before any provider,
+  // project-model, or asset work and pin it to this job's target.
+  const panelSet = await requireNovelPromotionPanelSetInProject(projectId, panelIds)
+  if (
+    job.data.targetType !== 'NovelPromotionStoryboard'
+    || job.data.targetId !== panelSet.storyboardId
+  ) {
+    throw new Error('MULTI_SHOT_TARGET_STORYBOARD_MISMATCH')
+  }
+  if (job.data.episodeId && job.data.episodeId !== panelSet.episodeId) {
+    throw new Error('MULTI_SHOT_TARGET_EPISODE_MISMATCH')
+  }
+  const validPanels = panelSet.panels
+  const rawProjectData = await resolveNovelData(projectId)
+  const projectData = await canonicalizeEpisodeCharacterAppearances({
+    projectId,
+    episodeId: panelSet.episodeId,
+    projectData: rawProjectData,
+    panels: validPanels,
+    extraMiningText: rawPrompt,
+    characterOverrides,
+  })
 
   // 2026-05-22 — when payload didn't carry resolution, fall back to the
   // project-level setting (NovelPromotionProject.videoResolution, default
@@ -266,34 +301,7 @@ export async function handleMultiShotVideoTask(job: Job<TaskJobData>) {
 
   await reportTaskProgress(job, 5, { stage: 'load_panels' })
 
-  // 1. 按 panelIds 順序載入 panels
-  const panels = await Promise.all(
-    panelIds.map((id) =>
-      prisma.novelPromotionPanel.findUnique({
-        where: { id },
-        select: {
-          id: true,
-          description: true,
-          videoPrompt: true,
-          characters: true,
-          // Phase 11.3 Stage 2 — panel.props JSON so b-path can match
-          // against projectData.props and add prop ref images.
-          props: true,
-          location: true,
-          shotType: true,
-          cameraMove: true,
-          imageUrl: true,
-          storyboardId: true,
-          // 2026-05-01: pull user-edited dialogue so the b-path
-          // handler can prefer it over the auto-extracted voiceLines.
-          srtSegment: true,
-        },
-      }),
-    ),
-  )
-
-  for (let i = 0; i < panels.length; i++) {
-    if (!panels[i]) throw new Error(`Panel not found: ${panelIds[i]}`)
+  for (let i = 0; i < validPanels.length; i++) {
     // C path (Kling i2v) requires every panel to have imageUrl — first_
     // frame chained from one panel to the next. B path is t2v so text-only
     // panels are fine. Seedance composite (Phase 2 — 2026-05-17) accepts
@@ -303,12 +311,10 @@ export async function handleMultiShotVideoTask(job: Job<TaskJobData>) {
     // AtlasCloud composite t2v + r2v also tolerate panels without imageUrl
     // (t2v ignores all images; r2v uses character / scene refs as fallback).
     // fal composite r2v also tolerates text-only panels for the same reason.
-    if (!useBPath && !useSeedanceComposite && !useArkComposite && !useAtlasCloudComposite && !useFalComposite && !panels[i]!.imageUrl) {
+    if (!useBPath && !useSeedanceComposite && !useArkComposite && !useAtlasCloudComposite && !useFalComposite && !validPanels[i].imageUrl) {
       throw new Error(`Panel ${panelIds[i]} has no imageUrl`)
     }
   }
-
-  const validPanels = panels as NonNullable<(typeof panels)[number]>[]
 
   // Phase 1.5C — the four Seedance-family composite paths (seedance / ark /
   // atlascloud / fal) take an identical base + the same optional-field set.
@@ -321,10 +327,10 @@ export async function handleMultiShotVideoTask(job: Job<TaskJobData>) {
     job,
     projectId,
     validPanels,
+    projectData,
     videoModel,
     sound,
     aspectRatio,
-    ...(characterOverrides && characterOverrides.length > 0 ? { characterOverrides } : {}),
     ...(locationOverrides && locationOverrides.length > 0 ? { locationOverrides } : {}),
     ...(rawPrompt ? { rawPrompt } : {}),
     ...(panelDurations ? { panelDurations } : {}),
@@ -388,8 +394,6 @@ export async function handleMultiShotVideoTask(job: Job<TaskJobData>) {
 
   await reportTaskProgress(job, 15, { stage: 'collect_characters' })
 
-  const projectData = await resolveNovelData(projectId)
-
   // ──────────────────────────── B PATH ────────────────────────────
   // Tencent VOD Kling Omni — t2v with multi_shot=intelligence + SubjectInfos.
   // See multi-shot-video-b-path.ts for the full implementation.
@@ -412,7 +416,6 @@ export async function handleMultiShotVideoTask(job: Job<TaskJobData>) {
       ...(panelDurations ? { panelDurations } : {}),
       ...(rawPrompt ? { rawPrompt } : {}),
       ...(promptStyle ? { promptStyle } : {}),
-      ...(characterOverrides && characterOverrides.length > 0 ? { characterOverrides } : {}),
       ...(locationOverrides && locationOverrides.length > 0 ? { locationOverrides } : {}),
       ...(firstFrameImageUrl ? { firstFrameImageUrl } : {}),
       ...(lastFrameImageUrl ? { lastFrameImageUrl } : {}),
@@ -436,14 +439,9 @@ export async function handleMultiShotVideoTask(job: Job<TaskJobData>) {
       const character = findCharacterByName(projectData.characters || [], ref.name)
       if (!character) continue
 
-      const appearances = character.appearances || []
-      let appearance = appearances[0]
-      if (ref.appearance) {
-        const matched = appearances.find(
-          (a) => (a.changeReason || '').toLowerCase() === ref.appearance!.toLowerCase(),
-        )
-        if (matched) appearance = matched
-      }
+      // Canonical resolver collapsed this character to the episode-active
+      // appearance; the panel's legacy appearance hint is non-authoritative.
+      const appearance = character.appearances?.[0]
 
       if (!appearance) continue
 
@@ -535,16 +533,18 @@ export async function handleMultiShotVideoTask(job: Job<TaskJobData>) {
 
   // 6. 上傳到 R2/COS
   const storyboardId = validPanels[0].storyboardId
+  await requireNovelPromotionStoryboardInProject(projectId, storyboardId)
   const cosKey = await uploadVideoSourceToCos(polled.url, 'multi-shot-video', storyboardId)
 
   await reportTaskProgress(job, 95, { stage: 'persist' })
 
   // 7. 存入 storyboard — write both legacy and new array column for
   // uniform shape (C path doesn't chunk; always 1 clip).
-  await prisma.novelPromotionStoryboard.update({
-    where: { id: storyboardId },
-    data: buildMultiShotClipUpdate([cosKey]),
-  })
+  await updateNovelPromotionStoryboardInProject(
+    projectId,
+    storyboardId,
+    buildMultiShotClipUpdate([cosKey]),
+  )
 
   return {
     storyboardId,

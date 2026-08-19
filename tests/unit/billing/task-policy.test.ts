@@ -17,6 +17,8 @@ describe('billing/task-policy', () => {
     analysisModel: 'anthropic/claude-sonnet-4',
     imageModel: 'seedream',
     videoModel: 'doubao-seedance-1-5-pro-251215',
+    audioModel: 'atlascloud::bytedance/seed-audio-1.0',
+    providerText: 'Atlas voice',
   } as const
 
   it('builds TaskBillingInfo for every billable task type', () => {
@@ -78,5 +80,44 @@ describe('billing/task-policy', () => {
     expect(info.apiType).toBe('lip-sync')
     expect(info.model).toBe('vidu::vidu-lipsync')
     expect(info.quantity).toBe(1)
+  })
+
+  it.each([
+    ['ASCII', TASK_TYPE.CANVAS_TTS, 'Use @audio1: Atlas', 18],
+    ['CJK', TASK_TYPE.CANVAS_TTS, '@audio1 配音測試', 12],
+    ['emoji', TASK_TYPE.VOICE_LINE, '@audio1 A😀中', 11],
+  ])('%s pinned provider text -> freezes the exact Unicode code-point count', (_label, taskType, providerText, expectedCharacters) => {
+    const model = 'atlascloud::bytedance/seed-audio-1.0'
+    const info = expectBillableInfo(buildDefaultTaskBillingInfo(taskType, {
+      audioModel: model,
+      providerText,
+    }))
+
+    expect(info.apiType).toBe('voice')
+    expect(info.model).toBe(model)
+    expect(info.quantity).toBe(expectedCharacters)
+    expect(info.unit).toBe('character')
+    expect(info.maxFrozenCost).toBeCloseTo(0.015 * 7.2 * (expectedCharacters / 1_000), 12)
+    expect(info.metadata).toEqual({ submittedCharacters: expectedCharacters })
+  })
+
+  it('missing pinned voice model or submitted text -> does not fabricate a billing quote', () => {
+    expect(buildDefaultTaskBillingInfo(TASK_TYPE.VOICE_LINE, {
+      providerText: '@audio1 hello',
+    })).toBeNull()
+    expect(buildDefaultTaskBillingInfo(TASK_TYPE.VOICE_LINE, {
+      audioModel: 'atlascloud::bytedance/seed-audio-1.0',
+    })).toBeNull()
+  })
+
+  it('pinned provider text whitespace -> counts exact submitted code points without trimming', () => {
+    const providerText = '@audio1 hello '
+    const info = expectBillableInfo(buildDefaultTaskBillingInfo(TASK_TYPE.CANVAS_TTS, {
+      audioModel: 'atlascloud::bytedance/seed-audio-1.0',
+      providerText,
+    }))
+
+    expect(info.quantity).toBe([...providerText].length)
+    expect(info.metadata).toEqual({ submittedCharacters: 14 })
   })
 })

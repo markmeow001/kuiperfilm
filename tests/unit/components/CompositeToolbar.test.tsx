@@ -65,6 +65,37 @@ describe('CompositeToolbar', () => {
     expect(onBrushPercentChange).toHaveBeenCalledWith(12)
   })
 
+  it('[工具列特殊控制] -> range 與 checkbox 都放在獨立的可觸控 label', () => {
+    render(
+      <CompositeToolbar
+        tool="keep"
+        editTarget="person"
+        view="source"
+        brushPercent={6}
+        overlayVisible
+        canUndo={false}
+        canRedo={false}
+        currentTime={0}
+        onToolChange={vi.fn()}
+        onEditTargetChange={vi.fn()}
+        onViewChange={vi.fn()}
+        onBrushPercentChange={vi.fn()}
+        onOverlayVisibleChange={vi.fn()}
+        onUndo={vi.fn()}
+        onRedo={vi.fn()}
+        onClear={vi.fn()}
+      />,
+    )
+
+    const brushHitArea = screen.getByRole('slider', { name: '筆刷大小' })
+      .closest('[data-live-composite-control-hit-area]')
+    const overlayHitArea = screen.getByRole('checkbox', { name: '顯示選區' })
+      .closest('[data-live-composite-control-hit-area]')
+
+    expect(brushHitArea?.tagName).toBe('LABEL')
+    expect(overlayHitArea?.tagName).toBe('LABEL')
+  })
+
   it('影片輸出中 -> 遮罩與檢視控制全部鎖定', () => {
     render(
       <CompositeToolbar

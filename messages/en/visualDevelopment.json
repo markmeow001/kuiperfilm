@@ -1,7 +1,9 @@
 {
   "header": {
     "back": "Back to projects",
-    "eyebrow": "VISUAL DEVELOPMENT",
+    "eyebrow": "CREATIVE TOOL",
+    "description": "Build traceable canon from world design and casting through final character development.",
+    "controls": "Project and character",
     "system": "CHARACTER CANON SYSTEM",
     "title": "Character Visual Development",
     "project": "Bind project",
@@ -15,6 +17,7 @@
     "create": "Create and bind",
     "creating": "Creating…",
     "cancel": "Cancel",
+    "close": "Close new project dialog",
     "createFailed": "Unable to create project",
     "export": "Export package",
     "exportCanon": "Download Canon package",
@@ -26,6 +29,9 @@
   },
   "rail": {
     "title": "Development phases",
+    "kicker": "VISUAL DEVELOPMENT FLOW",
+    "phase": "Phase",
+    "playground": "Creative Playground",
     "groups": {
       "foundation": "01 · WORLD FOUNDATION",
       "identity": "02 · CHARACTER IDENTITY",
@@ -446,6 +452,7 @@
     }
   },
   "inspector": {
+    "kicker": "SYSTEM INSPECTOR",
     "title": "Development control",
     "canon": "CANON CONTROL",
     "promptStack": "PROMPT STACK",

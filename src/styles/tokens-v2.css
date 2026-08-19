@@ -15,6 +15,48 @@
 
 :root {
   /* ──────────────────────────────────────────────────────────────
+   * Unified production studio — dashboard, planning and media surfaces
+   *
+   * Token names remain stable for migrated components, but all V2 routes
+   * now resolve to the same three-level dark studio hierarchy. "Paper"
+   * means the page canvas, "surface" the working plane and "muted" the
+   * raised/inset control layer; it no longer implies a light theme.
+   * ────────────────────────────────────────────────────────────── */
+  --production-paper:       #070B0F;
+  --production-surface:     #111B24;
+  --production-muted:       #17232D;
+  --production-ink:         #F2F6F7;
+  --production-ink-muted:   #A7B3BC;
+  --production-border:      #263642;
+  --production-border-dark: #354956;
+  --production-blue:        #3E73B9;
+  --production-blue-hover:  #315F98;
+  --production-blue-soft:   rgba(62, 115, 185, 0.18);
+  --production-gold:        #C89432;
+  --production-danger:      #F07676;
+  --production-focus:       #55AFC0;
+
+  /* ──────────────────────────────────────────────────────────────
+   * Unified shell contract
+   *
+   * These tokens are intentionally separate from the legacy primary
+   * palette below. Older routes may still rely on magenta; new production
+   * shells opt into this charcoal darkroom + cyan process language without
+   * silently changing unrelated pages.
+   * ────────────────────────────────────────────────────────────── */
+  --studio-chrome:    #0D141B;
+  --darkroom-canvas:  #070B0F;
+  --darkroom-surface: #111B24;
+  --darkroom-raised:  #17232D;
+  --darkroom-border:  #263642;
+  --darkroom-text:    #F2F6F7;
+  --darkroom-muted:   #A7B3BC;
+  --process-cyan:     #55AFC0;
+  --process-cyan-strong: #79C7D4;
+  --process-cyan-deep:   #2E7887;
+  --process-cyan-soft:   rgba(85, 175, 192, 0.14);
+
+  /* ──────────────────────────────────────────────────────────────
    * §3.2 Color tokens — dark-first, WCAG AA verified
    * ────────────────────────────────────────────────────────────── */
 
@@ -34,6 +76,8 @@
   /* Primary — Kuiper signal magenta.
    * A single high-energy brand colour keeps dense production screens
    * legible while giving navigation and primary actions a clear identity. */
+  --primary-100: #FFE6F6;
+  --primary-200: #FFC2E8;
   --primary-300: #FF8AD8;
   --primary-400: #FF58C5;
   --primary-500: #FF2EAF;

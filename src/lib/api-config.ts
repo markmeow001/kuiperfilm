@@ -16,6 +16,11 @@ import {
   parseModelKeyStrict,
   type UnifiedModelType,
 } from './model-config-contract'
+import {
+  ATLASCLOUD_PROVIDER_KEY,
+  ATLASCLOUD_SEED_AUDIO_MODEL_ID,
+  AtlasCloudSeedAudioConfigError,
+} from './voice/atlascloud-seed-audio-contract'
 
 export interface CustomModel {
   modelId: string
@@ -350,6 +355,86 @@ export async function resolveModelSelectionOrSingle(
   return await resolveModelSelection(userId, modelKey, mediaType)
 }
 
+function atlasCloudSeedAudioCandidates(models: CustomModel[]): CustomModel[] {
+  const byModelKey = new Map<string, CustomModel>()
+  for (const model of models) {
+    if (
+      model.type !== 'audio'
+      || model.modelId !== ATLASCLOUD_SEED_AUDIO_MODEL_ID
+      || getProviderKey(model.provider).toLowerCase() !== ATLASCLOUD_PROVIDER_KEY
+    ) {
+      continue
+    }
+    byModelKey.set(model.modelKey, model)
+  }
+  return [...byModelKey.values()]
+}
+
+function selectAtlasCloudSeedAudioCandidate(models: CustomModel[]): CustomModel {
+  const candidates = atlasCloudSeedAudioCandidates(models)
+  if (candidates.length === 0) {
+    throw new AtlasCloudSeedAudioConfigError(
+      'ATLAS_AUDIO_MODEL_NOT_CONFIGURED',
+      '請先在 /profile 啟用 AtlasCloud Seed Audio 1.0 配音模型',
+    )
+  }
+
+  if (candidates.length === 1) return candidates[0]
+
+  throw new AtlasCloudSeedAudioConfigError(
+    'ATLAS_AUDIO_PROVIDER_AMBIGUOUS',
+    '偵測到多個 AtlasCloud Seed Audio provider，請在 /profile 只保留一個配音 provider',
+  )
+}
+
+/**
+ * Resolve the one supported model for all new voice submissions.
+ *
+ * This intentionally filters the audio catalog to the canonical AtlasCloud
+ * Seed Audio model before choosing. A legacy FAL audio entry can therefore
+ * remain enabled while already-paid tasks drain, without making new requests
+ * ambiguous or allowing them to fall back to FAL.
+ *
+ * Members inherit the admin's Atlas audio model whenever their own catalog
+ * does not contain that exact model, even when they have unrelated models of
+ * their own. This is narrower than getUserModels' whole-catalog inheritance.
+ */
+export async function resolveAtlasCloudSeedAudioSelection(
+  userId: string,
+): Promise<ModelSelection> {
+  let selected: CustomModel
+  try {
+    const userConfig = await readUserConfig(userId)
+    const ownCandidates = atlasCloudSeedAudioCandidates(userConfig.models)
+    if (ownCandidates.length > 0) {
+      selected = selectAtlasCloudSeedAudioCandidate(ownCandidates)
+    } else {
+      const adminConfig = await readAdminConfig()
+      if (!adminConfig || adminConfig.userId === userId) {
+        throw new AtlasCloudSeedAudioConfigError(
+          'ATLAS_AUDIO_MODEL_NOT_CONFIGURED',
+          '請先在 /profile 啟用 AtlasCloud Seed Audio 1.0 配音模型',
+        )
+      }
+      selected = selectAtlasCloudSeedAudioCandidate(adminConfig.models)
+    }
+  } catch (error) {
+    if (error instanceof AtlasCloudSeedAudioConfigError) throw error
+    throw new AtlasCloudSeedAudioConfigError(
+      'ATLAS_AUDIO_CONFIG_INVALID',
+      'AtlasCloud 配音設定格式無效，請在 /profile 重新儲存模型設定',
+      error,
+    )
+  }
+
+  return {
+    provider: selected.provider,
+    modelId: selected.modelId,
+    modelKey: composeModelKey(selected.provider, selected.modelId),
+    mediaType: 'audio',
+  }
+}
+
 /**
  * Provider 配置
  *
@@ -405,6 +490,39 @@ export async function getProviderConfig(userId: string, providerId: string): Pro
     apiKey: decryptApiKey(provider.apiKey),
     baseUrl: normalizeProviderBaseUrl(provider.id, provider.baseUrl),
     apiMode: provider.apiMode,
+  }
+}
+
+/** Resolve and validate the complete AtlasCloud Seed Audio submission config. */
+export async function resolveAtlasCloudSeedAudioConfiguration(userId: string): Promise<{
+  selection: ModelSelection
+  provider: ProviderConfig
+}> {
+  const selection = await resolveAtlasCloudSeedAudioSelection(userId)
+  try {
+    const provider = await getProviderConfig(userId, selection.provider)
+    return { selection, provider }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    if (message.startsWith('PROVIDER_NOT_FOUND:')) {
+      throw new AtlasCloudSeedAudioConfigError(
+        'ATLAS_AUDIO_PROVIDER_NOT_CONFIGURED',
+        `請先在 /profile 設定 ${selection.provider} provider`,
+        error,
+      )
+    }
+    if (message.startsWith('PROVIDER_API_KEY_MISSING:')) {
+      throw new AtlasCloudSeedAudioConfigError(
+        'ATLAS_AUDIO_API_KEY_MISSING',
+        `請先在 /profile 填入 ${selection.provider} API Key`,
+        error,
+      )
+    }
+    throw new AtlasCloudSeedAudioConfigError(
+      'ATLAS_AUDIO_CONFIG_INVALID',
+      `無法讀取 ${selection.provider} 憑證，請在 /profile 重新儲存 API Key`,
+      error,
+    )
   }
 }
 

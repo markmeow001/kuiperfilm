@@ -82,6 +82,8 @@
     "completedShots": "{count} completed",
     "failedShots": "{count} failed",
     "generateAll": "Generate All Videos",
+    "batchMovedToV2": "Batch generation has moved to the V2 storyboard.",
+    "openV2Storyboard": "Open V2 storyboard",
     "batchConfigTitle": "Batch Generation Settings",
     "batchConfigDesc": "Choose model and parameters before generating all videos.",
     "confirmGenerateAll": "Confirm and Generate All",

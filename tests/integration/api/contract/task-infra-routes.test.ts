@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { TASK_STATUS } from '@/lib/task/types'
+import { TASK_STATUS, TASK_TYPE } from '@/lib/task/types'
 import { buildMockRequest } from '../../../helpers/request'
 
 type AuthState = {
@@ -11,12 +11,26 @@ type TaskRecord = {
   id: string
   userId: string
   projectId: string
+  episodeId: string | null
   type: string
   targetType: string
   targetId: string
   status: string
+  progress: number
+  attempt: number
+  maxAttempts: number
   errorCode: string | null
   errorMessage: string | null
+  billingInfo: Record<string, unknown> | null
+  payload: Record<string, unknown> | null
+  result: Record<string, unknown> | null
+  externalId: string | null
+  dedupeKey: string | null
+  queuedAt: Date | null
+  startedAt: Date | null
+  finishedAt: Date | null
+  createdAt: Date
+  updatedAt: Date
 }
 
 const authState = vi.hoisted<AuthState>(() => ({
@@ -29,6 +43,7 @@ const dismissFailedTasksMock = vi.hoisted(() => vi.fn())
 const getTaskByIdMock = vi.hoisted(() => vi.fn())
 const cancelTaskMock = vi.hoisted(() => vi.fn())
 const removeTaskJobMock = vi.hoisted(() => vi.fn(async () => true))
+const reconcileVoiceLineTerminalStateMock = vi.hoisted(() => vi.fn(async () => 'deleted'))
 const publishTaskEventMock = vi.hoisted(() => vi.fn(async () => undefined))
 const queryTaskTargetStatesMock = vi.hoisted(() => vi.fn())
 const withPrismaRetryMock = vi.hoisted(() => vi.fn(async <T>(fn: () => Promise<T>) => await fn()))
@@ -75,6 +90,10 @@ vi.mock('@/lib/task/queues', () => ({
   removeTaskJob: removeTaskJobMock,
 }))
 
+vi.mock('@/lib/voice/voice-line-publication', () => ({
+  reconcileVoiceLineTerminalState: reconcileVoiceLineTerminalStateMock,
+}))
+
 vi.mock('@/lib/task/publisher', () => ({
   publishTaskEvent: publishTaskEventMock,
   getProjectChannel: vi.fn((projectId: string) => `project:${projectId}`),
@@ -108,12 +127,26 @@ const baseTask: TaskRecord = {
   id: 'task-1',
   userId: 'user-1',
   projectId: 'project-1',
+  episodeId: 'episode-1',
   type: 'IMAGE_CHARACTER',
   targetType: 'CharacterAppearance',
   targetId: 'appearance-1',
   status: TASK_STATUS.FAILED,
+  progress: 15,
+  attempt: 1,
+  maxAttempts: 3,
   errorCode: null,
   errorMessage: null,
+  billingInfo: null,
+  payload: { prompt: 'private prompt', panelIds: ['panel-1'] },
+  result: { imageUrl: 'private result' },
+  externalId: 'provider-request-1',
+  dedupeKey: 'private-dedupe-key',
+  queuedAt: new Date('2026-08-08T10:00:00.000Z'),
+  startedAt: null,
+  finishedAt: null,
+  createdAt: new Date('2026-08-08T10:00:00.000Z'),
+  updatedAt: new Date('2026-08-08T10:01:00.000Z'),
 }
 
 describe('api contract - task infra routes (behavior)', () => {
@@ -176,10 +209,101 @@ describe('api contract - task infra routes (behavior)', () => {
     const payload = await res.json() as { tasks: TaskRecord[] }
     expect(payload.tasks).toHaveLength(1)
     expect(payload.tasks[0]?.id).toBe('task-1')
+    const safeTask = payload.tasks[0] as unknown as Record<string, unknown>
+    expect(safeTask.payload).toEqual({ panelIds: ['panel-1'] })
+    expect(JSON.stringify(safeTask)).not.toContain('private prompt')
+    expect(safeTask.result).toBeUndefined()
+    expect(safeTask.billingInfo).toBeUndefined()
+    expect(safeTask.externalId).toBeUndefined()
+    expect(safeTask.dedupeKey).toBeUndefined()
     expect(queryTasksMock).toHaveBeenCalledWith(expect.objectContaining({
       projectId: 'project-1',
       targetId: 'appearance-1',
-      limit: 20,
+      limit: 21,
+    }))
+  })
+
+  it('GET /api/tasks?scope=summary: personal cursor page -> DB ownership filter and allowlisted DTO', async () => {
+    const { GET } = await import('@/app/api/tasks/route')
+    const cancelled = {
+      ...baseTask,
+      id: 'task-cancelled',
+      status: TASK_STATUS.FAILED,
+      errorCode: 'TASK_CANCELLED',
+      errorMessage: 'Task cancelled by user',
+      billingInfo: {
+        billable: true,
+        source: 'task',
+        taskType: 'video_panel',
+        apiType: 'video',
+        model: 'atlascloud::seedance-2.0-r2v',
+        quantity: 1,
+        unit: 'video',
+        maxFrozenCost: 1.5,
+        action: 'video.generate',
+        status: 'rolled_back',
+      },
+    }
+    queryTasksMock.mockResolvedValue([
+      cancelled,
+      { ...baseTask, id: 'task-next' },
+    ])
+
+    const req = buildMockRequest({
+      path: '/api/tasks?scope=summary&episodeId=episode-1&jobStatus=cancelled&type=video_panel&cursor=task-before',
+      method: 'GET',
+      query: { limit: 1 },
+    })
+    const res = await GET(req, { params: Promise.resolve({}) })
+    expect(res.status).toBe(200)
+
+    const payload = await res.json() as {
+      tasks: Array<Record<string, unknown>>
+      nextCursor: string | null
+    }
+    expect(payload.nextCursor).toBe('task-cancelled')
+    expect(payload.tasks).toHaveLength(1)
+    expect(payload.tasks[0]).toMatchObject({
+      id: 'task-cancelled',
+      status: 'cancelled',
+      model: 'atlascloud::seedance-2.0-r2v',
+      billingStatus: 'refunded',
+      refund: { status: 'refunded', amount: null },
+      cost: { estimated: 1.5, actual: 0, currency: 'CNY' },
+    })
+    expect(payload.tasks[0]).not.toHaveProperty('payload')
+    expect(payload.tasks[0]).not.toHaveProperty('result')
+    expect(payload.tasks[0]).not.toHaveProperty('externalId')
+    expect(payload.tasks[0]).not.toHaveProperty('dedupeKey')
+    expect(queryTasksMock).toHaveBeenCalledWith(expect.objectContaining({
+      userId: 'user-1',
+      episodeId: 'episode-1',
+      jobStatus: ['cancelled'],
+      type: ['video_panel'],
+      cursor: 'task-before',
+      limit: 2,
+    }))
+  })
+
+  it('GET /api/tasks?scope=summary without jobStatus -> excludes dismissed in the DB query', async () => {
+    const { GET } = await import('@/app/api/tasks/route')
+    queryTasksMock.mockResolvedValue([])
+
+    const req = buildMockRequest({
+      path: '/api/tasks?scope=summary',
+      method: 'GET',
+    })
+    const res = await GET(req, { params: Promise.resolve({}) })
+
+    expect(res.status).toBe(200)
+    expect(queryTasksMock).toHaveBeenCalledWith(expect.objectContaining({
+      userId: 'user-1',
+      status: [
+        TASK_STATUS.QUEUED,
+        TASK_STATUS.PROCESSING,
+        TASK_STATUS.COMPLETED,
+        TASK_STATUS.FAILED,
+      ],
     }))
   })
 
@@ -274,6 +398,41 @@ describe('api contract - task infra routes (behavior)', () => {
 
     const payload = await res.json() as { task: TaskRecord }
     expect(payload.task.id).toBe('task-1')
+    const safeTask = payload.task as unknown as Record<string, unknown>
+    expect(safeTask.payload).toBeUndefined()
+    expect(safeTask.billingInfo).toBeUndefined()
+    expect(safeTask.externalId).toBeUndefined()
+    expect(safeTask.dedupeKey).toBeUndefined()
+    expect(safeTask.result).toEqual({ imageUrl: 'private result' })
+  })
+
+  it('GET /api/tasks/[taskId]: revoked original submitter cannot read a real-project task', async () => {
+    const route = await import('@/app/api/tasks/[taskId]/route')
+    getTaskByIdMock.mockResolvedValueOnce(baseTask)
+    authState.projectAccessAllowed = false
+
+    const req = buildMockRequest({ path: '/api/tasks/task-1', method: 'GET' })
+    const res = await route.GET(req, { params: Promise.resolve({ taskId: 'task-1' }) })
+
+    expect(res.status).toBe(404)
+  })
+
+  it('GET /api/tasks/[taskId]: virtual task is owner-only', async () => {
+    const route = await import('@/app/api/tasks/[taskId]/route')
+    getTaskByIdMock.mockResolvedValueOnce({ ...baseTask, projectId: 'playground' })
+
+    const ownerReq = buildMockRequest({ path: '/api/tasks/task-1', method: 'GET' })
+    const ownerRes = await route.GET(ownerReq, { params: Promise.resolve({ taskId: 'task-1' }) })
+    expect(ownerRes.status).toBe(200)
+
+    getTaskByIdMock.mockResolvedValueOnce({
+      ...baseTask,
+      projectId: 'playground',
+      userId: 'other-user',
+    })
+    const otherReq = buildMockRequest({ path: '/api/tasks/task-1', method: 'GET' })
+    const otherRes = await route.GET(otherReq, { params: Promise.resolve({ taskId: 'task-1' }) })
+    expect(otherRes.status).toBe(404)
   })
 
   it('GET /api/tasks/[taskId]?includeEvents=1: returns lifecycle events for refresh replay', async () => {
@@ -297,6 +456,7 @@ describe('api contract - task infra routes (behavior)', () => {
           stepIndex: 1,
           stepTotal: 3,
           message: 'running',
+          prompt: 'private worker prompt',
         },
       },
     ]
@@ -314,6 +474,8 @@ describe('api contract - task infra routes (behavior)', () => {
     expect(payload.task.id).toBe('task-1')
     expect(payload.events).toHaveLength(1)
     expect(payload.events[0]?.id).toBe('11')
+    expect((payload.events[0]?.payload as Record<string, unknown>).message).toBe('running')
+    expect((payload.events[0]?.payload as Record<string, unknown>).prompt).toBeUndefined()
     expect(listTaskLifecycleEventsMock).toHaveBeenCalledWith('task-1', 1200)
   })
 
@@ -325,6 +487,7 @@ describe('api contract - task infra routes (behavior)', () => {
     expect(res.status).toBe(200)
 
     expect(removeTaskJobMock).toHaveBeenCalledWith('task-1')
+    expect(reconcileVoiceLineTerminalStateMock).not.toHaveBeenCalled()
     expect(publishTaskEventMock).toHaveBeenCalledWith(expect.objectContaining({
       taskId: 'task-1',
       projectId: 'project-1',
@@ -333,6 +496,187 @@ describe('api contract - task infra routes (behavior)', () => {
         stage: 'cancelled',
       }),
     }))
+    const payload = await res.json() as { task: Record<string, unknown> }
+    expect(payload.task.payload).toBeUndefined()
+    expect(payload.task.billingInfo).toBeUndefined()
+    expect(payload.task.externalId).toBeUndefined()
+    expect(payload.task.dedupeKey).toBeUndefined()
+  })
+
+  it('DELETE /api/tasks/[taskId]: cancelled delayed VOICE_LINE immediately reconciles its durable marker', async () => {
+    const { DELETE } = await import('@/app/api/tasks/[taskId]/route')
+    const voiceTask = {
+      ...baseTask,
+      externalId: null,
+      type: 'voice_line',
+      targetType: 'NovelPromotionVoiceLine',
+      targetId: 'line-1',
+      payload: {
+        episodeId: 'episode-1',
+        lineId: 'line-1',
+        sourceFingerprint: 'f'.repeat(64),
+        meta: { locale: 'zh' },
+      },
+    }
+    getTaskByIdMock.mockResolvedValueOnce(voiceTask)
+    cancelTaskMock.mockResolvedValueOnce({
+      task: { ...voiceTask, status: TASK_STATUS.FAILED, errorCode: 'TASK_CANCELLED' },
+      cancelled: true,
+    })
+
+    const req = buildMockRequest({ path: '/api/tasks/task-1', method: 'DELETE' })
+    const res = await DELETE(req, { params: Promise.resolve({ taskId: 'task-1' }) })
+
+    expect(res.status).toBe(200)
+    expect(removeTaskJobMock).toHaveBeenCalledWith('task-1')
+    expect(reconcileVoiceLineTerminalStateMock).toHaveBeenCalledWith(expect.objectContaining({
+      id: 'task-1',
+      data: expect.objectContaining({
+        taskId: 'task-1',
+        type: 'voice_line',
+        projectId: 'project-1',
+        episodeId: 'episode-1',
+        targetType: 'NovelPromotionVoiceLine',
+        targetId: 'line-1',
+      }),
+    }))
+  })
+
+  it('DELETE /api/tasks/[taskId]: voice cleanup failure keeps the delayed job available for terminal retry', async () => {
+    const { DELETE } = await import('@/app/api/tasks/[taskId]/route')
+    const voiceTask = {
+      ...baseTask,
+      externalId: null,
+      type: 'voice_line',
+      targetType: 'NovelPromotionVoiceLine',
+      targetId: 'line-1',
+      payload: {
+        episodeId: 'episode-1',
+        lineId: 'line-1',
+        sourceFingerprint: 'f'.repeat(64),
+        meta: { locale: 'zh' },
+      },
+    }
+    getTaskByIdMock.mockResolvedValueOnce(voiceTask)
+    cancelTaskMock.mockResolvedValueOnce({
+      task: { ...voiceTask, status: TASK_STATUS.FAILED, errorCode: 'TASK_CANCELLED' },
+      cancelled: true,
+    })
+    reconcileVoiceLineTerminalStateMock.mockRejectedValueOnce(new Error('storage unavailable'))
+
+    const req = buildMockRequest({ path: '/api/tasks/task-1', method: 'DELETE' })
+    const res = await DELETE(req, { params: Promise.resolve({ taskId: 'task-1' }) })
+
+    expect(res.status).toBe(200)
+    expect(await res.json()).toMatchObject({ success: true, cancelled: true })
+    expect(removeTaskJobMock).not.toHaveBeenCalled()
+  })
+
+  it('DELETE /api/tasks/[taskId]: repeated cancel retries terminal voice cleanup before removing the job', async () => {
+    const { DELETE } = await import('@/app/api/tasks/[taskId]/route')
+    const voiceTask = {
+      ...baseTask,
+      externalId: null,
+      type: 'voice_line',
+      targetType: 'NovelPromotionVoiceLine',
+      targetId: 'line-1',
+      status: TASK_STATUS.FAILED,
+      errorCode: 'TASK_CANCELLED',
+      payload: {
+        episodeId: 'episode-1',
+        lineId: 'line-1',
+        sourceFingerprint: 'f'.repeat(64),
+        meta: { locale: 'zh' },
+      },
+    }
+    getTaskByIdMock.mockResolvedValueOnce(voiceTask)
+    cancelTaskMock.mockResolvedValueOnce({ task: voiceTask, cancelled: false })
+
+    const req = buildMockRequest({ path: '/api/tasks/task-1', method: 'DELETE' })
+    const res = await DELETE(req, { params: Promise.resolve({ taskId: 'task-1' }) })
+
+    expect(res.status).toBe(200)
+    expect(reconcileVoiceLineTerminalStateMock).toHaveBeenCalledTimes(1)
+    expect(removeTaskJobMock).toHaveBeenCalledWith('task-1')
+  })
+
+  it('DELETE /api/tasks/[taskId]: publish failure does not mask durable cancellation success', async () => {
+    const { DELETE } = await import('@/app/api/tasks/[taskId]/route')
+    publishTaskEventMock.mockRejectedValueOnce(new Error('redis unavailable'))
+
+    const req = buildMockRequest({ path: '/api/tasks/task-1', method: 'DELETE' })
+    const res = await DELETE(req, { params: Promise.resolve({ taskId: 'task-1' }) })
+
+    expect(res.status).toBe(200)
+    expect(await res.json()).toMatchObject({ success: true, cancelled: true })
+    expect(removeTaskJobMock).toHaveBeenCalledWith('task-1')
+    expect(publishTaskEventMock).toHaveBeenCalledTimes(1)
+  })
+
+  it.each([
+    'FAL:VOICE:fal-ai/index-tts-2/text-to-speech:req-1',
+    'FAL:VOICE:CLAIM:claim-1:owner-1',
+    'malformed-paid-handoff',
+  ])('DELETE /api/tasks/[taskId]: protected VoiceLine handoff %s -> 409 and zero mutation', async (externalId) => {
+    const { DELETE } = await import('@/app/api/tasks/[taskId]/route')
+    const voiceTask = {
+      ...baseTask,
+      type: TASK_TYPE.VOICE_LINE,
+      targetType: 'NovelPromotionVoiceLine',
+      targetId: 'line-1',
+      status: TASK_STATUS.PROCESSING,
+      externalId,
+      payload: {
+        episodeId: 'episode-1',
+        lineId: 'line-1',
+        sourceFingerprint: 'f'.repeat(64),
+        meta: { locale: 'zh' },
+      },
+    }
+    getTaskByIdMock.mockResolvedValueOnce(voiceTask)
+    cancelTaskMock.mockResolvedValueOnce({
+      task: voiceTask,
+      cancelled: false,
+      providerHandoffProtected: true,
+    })
+
+    const req = buildMockRequest({ path: '/api/tasks/task-1', method: 'DELETE' })
+    const res = await DELETE(req, { params: Promise.resolve({ taskId: 'task-1' }) })
+
+    expect(res.status).toBe(409)
+    expect(await res.json()).toMatchObject({
+      error: {
+        details: { code: 'VOICE_PROVIDER_CANCEL_RECONCILIATION_REQUIRED' },
+      },
+    })
+    expect(removeTaskJobMock).not.toHaveBeenCalled()
+    expect(reconcileVoiceLineTerminalStateMock).not.toHaveBeenCalled()
+    expect(publishTaskEventMock).not.toHaveBeenCalled()
+  })
+
+  it('DELETE /api/tasks/[taskId]: original submitter downgraded to viewer cannot cancel a real-project task', async () => {
+    const { DELETE } = await import('@/app/api/tasks/[taskId]/route')
+    authState.projectAccessAllowed = false
+
+    const req = buildMockRequest({ path: '/api/tasks/task-1', method: 'DELETE' })
+    const res = await DELETE(req, { params: Promise.resolve({ taskId: 'task-1' }) })
+
+    expect(res.status).toBe(404)
+    expect(cancelTaskMock).not.toHaveBeenCalled()
+    expect(removeTaskJobMock).not.toHaveBeenCalled()
+    expect(publishTaskEventMock).not.toHaveBeenCalled()
+  })
+
+  it('DELETE /api/tasks/[taskId]: virtual-project tasks remain submitter-only', async () => {
+    const { DELETE } = await import('@/app/api/tasks/[taskId]/route')
+    authState.projectAccessAllowed = false
+    getTaskByIdMock.mockResolvedValueOnce({ ...baseTask, projectId: 'playground' })
+
+    const req = buildMockRequest({ path: '/api/tasks/task-1', method: 'DELETE' })
+    const res = await DELETE(req, { params: Promise.resolve({ taskId: 'task-1' }) })
+
+    expect(res.status).toBe(200)
+    expect(cancelTaskMock).toHaveBeenCalledWith('task-1')
   })
 
   it('GET /api/sse: missing projectId -> 400; unauthenticated with projectId -> 401', async () => {

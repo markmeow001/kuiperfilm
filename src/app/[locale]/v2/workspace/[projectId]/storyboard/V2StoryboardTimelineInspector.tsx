@@ -17,19 +17,23 @@ import { useTranslations } from 'next-intl'
 import { MultiShotBindingsRail } from './MultiShotBindingsRail'
 import type {
   PanelLike,
-  EpisodeBinding,
   EpisodeWithNumber,
 } from './storyboard-client-helpers'
 import type { CharacterRosterEntry } from './V2GroupsLayout'
+import {
+  resolveActiveCharacterAppearance,
+  type ActiveCharacterAppearanceBindingState,
+} from '../subjects/active-character-appearance'
 
 export interface V2StoryboardTimelineInspectorProps {
   projectId: string
   selected: PanelLike | null
   selectedGroupTaskId: string | null
   selectedGroupLabel: string | null
+  currentEpisodeId: string | null
   currentEpisode: EpisodeWithNumber | null
   characterRoster: CharacterRosterEntry[]
-  episodeBindings: EpisodeBinding[]
+  appearanceBindingState: ActiveCharacterAppearanceBindingState
 }
 
 export function V2StoryboardTimelineInspector(props: V2StoryboardTimelineInspectorProps) {
@@ -39,9 +43,10 @@ export function V2StoryboardTimelineInspector(props: V2StoryboardTimelineInspect
     selected,
     selectedGroupTaskId,
     selectedGroupLabel,
+    currentEpisodeId,
     currentEpisode,
     characterRoster,
-    episodeBindings,
+    appearanceBindingState,
   } = props
 
   return (
@@ -63,15 +68,6 @@ export function V2StoryboardTimelineInspector(props: V2StoryboardTimelineInspect
             </div>
           ) : null}
         </div>
-        {/*
-          Each panel character is rendered with the appearance the
-          worker WOULD use right now — looks up
-          EpisodeCharacter(currentEpisodeId, characterId) and falls
-          back to characterRoster[0].appearances[0] when no
-          binding exists. Match exactly the resolution priority in
-          multi-shot-video-b-path.ts:820-855 so the chip reflects
-          the actual generation outcome (no surprises).
-        */}
         {Array.isArray(selected?.characters) && selected.characters.length > 0 ? (
           <div className="space-y-1.5">
             {selected.characters.map((ref, i) => {
@@ -84,59 +80,30 @@ export function V2StoryboardTimelineInspector(props: V2StoryboardTimelineInspect
               const name = typeof ref === 'string'
                 ? ref
                 : ref.name ?? ''
-              const appearanceHint = typeof ref === 'string'
-                ? null
-                : ref.appearance ?? null
               const character = characterRoster.find(
                 (c) => (c.name ?? '').trim().toLowerCase() === name.trim().toLowerCase(),
               )
               const appearances = character?.appearances ?? []
-              const binding = episodeBindings.find(
-                (b) => b.characterId === character?.id,
-              )
-              // Resolution priority (mirrors worker
-              // collectPanelReferenceImages) — 2026-05-13 reordered:
-              //   1. panel.characters[i].appearance hint matched against
-              //      changeReason (per-shot LLM intent wins)
-              //   2. EpisodeCharacter binding (this episode, fallback
-              //      when LLM did not pick)
-              //   3. appearances[0]
-              let resolved = null as
-                | { id: string | null; label: string; imageUrl: string | null; isDefault: boolean }
-                | null
-              if (appearanceHint) {
-                const ap = appearances.find(
-                  (a) => (a.changeReason ?? '').toLowerCase() === appearanceHint.toLowerCase(),
-                )
-                if (ap) {
-                  resolved = {
-                    id: ap.id ?? null,
-                    label: ap.changeReason || appearanceHint,
-                    imageUrl: ap.imageUrl ?? null,
-                    isDefault: false,
+              const activeResolution = character
+                ? resolveActiveCharacterAppearance({
+                    characterId: character.id,
+                    appearances,
+                    episodeId: currentEpisodeId,
+                    bindingState: appearanceBindingState,
+                  })
+                : null
+              const resolved = activeResolution?.status === 'resolved'
+                ? {
+                    id: activeResolution.appearance.id ?? null,
+                    label:
+                      activeResolution.appearance.changeReason
+                      || t('cast.appearanceLabel', {
+                        n: (activeResolution.appearance.appearanceIndex ?? 0) + 1,
+                      }),
+                    imageUrl: activeResolution.appearance.imageUrl ?? null,
+                    isDefault: activeResolution.source === 'default',
                   }
-                }
-              }
-              if (!resolved && binding?.appearanceId) {
-                const ap = appearances.find((a) => a.id === binding.appearanceId)
-                if (ap) {
-                  resolved = {
-                    id: ap.id ?? null,
-                    label: ap.changeReason || t('cast.appearanceLabel', { n: (ap.appearanceIndex ?? 0) + 1 }),
-                    imageUrl: ap.imageUrl ?? null,
-                    isDefault: false,
-                  }
-                }
-              }
-              if (!resolved && appearances.length > 0) {
-                const ap = appearances[0]
-                resolved = {
-                  id: ap.id ?? null,
-                  label: ap.changeReason || t('cast.initialAppearance'),
-                  imageUrl: ap.imageUrl ?? null,
-                  isDefault: true,
-                }
-              }
+                : null
               return (
                 <div
                   key={`${name}-${i}`}

@@ -60,6 +60,7 @@ export interface V2StoryboardTimelineShotProps {
   failedPanelVideoIds: Map<string, FailedTaskMeta>
   setZoomImageUrl: Dispatch<SetStateAction<string | null>>
   canEdit: boolean
+  appearanceGenerationBlocked: boolean
 }
 
 export function V2StoryboardTimelineShot(props: V2StoryboardTimelineShotProps) {
@@ -87,6 +88,7 @@ export function V2StoryboardTimelineShot(props: V2StoryboardTimelineShotProps) {
     failedPanelVideoIds,
     setZoomImageUrl,
     canEdit,
+    appearanceGenerationBlocked,
   } = props
 
   return (
@@ -96,7 +98,7 @@ export function V2StoryboardTimelineShot(props: V2StoryboardTimelineShotProps) {
         <button
           type="button"
           onClick={() => onSubmitMultiShot()}
-          disabled={multiShotState.status === 'submitting' || !canMultiShot}
+          disabled={multiShotState.status === 'submitting' || !canMultiShot || appearanceGenerationBlocked}
           className="flex items-center gap-1.5 rounded-sm border border-primary-500/40 bg-primary-500/10 px-3 py-1.5 font-mono text-[14px] tracking-wider text-primary-500 transition-all hover:bg-primary-500/20 disabled:cursor-not-allowed disabled:opacity-50"
           title={(() => {
             const m = project?.novelPromotionData?.videoModel ?? ''
@@ -169,9 +171,9 @@ export function V2StoryboardTimelineShot(props: V2StoryboardTimelineShotProps) {
       ) : selected?.videoUrl && !selected?.imageUrl ? (
         <button
           type="button"
-          disabled={!selected || regenPanel.isPending || isCurrentPanelImageInFlight || !canEdit}
+          disabled={!selected || regenPanel.isPending || isCurrentPanelImageInFlight || !canEdit || appearanceGenerationBlocked}
           onClick={() => {
-            if (!selected) return
+            if (!selected || appearanceGenerationBlocked) return
             const panelIdAtSubmit = selected.id
             regenPanel.mutate(
               { panelId: panelIdAtSubmit },
@@ -332,9 +334,9 @@ export function V2StoryboardTimelineShot(props: V2StoryboardTimelineShotProps) {
       <div className="mt-5 flex items-center gap-3">
         <button
           type="button"
-          disabled={!selected || regenPanel.isPending || !canEdit}
+          disabled={!selected || regenPanel.isPending || !canEdit || appearanceGenerationBlocked}
           onClick={() => {
-            if (!selected) return
+            if (!selected || appearanceGenerationBlocked) return
             const panelIdAtSubmit = selected.id
             regenPanel.mutate(
               { panelId: panelIdAtSubmit },
@@ -363,7 +365,7 @@ export function V2StoryboardTimelineShot(props: V2StoryboardTimelineShotProps) {
         </button>
         <button
           type="button"
-          disabled={!selected || !selected.imageUrl || generateVideo.isPending || isCurrentPanelVideoInFlight || !canEdit}
+          disabled={!selected || !selected.imageUrl || generateVideo.isPending || isCurrentPanelVideoInFlight || !canEdit || appearanceGenerationBlocked}
           onClick={() => onGenerateVideo()}
           title={
             !selected?.imageUrl
@@ -395,7 +397,7 @@ export function V2StoryboardTimelineShot(props: V2StoryboardTimelineShotProps) {
         <span className="shrink-0">{t('gallery.fal.label')}</span>
         <button
           type="button"
-          disabled={!selected || !selected.imageUrl || generateVideo.isPending || isCurrentPanelVideoInFlight || !canEdit}
+          disabled={!selected || !selected.imageUrl || generateVideo.isPending || isCurrentPanelVideoInFlight || !canEdit || appearanceGenerationBlocked}
           onClick={() => onGenerateVideo('fal::bytedance/seedance-2.0/image-to-video')}
           title={
             !selected?.imageUrl
@@ -409,7 +411,7 @@ export function V2StoryboardTimelineShot(props: V2StoryboardTimelineShotProps) {
         </button>
         <button
           type="button"
-          disabled={!selected || !selected.imageUrl || generateVideo.isPending || isCurrentPanelVideoInFlight || !canEdit}
+          disabled={!selected || !selected.imageUrl || generateVideo.isPending || isCurrentPanelVideoInFlight || !canEdit || appearanceGenerationBlocked}
           onClick={() => onGenerateVideo('fal::bytedance/seedance-2.0/fast/image-to-video')}
           title={
             !selected?.imageUrl

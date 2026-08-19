@@ -3,14 +3,26 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { TASK_TYPE, type TaskJobData } from '@/lib/task/types'
 
 type WorkerProcessor = (job: Job<TaskJobData>) => Promise<unknown>
+type WorkerLifecycleOptions = {
+  completionClaim?: (input: {
+    taskId: string
+    result: Record<string, unknown> | null
+    billing?: { billingInfo?: unknown; billedAt?: Date | null }
+  }) => Promise<boolean>
+  terminalReconcile?: () => Promise<unknown>
+}
 
 type PanelRow = {
   id: string
+  storyboardId: string
+  panelIndex: number
   videoUrl: string | null
   imageUrl: string | null
   videoPrompt: string | null
   description: string | null
   firstLastFramePrompt: string | null
+  srtSegment: string | null
+  storyboard: { id: string; episodeId: string }
 }
 
 const workerState = vi.hoisted(() => ({
@@ -19,8 +31,17 @@ const workerState = vi.hoisted(() => ({
 
 const reportTaskProgressMock = vi.hoisted(() => vi.fn(async () => undefined))
 const withTaskLifecycleMock = vi.hoisted(() =>
-  vi.fn(async (job: Job<TaskJobData>, handler: WorkerProcessor) => await handler(job)),
+  vi.fn(async (
+    job: Job<TaskJobData>,
+    handler: WorkerProcessor,
+    _options?: WorkerLifecycleOptions,
+  ) => await handler(job)),
 )
+
+const episodePackagePublicationMock = vi.hoisted(() => ({
+  claimEpisodePackageCompletion: vi.fn(async () => true),
+  reconcileEpisodePackageTerminalState: vi.fn(async () => 'deleted'),
+}))
 
 const utilsMock = vi.hoisted(() => ({
   assertTaskActive: vi.fn(async () => undefined),
@@ -35,11 +56,18 @@ const prismaMock = vi.hoisted(() => ({
   novelPromotionPanel: {
     findUnique: vi.fn(),
     findFirst: vi.fn(),
-    update: vi.fn(async () => undefined),
+    update: vi.fn(async (_args?: unknown) => undefined),
   },
   novelPromotionVoiceLine: {
     findUnique: vi.fn(),
   },
+}))
+
+const projectScopeMock = vi.hoisted(() => ({
+  requireNovelPromotionPanelInProject: vi.fn(),
+  requireNovelPromotionVoiceLineInProject: vi.fn(),
+  findNovelPromotionPanelByStoryboardIndexInProject: vi.fn(),
+  updateNovelPromotionPanelInProject: vi.fn(),
 }))
 
 vi.mock('bullmq', () => ({
@@ -69,8 +97,10 @@ vi.mock('@/lib/workers/shared', () => ({
   reportTaskProgress: reportTaskProgressMock,
   withTaskLifecycle: withTaskLifecycleMock,
 }))
+vi.mock('@/lib/novel-promotion/episode-package-publication', () => episodePackagePublicationMock)
 vi.mock('@/lib/workers/utils', () => utilsMock)
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }))
+vi.mock('@/lib/novel-promotion/project-scope', () => projectScopeMock)
 vi.mock('@/lib/media/outbound-image', () => ({
   normalizeToBase64ForGeneration: vi.fn(async (input: string) => input),
 }))
@@ -97,11 +127,15 @@ vi.mock('@/lib/style-profile/loader', () => styleProfileLoaderMock)
 function buildPanel(overrides?: Partial<PanelRow>): PanelRow {
   return {
     id: 'panel-1',
+    storyboardId: 'storyboard-1',
+    panelIndex: 0,
     videoUrl: 'cos/base-video.mp4',
     imageUrl: 'cos/panel-image.png',
     videoPrompt: 'panel prompt',
     description: 'panel description',
     firstLastFramePrompt: null,
+    srtSegment: null,
+    storyboard: { id: 'storyboard-1', episodeId: 'episode-1' },
     ...(overrides || {}),
   }
 }
@@ -134,9 +168,28 @@ describe('worker video processor behavior', () => {
 
     prismaMock.novelPromotionPanel.findUnique.mockResolvedValue(buildPanel())
     prismaMock.novelPromotionPanel.findFirst.mockResolvedValue(buildPanel())
+    projectScopeMock.requireNovelPromotionPanelInProject.mockImplementation(async () => {
+      const panel = await prismaMock.novelPromotionPanel.findUnique()
+      if (!panel) throw new Error('NOVEL_PROMOTION_PROJECT_SCOPE_MISMATCH')
+      return panel
+    })
+    projectScopeMock.findNovelPromotionPanelByStoryboardIndexInProject.mockImplementation(
+      async () => await prismaMock.novelPromotionPanel.findFirst(),
+    )
+    projectScopeMock.updateNovelPromotionPanelInProject.mockImplementation(
+      async (_projectId: string, panelId: string, data: Record<string, unknown>) => {
+        await prismaMock.novelPromotionPanel.update({ where: { id: panelId }, data })
+      },
+    )
     prismaMock.novelPromotionVoiceLine.findUnique.mockResolvedValue({
       id: 'line-1',
+      episodeId: 'episode-1',
       audioUrl: 'cos/line-1.mp3',
+    })
+    projectScopeMock.requireNovelPromotionVoiceLineInProject.mockImplementation(async () => {
+      const voiceLine = await prismaMock.novelPromotionVoiceLine.findUnique()
+      if (!voiceLine) throw new Error('NOVEL_PROMOTION_PROJECT_SCOPE_MISMATCH')
+      return voiceLine
     })
 
     const mod = await import('@/lib/workers/video.worker')
@@ -200,7 +253,7 @@ describe('worker video processor behavior', () => {
       targetId: 'panel-missing',
     })
 
-    await expect(processor!(job)).rejects.toThrow('Lip-sync panel not found')
+    await expect(processor!(job)).rejects.toThrow('NOVEL_PROMOTION_PROJECT_SCOPE_MISMATCH')
   })
 
   it('LIP_SYNC: 正常路径写回 lipSyncVideoUrl 并清理 lipSyncTaskId', async () => {
@@ -249,6 +302,26 @@ describe('worker video processor behavior', () => {
     })
 
     await expect(processor!(unsupportedJob)).rejects.toThrow('Unsupported video task type')
+  })
+
+  it('EPISODE_STITCH_MP4: wires terminal reconciliation without changing other task handlers', async () => {
+    const processor = workerState.processor
+    expect(processor).toBeTruthy()
+    withTaskLifecycleMock.mockImplementationOnce(async () => undefined)
+    const job = buildJob({
+      type: TASK_TYPE.EPISODE_STITCH_MP4,
+      targetType: 'NovelPromotionEpisode',
+      targetId: 'episode-1',
+      payload: { episodeId: 'episode-1', sourceFingerprint: 'f'.repeat(64) },
+    })
+
+    await processor!(job)
+
+    const options = withTaskLifecycleMock.mock.calls.at(-1)?.[2]
+    expect(options?.completionClaim).toEqual(expect.any(Function))
+    expect(options?.terminalReconcile).toEqual(expect.any(Function))
+    await options!.terminalReconcile!()
+    expect(episodePackagePublicationMock.reconcileEpisodePackageTerminalState).toHaveBeenCalledWith(job)
   })
 
   // Bug-4 chokepoint approach: video handler 把 raw prompt + raw styleProfile 透传给

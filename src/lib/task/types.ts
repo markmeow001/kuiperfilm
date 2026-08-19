@@ -46,6 +46,7 @@ export const TASK_TYPE = {
   VOICE_LINE: 'voice_line',
   VOICE_DESIGN: 'voice_design',
   ASSET_HUB_VOICE_DESIGN: 'asset_hub_voice_design',
+  AUTO_GROUP_MULTI_SHOT: 'auto_group_multi_shot',
   REGENERATE_STORYBOARD_TEXT: 'regenerate_storyboard_text',
   INSERT_PANEL: 'insert_panel',
   PANEL_VARIANT: 'panel_variant',
@@ -117,6 +118,14 @@ export type QueueType = 'image' | 'video' | 'voice' | 'text'
 
 export type BillingMode = 'OFF' | 'SHADOW' | 'ENFORCE'
 
+export type TaskBillingSettlement = {
+  state: 'pending' | 'settled'
+  attempts: number
+  textUsage: Array<{ model: string; inputTokens: number; outputTokens: number }>
+  lastAttemptAt: string
+  lastError?: string
+}
+
 export type TaskBillingInfo =
   | {
     billable: false
@@ -130,7 +139,7 @@ export type TaskBillingInfo =
     apiType: 'text' | 'image' | 'video' | 'voice' | 'voice-design' | 'lip-sync'
     model: string
     quantity: number
-    unit: 'token' | 'image' | 'video' | 'second' | 'call'
+    unit: 'token' | 'image' | 'video' | 'second' | 'character' | 'call'
     maxFrozenCost: number
     pricingVersion?: string
     action: string
@@ -140,6 +149,7 @@ export type TaskBillingInfo =
     modeSnapshot?: BillingMode | null
     status?: 'skipped' | 'quoted' | 'frozen' | 'settled' | 'rolled_back' | 'failed'
     chargedCost?: number
+    settlement?: TaskBillingSettlement
   }
 
 export type TaskJobData = {
@@ -186,6 +196,12 @@ export type SSEEvent = {
 }
 
 export type CreateTaskInput = {
+  /**
+   * Immutable HTTP-attempt identity chosen before submission. Unlike
+   * `dedupeKey`, this survives terminal lifecycle states and can therefore
+   * replay the exact historical Task after the target's active lock is freed.
+   */
+  idempotencyTaskId?: string
   userId: string
   projectId: string
   episodeId?: string | null

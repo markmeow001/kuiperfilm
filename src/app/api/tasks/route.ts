@@ -1,15 +1,97 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { apiHandler } from '@/lib/api-errors'
+import { ApiError, apiHandler } from '@/lib/api-errors'
 import { requireUserAuth, isErrorResponse, requireProjectAccess } from '@/lib/api-auth'
-import { queryTasks } from '@/lib/task/service'
-import { type TaskStatus } from '@/lib/task/types'
 import { normalizeTaskError } from '@/lib/errors/normalize'
+import { toJobView, type JobStatusFilter } from '@/lib/task/job-view'
+import { queryTasks } from '@/lib/task/service'
+import { TASK_STATUS, type TaskStatus } from '@/lib/task/types'
 
-function withTaskError(task: Awaited<ReturnType<typeof queryTasks>>[number]) {
-  const error = normalizeTaskError(task.errorCode, task.errorMessage)
+type TaskListScope = 'detail' | 'summary'
+
+const TASK_STATUSES = new Set<string>(Object.values(TASK_STATUS))
+const JOB_STATUSES = new Set<JobStatusFilter>(['active', 'completed', 'failed', 'cancelled'])
+const SUMMARY_TASK_STATUSES: TaskStatus[] = [
+  TASK_STATUS.QUEUED,
+  TASK_STATUS.PROCESSING,
+  TASK_STATUS.COMPLETED,
+  TASK_STATUS.FAILED,
+]
+
+function readString(value: string | null): string | undefined {
+  const trimmed = value?.trim()
+  return trimmed || undefined
+}
+
+function readScope(value: string | null): TaskListScope {
+  if (!value) return 'detail'
+  if (value === 'detail') return 'detail'
+  if (value === 'summary') return 'summary'
+  throw new ApiError('INVALID_PARAMS', { field: 'scope' })
+}
+
+function readTaskStatuses(values: string[]): TaskStatus[] | undefined {
+  if (!values.length) return undefined
+  const statuses = values.map((value) => value.trim()).filter(Boolean)
+  if (!statuses.length) return undefined
+  if (statuses.some((status) => !TASK_STATUSES.has(status))) {
+    throw new ApiError('INVALID_PARAMS', { field: 'status' })
+  }
+  return Array.from(new Set(statuses)) as TaskStatus[]
+}
+
+function readJobStatuses(values: string[]): JobStatusFilter[] | undefined {
+  if (!values.length) return undefined
+  const statuses = values.map((value) => value.trim()).filter(Boolean)
+  if (!statuses.length) return undefined
+  if (statuses.some((status) => !JOB_STATUSES.has(status as JobStatusFilter))) {
+    throw new ApiError('INVALID_PARAMS', { field: 'jobStatus' })
+  }
+  return Array.from(new Set(statuses)) as JobStatusFilter[]
+}
+
+function readTypes(values: string[]): string[] | undefined {
+  const types = Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)))
+  return types.length ? types : undefined
+}
+
+function toRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  return value as Record<string, unknown>
+}
+
+function toSafeTaskListPayload(value: unknown) {
+  const payload = toRecord(value)
+  if (!payload) return null
+  const panelIds = Array.isArray(payload.panelIds)
+    ? payload.panelIds
+      .filter((item): item is string => typeof item === 'string' && item.length > 0)
+      .slice(0, 500)
+    : []
+  return panelIds.length ? { panelIds } : null
+}
+
+function toSafeTaskListItem(task: Awaited<ReturnType<typeof queryTasks>>[number]) {
   return {
-    ...task,
-    error,
+    id: task.id,
+    userId: task.userId,
+    projectId: task.projectId,
+    episodeId: task.episodeId,
+    type: task.type,
+    targetType: task.targetType,
+    targetId: task.targetId,
+    status: task.status,
+    progress: task.progress,
+    attempt: task.attempt,
+    maxAttempts: task.maxAttempts,
+    payload: toSafeTaskListPayload(task.payload),
+    errorCode: task.errorCode,
+    errorMessage: task.errorMessage,
+    error: normalizeTaskError(task.errorCode, task.errorMessage),
+    queuedAt: task.queuedAt,
+    startedAt: task.startedAt,
+    finishedAt: task.finishedAt,
+    createdAt: task.createdAt,
+    updatedAt: task.updatedAt,
   }
 }
 
@@ -19,53 +101,46 @@ export const GET = apiHandler(async (request: NextRequest) => {
   const { session } = authResult
 
   const searchParams = request.nextUrl.searchParams
-  const projectId = searchParams.get('projectId') || undefined
-  const targetType = searchParams.get('targetType') || undefined
-  const targetId = searchParams.get('targetId') || undefined
-  const status = searchParams.getAll('status')
-  const type = searchParams.getAll('type')
-  const limit = Number.parseInt(searchParams.get('limit') || '50', 10)
+  const scope = readScope(searchParams.get('scope'))
+  const projectId = readString(searchParams.get('projectId'))
+  const episodeId = readString(searchParams.get('episodeId'))
+  const targetType = readString(searchParams.get('targetType'))
+  const targetId = readString(searchParams.get('targetId'))
+  const cursor = readString(searchParams.get('cursor'))
+  const status = readTaskStatuses(searchParams.getAll('status'))
+  const jobStatus = readJobStatuses(searchParams.getAll('jobStatus'))
+  const type = readTypes(searchParams.getAll('type'))
+  const limitRaw = Number.parseInt(searchParams.get('limit') || '50', 10)
+  const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 200) : 50
 
-  // Phase V (2026-05-28) — task list auth split by scope:
-  //
-  //   With projectId query param → project-scoped list. Run the 8-tier
-  //     cascade on that project; on allow, return ALL tasks for the
-  //     project (no userId filter) so workspace members / admin / etc
-  //     can see teammate-generated videos. Without this, multi-shot
-  //     video tasks created by IkariNERV were invisible to admin
-  //     holykinds even after the project /data fix.
-  //
-  //   Without projectId          → personal task list (e.g. global
-  //     activity log). Keep the original userId filter — there's no
-  //     project to cascade against, and exposing cross-user tasks
-  //     without a scope key would leak unrelated work.
+  // With a project scope, project read access intentionally exposes teammate
+  // tasks. Without a project scope this must stay caller-private at the DB
+  // query itself; post-query filtering breaks pagination and can leak counts.
   if (projectId) {
     const access = await requireProjectAccess(projectId, session.user.id, 'read')
     if (!access.allowed) {
-      return NextResponse.json({ tasks: [] })
+      return NextResponse.json({ tasks: [], nextCursor: null })
     }
-    const tasks = await queryTasks({
-      projectId,
-      targetType,
-      targetId,
-      status: status.length ? (status as TaskStatus[]) : undefined,
-      type: type.length ? type : undefined,
-      limit: Number.isFinite(limit) ? Math.min(Math.max(limit, 1), 200) : 50,
-    })
-    return NextResponse.json({ tasks: tasks.map(withTaskError) })
   }
 
   const tasks = await queryTasks({
+    ...(!projectId ? { userId: session.user.id } : {}),
     projectId,
+    episodeId,
     targetType,
     targetId,
-    status: status.length ? (status as TaskStatus[]) : undefined,
-    type: type.length ? type : undefined,
-    limit: Number.isFinite(limit) ? Math.min(Math.max(limit, 1), 200) : 50,
+    status: scope === 'summary' && !status && !jobStatus ? SUMMARY_TASK_STATUSES : status,
+    jobStatus,
+    type,
+    cursor,
+    limit: limit + 1,
   })
+  const hasMore = tasks.length > limit
+  const page = hasMore ? tasks.slice(0, limit) : tasks
+  const nextCursor = hasMore ? page.at(-1)?.id || null : null
 
-  const filtered = tasks
-    .filter((task) => task.userId === session.user.id)
-    .map(withTaskError)
-  return NextResponse.json({ tasks: filtered })
+  return NextResponse.json({
+    tasks: scope === 'summary' ? page.map(toJobView) : page.map(toSafeTaskListItem),
+    nextCursor,
+  })
 })

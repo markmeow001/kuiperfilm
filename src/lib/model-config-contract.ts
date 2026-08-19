@@ -67,9 +67,28 @@ export interface VideoCapabilities {
   fieldI18n?: CapabilityFieldI18nMap
 }
 
+export interface AudioCapabilityRange {
+  min: number
+  max: number
+  step: number
+  defaultValue: number
+}
+
 export interface AudioCapabilities {
   voiceOptions?: string[]
   rateOptions?: string[]
+  supportReferenceAudio?: boolean
+  supportEmotionPrompt?: boolean
+  supportEmotionStrength?: boolean
+  emotionStrengthRange?: AudioCapabilityRange
+  supportEmotionVector?: boolean
+  supportSpeed?: boolean
+  speedRange?: AudioCapabilityRange
+  supportPitch?: boolean
+  pitchRange?: AudioCapabilityRange
+  supportVolume?: boolean
+  volumeRange?: AudioCapabilityRange
+  supportPause?: boolean
   fieldI18n?: CapabilityFieldI18nMap
 }
 
@@ -137,6 +156,18 @@ const VIDEO_ALLOWED_FIELDS = new Set<keyof VideoCapabilities>([
 const AUDIO_ALLOWED_FIELDS = new Set<keyof AudioCapabilities>([
   'voiceOptions',
   'rateOptions',
+  'supportReferenceAudio',
+  'supportEmotionPrompt',
+  'supportEmotionStrength',
+  'emotionStrengthRange',
+  'supportEmotionVector',
+  'supportSpeed',
+  'speedRange',
+  'supportPitch',
+  'pitchRange',
+  'supportVolume',
+  'volumeRange',
+  'supportPause',
   'fieldI18n',
 ])
 
@@ -503,6 +534,99 @@ function validateVideoCapabilities(issues: CapabilityValidationIssue[], raw: unk
   })
 }
 
+const AUDIO_RANGE_BINDINGS = [
+  { supportField: 'supportEmotionStrength', rangeField: 'emotionStrengthRange' },
+  { supportField: 'supportSpeed', rangeField: 'speedRange' },
+  { supportField: 'supportPitch', rangeField: 'pitchRange' },
+  { supportField: 'supportVolume', rangeField: 'volumeRange' },
+] as const
+
+function validateAudioCapabilityRange(
+  issues: CapabilityValidationIssue[],
+  raw: Record<string, unknown>,
+  supportField: typeof AUDIO_RANGE_BINDINGS[number]['supportField'],
+  rangeField: typeof AUDIO_RANGE_BINDINGS[number]['rangeField'],
+) {
+  const range = raw[rangeField]
+  const rangePath = `capabilities.audio.${rangeField}`
+
+  if (range === undefined) {
+    if (raw[supportField] === true) {
+      issues.push({
+        code: 'CAPABILITY_FIELD_INVALID',
+        field: rangePath,
+        message: `${rangeField} is required when ${supportField} is true`,
+      })
+    }
+    return
+  }
+
+  if (!isRecord(range)) {
+    issues.push({
+      code: 'CAPABILITY_FIELD_INVALID',
+      field: rangePath,
+      message: `${rangeField} must be an object`,
+    })
+    return
+  }
+
+  const rangeFields = new Set(['min', 'max', 'step', 'defaultValue'])
+  for (const field of Object.keys(range)) {
+    if (!rangeFields.has(field)) {
+      issues.push({
+        code: 'CAPABILITY_FIELD_INVALID',
+        field: `${rangePath}.${field}`,
+        message: `Unknown range field: ${field}`,
+      })
+    }
+  }
+
+  const { min, max, step, defaultValue } = range
+  for (const [field, value] of Object.entries({ min, max, step, defaultValue })) {
+    if (typeof value !== 'number' || !Number.isFinite(value)) {
+      issues.push({
+        code: 'CAPABILITY_FIELD_INVALID',
+        field: `${rangePath}.${field}`,
+        message: `${field} must be a finite number`,
+      })
+    }
+  }
+
+  if (typeof min === 'number' && Number.isFinite(min)
+    && typeof max === 'number' && Number.isFinite(max)
+    && min >= max) {
+    issues.push({
+      code: 'CAPABILITY_FIELD_INVALID',
+      field: rangePath,
+      message: `${rangeField} min must be less than max`,
+    })
+  }
+  if (typeof step === 'number' && Number.isFinite(step) && step <= 0) {
+    issues.push({
+      code: 'CAPABILITY_FIELD_INVALID',
+      field: `${rangePath}.step`,
+      message: `${rangeField} step must be greater than zero`,
+    })
+  }
+  if (typeof min === 'number' && Number.isFinite(min)
+    && typeof max === 'number' && Number.isFinite(max)
+    && typeof defaultValue === 'number' && Number.isFinite(defaultValue)
+    && (defaultValue < min || defaultValue > max)) {
+    issues.push({
+      code: 'CAPABILITY_FIELD_INVALID',
+      field: `${rangePath}.defaultValue`,
+      message: `${rangeField} defaultValue must be within min and max`,
+    })
+  }
+  if (raw[supportField] !== true) {
+    issues.push({
+      code: 'CAPABILITY_FIELD_INVALID',
+      field: rangePath,
+      message: `${rangeField} requires ${supportField} to be true`,
+    })
+  }
+}
+
 function validateAudioCapabilities(issues: CapabilityValidationIssue[], raw: unknown) {
   if (!isRecord(raw)) return
 
@@ -522,6 +646,30 @@ function validateAudioCapabilities(issues: CapabilityValidationIssue[], raw: unk
       field: 'capabilities.audio.rateOptions',
       message: 'rateOptions must be a non-empty string array',
     })
+  }
+
+  const booleanFields = [
+    'supportReferenceAudio',
+    'supportEmotionPrompt',
+    'supportEmotionStrength',
+    'supportEmotionVector',
+    'supportSpeed',
+    'supportPitch',
+    'supportVolume',
+    'supportPause',
+  ] as const
+  for (const field of booleanFields) {
+    if (raw[field] !== undefined && typeof raw[field] !== 'boolean') {
+      issues.push({
+        code: 'CAPABILITY_FIELD_INVALID',
+        field: `capabilities.audio.${field}`,
+        message: `${field} must be boolean`,
+      })
+    }
+  }
+
+  for (const binding of AUDIO_RANGE_BINDINGS) {
+    validateAudioCapabilityRange(issues, raw, binding.supportField, binding.rangeField)
   }
 
   validateFieldI18nMap(issues, 'audio', raw.fieldI18n, {

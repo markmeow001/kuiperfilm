@@ -15,6 +15,7 @@ import type { V2StepId } from '@/components/v2/v2-types'
 import { V2EpisodeTabBar } from './V2EpisodeTabBar'
 import { useEpisodePreservingHref } from './hooks/useEpisodePreservingHref'
 import { useStickyStep } from './hooks/useStickyStep'
+import studioStyles from '../../StudioShell.module.css'
 
 interface V2WorkspaceShellProps {
   projectId: string
@@ -22,6 +23,7 @@ interface V2WorkspaceShellProps {
   currentStep: V2StepId
   projectName?: string
   draftNumber?: number
+  tone?: 'darkroom' | 'paper'
   children: React.ReactNode
 }
 
@@ -31,6 +33,7 @@ export function V2WorkspaceShell({
   currentStep,
   projectName,
   draftNumber,
+  tone = 'darkroom',
   children,
 }: V2WorkspaceShellProps) {
   const router = useRouter()
@@ -64,8 +67,16 @@ export function V2WorkspaceShell({
     router.push(finalHref)
   }
 
+  const shellClassName = currentStep === 'home'
+    ? 'kuiper-dashboard kuiper-workspace font-body flex min-h-screen text-text-primary'
+    : 'kuiper-stage kuiper-workspace font-body flex min-h-screen text-text-primary'
+
   return (
-    <div className="kuiper-stage kuiper-workspace font-body flex min-h-screen text-text-primary">
+    <div
+      className={`${studioStyles.studioRoot} ${studioStyles.canvasAtmosphere} ${shellClassName}`}
+      data-workspace-tone={tone}
+      data-studio-theme="dark"
+    >
       <Sidebar currentStep={currentStep} onSelect={handleSelect} locale={locale} />
       <main className="flex min-w-0 flex-1 flex-col overflow-hidden pb-20 lg:pb-0">
         <TopBar
@@ -73,11 +84,19 @@ export function V2WorkspaceShell({
           projectId={projectId}
           projectName={projectName}
           draftNumber={draftNumber}
+          locale={locale}
         />
         {currentStep !== 'home' ? (
-          <V2EpisodeTabBar projectId={projectId} locale={locale} projectName={projectName} />
+          <V2EpisodeTabBar
+            projectId={projectId}
+            locale={locale}
+            projectName={projectName}
+            tone={tone}
+          />
         ) : null}
-        <div className="flex-1 overflow-y-auto">{children}</div>
+        <div className="flex-1 overflow-y-auto bg-[var(--darkroom-canvas)]">
+          {children}
+        </div>
       </main>
     </div>
   )

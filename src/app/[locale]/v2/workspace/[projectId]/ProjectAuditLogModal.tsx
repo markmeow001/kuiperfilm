@@ -13,6 +13,7 @@
 
 import { useEffect, useState } from 'react'
 import { useTranslations } from 'next-intl'
+import { Modal } from '@/components/v2/Modal'
 
 interface NamedUser {
   id: string
@@ -87,63 +88,56 @@ export function ProjectAuditLogModal({ projectId, onClose }: ProjectAuditLogModa
   }, [projectId])
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/70 backdrop-blur-sm"
-      onClick={onClose}
+    <Modal
+      open
+      onClose={onClose}
+      size="lg"
+      className="flex max-h-[min(80vh,720px)] flex-col overflow-hidden"
     >
-      <div
-        className="flex max-h-[80vh] w-full max-w-3xl flex-col rounded-sm border border-amber-900/30 bg-stone-950 shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between border-b border-amber-900/20 px-6 py-3">
-          <h3 className="font-serif-cn text-lg text-stone-100">{t('title')}</h3>
-          <button
-            type="button"
-            onClick={onClose}
-            className="font-mono text-sm text-stone-500 transition-colors hover:text-stone-300"
-            aria-label={t('closeAria')}
-          >
-            ✕
-          </button>
-        </div>
+      <Modal.Header
+        heading={t('title')}
+        onClose={onClose}
+        closeAriaLabel={t('closeAria')}
+      />
 
-        <div className="flex-1 overflow-y-auto px-6 py-2">
+      <Modal.Body className="flex-1 overflow-y-auto px-4 py-3 sm:px-6">
           {error ? (
-            <div className="rounded-sm border border-rose-600/40 bg-rose-600/10 px-3 py-2 font-fraunces text-sm text-rose-300">
+            <div className="rounded-[10px] border border-rose-500/35 bg-rose-500/10 px-3 py-2 font-fraunces text-sm text-rose-200" role="alert">
               {error}
             </div>
           ) : null}
 
           {entries.length === 0 && !loading ? (
-            <div className="py-12 text-center font-fraunces text-sm italic text-stone-500">
+            <div className="py-12 text-center font-fraunces text-sm italic text-[var(--production-ink-muted)]">
               {t('empty')}
             </div>
           ) : (
-            <ul className="divide-y divide-stone-800/60">
+            <ul className="divide-y divide-[var(--production-border)]">
               {entries.map((entry) => (
-                <li key={entry.id} className="py-2">
-                  <div className="flex items-baseline gap-3">
-                    <span className="w-36 shrink-0 font-mono text-[11px] tracking-wider text-stone-500">
+                <li key={entry.id} className="py-3">
+                  <div className="flex flex-col items-start gap-1.5 sm:flex-row sm:items-baseline sm:gap-3">
+                    <span className="shrink-0 font-mono text-[11px] tracking-wider text-[var(--production-ink-muted)] sm:w-36">
                       {formatTs(entry.createdAt)}
                     </span>
-                    <span className="w-28 shrink-0 font-serif-cn text-xs text-amber-400">
+                    <span className="shrink-0 font-serif-cn text-xs text-[var(--process-cyan-strong)] sm:w-28">
                       @{entry.actor?.displayName || entry.actor?.name || t('actorUnknown')}
                     </span>
-                    <span className="font-serif-cn text-sm text-stone-200">
+                    <span className="font-serif-cn text-sm leading-6 text-[var(--production-ink)]">
                       {friendlyDescription(entry, t)}
                     </span>
                     {entry.snapshot && Object.keys(entry.snapshot as object).length > 0 ? (
                       <button
                         type="button"
                         onClick={() => setExpandedId((id) => (id === entry.id ? null : entry.id))}
-                        className="ml-auto font-mono text-[11px] text-stone-500 hover:text-amber-300"
+                        className="min-h-11 rounded-[9px] px-2 font-mono text-[11px] text-[var(--production-ink-muted)] transition-colors hover:bg-[var(--process-cyan-soft)] hover:text-[var(--process-cyan-strong)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--production-focus)] sm:ml-auto"
+                        aria-expanded={expandedId === entry.id}
                       >
                         {expandedId === entry.id ? t('rawToggleHide') : t('rawToggleShow')}
                       </button>
                     ) : null}
                   </div>
                   {expandedId === entry.id && entry.snapshot ? (
-                    <pre className="mt-2 ml-36 max-h-40 overflow-auto rounded-sm border border-stone-800 bg-stone-900/60 p-2 font-mono text-[10px] text-stone-400">
+                    <pre className="mt-2 max-h-40 overflow-auto rounded-[10px] border border-[var(--production-border)] bg-[var(--production-muted)] p-3 font-mono text-[11px] text-[var(--production-ink-muted)] sm:ml-36">
                       {JSON.stringify(entry.snapshot, null, 2)}
                     </pre>
                   ) : null}
@@ -151,10 +145,10 @@ export function ProjectAuditLogModal({ projectId, onClose }: ProjectAuditLogModa
               ))}
             </ul>
           )}
-        </div>
+      </Modal.Body>
 
-        <div className="flex items-center justify-between border-t border-amber-900/20 px-6 py-2">
-          <span className="font-mono text-[11px] text-stone-500">
+      <Modal.Footer className="justify-between px-4 sm:px-6">
+          <span className="font-mono text-[11px] text-[var(--production-ink-muted)]">
             {entries.length} {t('countSuffix')}{hasMore ? '+' : ''}
           </span>
           {hasMore ? (
@@ -162,16 +156,15 @@ export function ProjectAuditLogModal({ projectId, onClose }: ProjectAuditLogModa
               type="button"
               onClick={() => fetchPage({ cursor })}
               disabled={loading}
-              className="rounded-sm border border-amber-500/40 bg-amber-500/5 px-3 py-1 font-mono text-[11px] text-amber-300 transition-colors hover:bg-amber-500/15 disabled:opacity-50"
+              className="min-h-11 rounded-[10px] bg-[var(--production-blue)] px-4 py-2 font-mono text-[11px] font-semibold text-white transition-colors hover:bg-[var(--production-blue-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--production-focus)] disabled:opacity-50"
             >
               {loading ? t('loading') : t('loadMore')}
             </button>
           ) : (
-            <span className="font-fraunces text-[11px] italic text-stone-600">{t('atBottom')}</span>
+            <span className="font-fraunces text-[11px] italic text-[var(--production-ink-muted)]">{t('atBottom')}</span>
           )}
-        </div>
-      </div>
-    </div>
+      </Modal.Footer>
+    </Modal>
   )
 }
 

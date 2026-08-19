@@ -4,6 +4,12 @@ import { prisma } from '@/lib/prisma'
 import { requireProjectAuthLight, isErrorResponse } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
 import { defaultPanelGenerationMode } from '@/lib/novel-promotion/generation-mode'
+import {
+  deriveManualStoryboardIds,
+  manualStoryboardPanelMatches,
+  normalizeManualStoryboardIdempotencyKey,
+  parseManualStoryboardInitialPanel,
+} from '@/lib/novel-promotion/manual-storyboard-create'
 
 /**
  * POST /api/novel-promotion/[projectId]/storyboard-group
@@ -20,15 +26,37 @@ export const POST = apiHandler(async (
   if (isErrorResponse(authResult)) return authResult
 
   const body = await request.json()
-  const { episodeId, insertIndex } = body
+  const episodeId = typeof body?.episodeId === 'string' ? body.episodeId : ''
+  const rawInsertIndex = body?.insertIndex
 
   if (!episodeId) {
     throw new ApiError('INVALID_PARAMS')
   }
 
+  if (
+    rawInsertIndex !== undefined
+    && (!Number.isInteger(rawInsertIndex) || rawInsertIndex < 0)
+  ) {
+    throw new ApiError('INVALID_PARAMS')
+  }
+
+  let initialPanel: ReturnType<typeof parseManualStoryboardInitialPanel>
+  let idempotencyKey: string | null = null
+  try {
+    initialPanel = parseManualStoryboardInitialPanel(body?.initialPanel)
+    idempotencyKey = initialPanel
+      ? normalizeManualStoryboardIdempotencyKey(body?.idempotencyKey)
+      : null
+  } catch {
+    throw new ApiError('INVALID_PARAMS')
+  }
+
   // 获取剧集和现有 clips
-  const episode = await prisma.novelPromotionEpisode.findUnique({
-    where: { id: episodeId },
+  const episode = await prisma.novelPromotionEpisode.findFirst({
+    where: {
+      id: episodeId,
+      novelPromotionProject: { projectId },
+    },
     include: {
       clips: { orderBy: { createdAt: 'asc' } },
       // Phase 1.5C — project mode decides the initial panel's panelGenerationMode.
@@ -41,7 +69,7 @@ export const POST = apiHandler(async (
   }
 
   const existingClips = episode.clips
-  const insertAt = insertIndex !== undefined ? insertIndex : existingClips.length
+  const insertAt = rawInsertIndex !== undefined ? rawInsertIndex : existingClips.length
 
   // 计算新 clip 的 createdAt 时间，用于排序
   let newCreatedAt: Date
@@ -65,8 +93,125 @@ export const POST = apiHandler(async (
     newCreatedAt = new Date(midTime)
   }
 
-  // 使用事务创建 Clip + Storyboard + Panel
+  if (initialPanel && idempotencyKey) {
+    const ids = deriveManualStoryboardIds(projectId, episodeId, idempotencyKey)
+    const charactersJson = JSON.stringify(initialPanel.characterNames)
+    const panelGenerationMode = defaultPanelGenerationMode({
+      projectGenerationMode: episode.novelPromotionProject?.generationMode,
+    })
+
+    const result = await prisma.$transaction(async (tx) => {
+      const scopedEpisode = await tx.novelPromotionEpisode.findFirst({
+        where: {
+          id: episodeId,
+          novelPromotionProject: { projectId },
+        },
+        select: { id: true },
+      })
+      if (!scopedEpisode) throw new ApiError('NOT_FOUND')
+
+      const clipCreate = await tx.novelPromotionClip.createMany({
+        data: [{
+          id: ids.clipId,
+          episodeId,
+          summary: initialPanel.description.slice(0, 500),
+          content: initialPanel.description,
+          location: initialPanel.locationName,
+          characters: charactersJson,
+          duration: initialPanel.durationSeconds,
+          createdAt: newCreatedAt,
+        }],
+        skipDuplicates: true,
+      })
+      const storyboardCreate = await tx.novelPromotionStoryboard.createMany({
+        data: [{
+          id: ids.storyboardId,
+          episodeId,
+          clipId: ids.clipId,
+          panelCount: 1,
+        }],
+        skipDuplicates: true,
+      })
+      const panelCreate = await tx.novelPromotionPanel.createMany({
+        data: [{
+          id: ids.panelId,
+          storyboardId: ids.storyboardId,
+          panelIndex: 0,
+          panelNumber: 1,
+          shotType: null,
+          cameraMove: null,
+          description: initialPanel.description,
+          characters: charactersJson,
+          location: initialPanel.locationName,
+          duration: initialPanel.durationSeconds,
+          multiShotGroupId: ids.multiShotGroupId,
+          multiShotGroupOrder: 0,
+          panelGenerationMode,
+        }],
+        skipDuplicates: true,
+      })
+
+      const reconciled = await tx.novelPromotionStoryboard.findFirst({
+        where: {
+          id: ids.storyboardId,
+          episodeId,
+          episode: { novelPromotionProject: { projectId } },
+        },
+        include: {
+          clip: true,
+          panels: { where: { id: ids.panelId } },
+        },
+      })
+      const panel = reconciled?.panels[0] ?? null
+      if (
+        !reconciled
+        || !reconciled.clip
+        || reconciled.clip.id !== ids.clipId
+        || reconciled.clip.episodeId !== episodeId
+        || reconciled.clipId !== ids.clipId
+        || !panel
+        || !manualStoryboardPanelMatches(
+          panel as Record<string, unknown>,
+          initialPanel,
+          ids.multiShotGroupId,
+        )
+      ) {
+        throw new ApiError('CONFLICT', {
+          code: 'MANUAL_STORYBOARD_IDEMPOTENCY_CONFLICT',
+          message: 'Manual storyboard create outcome could not be safely reconciled',
+        })
+      }
+
+      return {
+        clip: reconciled.clip,
+        storyboard: reconciled,
+        panel,
+        replayed:
+          clipCreate.count === 0
+          && storyboardCreate.count === 0
+          && panelCreate.count === 0,
+      }
+    })
+
+    _ulogInfo(
+      `[添加手動分鏡] episodeId=${episodeId}, clipId=${result.clip.id}, storyboardId=${result.storyboard.id}, replayed=${result.replayed}`,
+    )
+
+    return NextResponse.json({ success: true, ...result })
+  }
+
+  // Legacy group-only callers keep their original one-placeholder behavior.
+  // The V2 manual flow always supplies initialPanel and never enters this path.
   const result = await prisma.$transaction(async (tx) => {
+    const scopedEpisode = await tx.novelPromotionEpisode.findFirst({
+      where: {
+        id: episodeId,
+        novelPromotionProject: { projectId },
+      },
+      select: { id: true },
+    })
+    if (!scopedEpisode) throw new ApiError('NOT_FOUND')
+
     // 1. 创建新的 Clip（手动添加类型）
     const newClip = await tx.novelPromotionClip.create({
       data: {
@@ -132,15 +277,20 @@ export const PUT = apiHandler(async (
   if (isErrorResponse(authResult)) return authResult
 
   const body = await request.json()
-  const { episodeId, clipId, direction } = body // direction: 'up' | 'down'
+  const episodeId = typeof body?.episodeId === 'string' ? body.episodeId : ''
+  const clipId = typeof body?.clipId === 'string' ? body.clipId : ''
+  const direction = body?.direction
 
-  if (!episodeId || !clipId || !direction) {
+  if (!episodeId || !clipId || (direction !== 'up' && direction !== 'down')) {
     throw new ApiError('INVALID_PARAMS')
   }
 
   // 获取剧集和所有 clips（按 createdAt 排序）
-  const episode = await prisma.novelPromotionEpisode.findUnique({
-    where: { id: episodeId },
+  const episode = await prisma.novelPromotionEpisode.findFirst({
+    where: {
+      id: episodeId,
+      novelPromotionProject: { projectId },
+    },
     include: {
       clips: { orderBy: { createdAt: 'asc' } }
     }
@@ -175,22 +325,37 @@ export const PUT = apiHandler(async (
   // 使用事务更新
   await prisma.$transaction(async (tx) => {
     // 先把当前 clip 移到一个临时时间
-    await tx.novelPromotionClip.update({
-      where: { id: currentClip.id },
+    const parkedCurrent = await tx.novelPromotionClip.updateMany({
+      where: {
+        id: currentClip.id,
+        episodeId,
+        episode: { novelPromotionProject: { projectId } },
+      },
       data: { createdAt: new Date(0) } // 临时时间
     })
+    if (parkedCurrent.count !== 1) throw new ApiError('NOT_FOUND')
 
     // 更新目标 clip 的时间
-    await tx.novelPromotionClip.update({
-      where: { id: targetClip.id },
+    const movedTarget = await tx.novelPromotionClip.updateMany({
+      where: {
+        id: targetClip.id,
+        episodeId,
+        episode: { novelPromotionProject: { projectId } },
+      },
       data: { createdAt: new Date(tempTime) }
     })
+    if (movedTarget.count !== 1) throw new ApiError('NOT_FOUND')
 
     // 更新当前 clip 到目标时间
-    await tx.novelPromotionClip.update({
-      where: { id: currentClip.id },
+    const movedCurrent = await tx.novelPromotionClip.updateMany({
+      where: {
+        id: currentClip.id,
+        episodeId,
+        episode: { novelPromotionProject: { projectId } },
+      },
       data: { createdAt: new Date(targetTime) }
     })
+    if (movedCurrent.count !== 1) throw new ApiError('NOT_FOUND')
   })
 
   _ulogInfo(`[移动分镜组] clipId=${clipId}, direction=${direction}, ${currentIndex} -> ${targetIndex}`)
@@ -220,8 +385,11 @@ export const DELETE = apiHandler(async (
   }
 
   // 获取 storyboard 及其关联的 clip
-  const storyboard = await prisma.novelPromotionStoryboard.findUnique({
-    where: { id: storyboardId },
+  const storyboard = await prisma.novelPromotionStoryboard.findFirst({
+    where: {
+      id: storyboardId,
+      episode: { novelPromotionProject: { projectId } },
+    },
     include: {
       panels: true,
       clip: true
@@ -236,19 +404,36 @@ export const DELETE = apiHandler(async (
   await prisma.$transaction(async (tx) => {
     // 1. 删除所有关联的 Panels
     await tx.novelPromotionPanel.deleteMany({
-      where: { storyboardId }
+      where: {
+        storyboardId,
+        storyboard: {
+          episode: { novelPromotionProject: { projectId } },
+        },
+      }
     })
 
     // 2. 删除 Storyboard
-    await tx.novelPromotionStoryboard.delete({
-      where: { id: storyboardId }
+    const deletedStoryboard = await tx.novelPromotionStoryboard.deleteMany({
+      where: {
+        id: storyboardId,
+        episode: { novelPromotionProject: { projectId } },
+      },
     })
+    if (deletedStoryboard.count !== 1) {
+      throw new ApiError('NOT_FOUND')
+    }
 
     // 3. 删除关联的 Clip（如果存在）
     if (storyboard.clipId) {
-      await tx.novelPromotionClip.delete({
-        where: { id: storyboard.clipId }
+      const deletedClip = await tx.novelPromotionClip.deleteMany({
+        where: {
+          id: storyboard.clipId,
+          episode: { novelPromotionProject: { projectId } },
+        },
       })
+      if (deletedClip.count !== 1) {
+        throw new ApiError('NOT_FOUND')
+      }
     }
   })
 

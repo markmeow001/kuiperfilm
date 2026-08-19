@@ -1,0 +1,37 @@
+.touchSurface {
+  min-width: 0;
+}
+
+.touchSurface :where(button, select, a[href]) {
+  min-height: 44px;
+  min-width: 44px;
+  touch-action: manipulation;
+}
+
+.touchSurface :where(
+  input:not([type='hidden']):not([type='file']):not([type='checkbox']):not([type='radio']),
+  textarea
+) {
+  min-height: 44px;
+}
+
+.touchSurface :where(button, select, a[href], input, textarea):focus-visible {
+  outline: 2px solid var(--process-cyan);
+  outline-offset: 2px;
+}
+
+@media (max-width: 900px) {
+  .touchSurface :where(button, select, a[href]) {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .touchSurface *,
+  .touchSurface *::before,
+  .touchSurface *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}

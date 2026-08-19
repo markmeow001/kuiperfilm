@@ -44,30 +44,30 @@ export function WorkspaceCollabIntroBanner() {
   const richTags = { b: (chunks: React.ReactNode) => <strong>{chunks}</strong> }
 
   return (
-    <div className="mb-6 rounded-2xl border border-primary-500/25 bg-primary-500/[0.05] px-5 py-4">
-      <div className="flex items-start gap-4">
+    <div className="mb-6 rounded-[14px] border border-[color-mix(in_srgb,var(--process-cyan)_38%,transparent)] bg-[var(--process-cyan-soft)] px-5 py-4 text-[var(--production-ink)]">
+      <div className="flex flex-col items-start gap-4 sm:flex-row">
         <div className="flex-1">
-          <div className="mb-1 font-mono text-[10px] tracking-[0.2em] text-primary-400">
+          <div className="mb-1 font-mono text-[10px] font-semibold tracking-[0.18em] text-[var(--process-cyan-strong)]">
             {t('tag')}
           </div>
-          <div className="font-serif-cn text-base font-semibold text-text-primary">
+          <div className="text-[16px] font-semibold text-[var(--production-ink)]">
             {t('title')}
           </div>
-          <ul className="mt-2 space-y-1 font-serif-cn text-sm text-text-secondary">
+          <ul className="mt-2 space-y-1 text-[13px] leading-5 text-[var(--production-ink-muted)]">
             <li>
-              <span className="text-primary-400">·</span>{' '}
+              <span className="text-[var(--process-cyan-strong)]">·</span>{' '}
               {t.rich('bullet1', richTags)}
             </li>
             <li>
-              <span className="text-primary-400">·</span>{' '}
+              <span className="text-[var(--process-cyan-strong)]">·</span>{' '}
               {t.rich('bullet2', richTags)}
             </li>
             <li>
-              <span className="text-primary-400">·</span>{' '}
+              <span className="text-[var(--process-cyan-strong)]">·</span>{' '}
               {t.rich('bullet3', richTags)}
             </li>
             <li>
-              <span className="text-primary-400">·</span>{' '}
+              <span className="text-[var(--process-cyan-strong)]">·</span>{' '}
               {t.rich('bullet4', richTags)}
             </li>
           </ul>
@@ -75,7 +75,7 @@ export function WorkspaceCollabIntroBanner() {
         <button
           type="button"
           onClick={dismiss}
-          className="shrink-0 rounded-xl border border-primary-500/30 bg-primary-500/10 px-3 py-2 font-mono text-[10px] tracking-wider text-primary-300 transition-colors hover:bg-primary-500/20"
+          className="min-h-11 shrink-0 rounded-xl border border-[var(--production-border-dark)] bg-[var(--darkroom-raised)] px-3 py-2 font-mono text-[10px] font-semibold tracking-wider text-[var(--process-cyan-strong)] transition-colors hover:border-[var(--process-cyan)] hover:bg-[var(--darkroom-surface)]"
           title={t('dismissTitle')}
         >
           <AppIcon name="check" className="-mt-0.5 mr-1 inline h-3 w-3" />

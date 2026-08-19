@@ -103,4 +103,27 @@ describe('FacePerformancePanel', () => {
     )
     expect(screen.getByRole('alert')).toHaveTextContent('臉部表演分析失敗')
   })
+
+  it('一般控制介面 -> 分析與取消動作符合 44px 青色焦點契約', () => {
+    render(
+      <FacePerformancePanel
+        canAnalyze
+        progress={{ status: 'analyzing', completed: 1, total: 4, message: '分析中' }}
+        track={null}
+        onAnalyze={vi.fn()}
+        onCancel={vi.fn()}
+        onClear={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByRole('button', { name: '分析臉部表演' })).toHaveClass(
+      'min-h-11',
+      'bg-cyan-300',
+      'focus-visible:ring-cyan-300/70',
+    )
+    expect(screen.getByRole('button', { name: '取消臉部分析' })).toHaveClass(
+      'min-h-11',
+      'focus-visible:ring-2',
+    )
+  })
 })

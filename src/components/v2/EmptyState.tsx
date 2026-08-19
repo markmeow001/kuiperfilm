@@ -85,7 +85,7 @@ export function EmptyState({
       {illustration ? (
         <div
           aria-hidden="true"
-          className={`text-primary-500 ${isLg ? 'h-32 w-32' : 'h-20 w-20'} flex items-center justify-center`}
+          className={`text-[var(--process-cyan-strong)] ${isLg ? 'h-32 w-32' : 'h-20 w-20'} flex items-center justify-center`}
         >
           {illustration}
         </div>
@@ -124,7 +124,7 @@ function DefaultPlaceholder({ size }: { size: 'md' | 'lg' }) {
       name="clapperboard"
       aria-hidden="true"
       strokeWidth={1.25}
-      className={`${dimensionClass} text-primary-500`}
+      className={`${dimensionClass} text-[var(--process-cyan-strong)]`}
     />
   )
 }

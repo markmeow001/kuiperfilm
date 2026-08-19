@@ -3,6 +3,8 @@ import { prisma } from '@/lib/prisma'
 import { queueRedis } from '@/lib/redis'
 import { QUEUE_NAME, rateLimitAwareBackoff } from '@/lib/task/queues'
 import { TASK_TYPE, type TaskJobData } from '@/lib/task/types'
+import { TaskTerminatedError } from '@/lib/task/errors'
+import { tryUpdateTaskProgress, updateTaskPayload } from '@/lib/task/service'
 import { reportTaskProgress, withTaskLifecycle } from './shared'
 import {
   assertTaskActive,
@@ -19,16 +21,101 @@ import { getProviderConfig } from '@/lib/api-config'
 import { handleMultiShotVideoTask } from './handlers/multi-shot-video-handler'
 import { handleVideoEditorRenderTask } from './handlers/video-editor-render'
 import { handleEpisodePackageZipTask } from './handlers/episode-package-zip'
+import {
+  claimEpisodePackageCompletion,
+  reconcileEpisodePackageTerminalState,
+} from '@/lib/novel-promotion/episode-package-publication'
 import { handlePlaygroundVideoTask } from './handlers/playground-video'
 import { handleCanvasComposeVideoTask } from './handlers/canvas-compose-video'
 import { handleCanvasStoryboardExportTask } from './handlers/canvas-storyboard-export'
 import { loadStyleProfile } from '@/lib/style-profile/loader'
+import { deleteCOSObject } from '@/lib/cos'
+import {
+  compareAndSetNovelPromotionPanelVideoFromBatchQuote,
+  findNovelPromotionPanelByStoryboardIndexInProject,
+  requireNovelPromotionPanelInProject,
+  requireNovelPromotionVoiceLineInProject,
+  updateNovelPromotionPanelInProject,
+} from '@/lib/novel-promotion/project-scope'
+import {
+  isStoryboardBatchVideoPanelSourceCurrent,
+  readStoryboardBatchVideoPanelSource,
+  readStoryboardBatchVideoTaskIdentity,
+} from '@/lib/novel-promotion/storyboard-batch-video-source'
+import type { StoryboardBatchVideoPanelSource } from '@/lib/novel-promotion/storyboard-batch-video-quote'
 
 type AnyObj = Record<string, unknown>
 type VideoOptionValue = string | number | boolean
 type VideoOptionMap = Record<string, VideoOptionValue>
 type VideoGenerationMode = 'normal' | 'firstlastframe'
-type PanelRecord = NonNullable<Awaited<ReturnType<typeof prisma.novelPromotionPanel.findUnique>>>
+type PanelRecord = Awaited<ReturnType<typeof requireNovelPromotionPanelInProject>>
+type PanelVideoPersistMarker = {
+  kind: 'panel_video_persist'
+  taskId: string
+  panelId: string
+  episodeId: string
+  cosKey: string
+  quotedSnapshot: StoryboardBatchVideoPanelSource
+  generationMode: VideoGenerationMode
+}
+
+const PANEL_VIDEO_PERSIST_MARKER_KEY = 'panelVideoPersistMarker'
+
+function hasStoredVideoOutput(panel: { videoUrl: string | null; videoMediaId: string | null }): boolean {
+  return (
+    (typeof panel.videoUrl === 'string' && panel.videoUrl.trim().length > 0)
+    || (typeof panel.videoMediaId === 'string' && panel.videoMediaId.trim().length > 0)
+  )
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value)
+}
+
+function isSafePersistedStorageKey(value: string): boolean {
+  return (
+    value.length <= 1024
+    && /^[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(value)
+    && !value.includes('..')
+    && !value.includes('//')
+    && !value.includes('\\')
+  )
+}
+
+function readPanelVideoPersistMarker(value: unknown): PanelVideoPersistMarker | null {
+  if (!isRecord(value) || value.kind !== 'panel_video_persist') return null
+  const taskId = typeof value.taskId === 'string' ? value.taskId.trim() : ''
+  const panelId = typeof value.panelId === 'string' ? value.panelId.trim() : ''
+  const episodeId = typeof value.episodeId === 'string' ? value.episodeId.trim() : ''
+  const cosKey = typeof value.cosKey === 'string' ? value.cosKey.trim() : ''
+  const generationMode = value.generationMode
+  const quotedSnapshot = readStoryboardBatchVideoPanelSource(value.quotedSnapshot)
+  if (
+    !taskId
+    || !panelId
+    || !episodeId
+    || !cosKey
+    || !isSafePersistedStorageKey(cosKey)
+    || !quotedSnapshot
+    || (generationMode !== 'normal' && generationMode !== 'firstlastframe')
+  ) return null
+  return {
+    kind: 'panel_video_persist',
+    taskId,
+    panelId,
+    episodeId,
+    cosKey,
+    quotedSnapshot,
+    generationMode,
+  }
+}
+
+function panelVideoPersistReconciliationRequired(cause: unknown): Error {
+  return Object.assign(
+    new Error('PANEL_VIDEO_PERSIST_RECONCILIATION_REQUIRED'),
+    { code: 'EXTERNAL_ERROR', cause },
+  )
+}
 
 function extractGenerationOptions(payload: AnyObj): VideoOptionMap {
   const fromEnvelope = payload.generationOptions
@@ -46,35 +133,98 @@ function extractGenerationOptions(payload: AnyObj): VideoOptionMap {
   return next
 }
 
-async function fetchPanelByStoryboardIndex(storyboardId: string, panelIndex: number) {
-  return await prisma.novelPromotionPanel.findFirst({
-    where: {
-      storyboardId,
-      panelIndex,
-    },
-  })
+async function fetchPanelByStoryboardIndex(projectId: string, storyboardId: string, panelIndex: number) {
+  return await findNovelPromotionPanelByStoryboardIndexInProject(projectId, storyboardId, panelIndex)
 }
 
 async function getPanelForVideoTask(job: Job<TaskJobData>) {
-  const payload = (job.data.payload || {}) as AnyObj
+  if (job.data.targetType !== 'NovelPromotionPanel') {
+    throw new Error('VIDEO_PANEL_TARGET_MISMATCH')
+  }
+  return await requireNovelPromotionPanelInProject(job.data.projectId, job.data.targetId)
+}
 
-  // 优先使用 targetType=NovelPromotionPanel 直接定位
-  if (job.data.targetType === 'NovelPromotionPanel') {
-    const panel = await prisma.novelPromotionPanel.findUnique({ where: { id: job.data.targetId } })
-    if (!panel) throw new Error('Panel not found')
-    return panel
+async function readDurablePanelVideoPersistMarker(
+  job: Job<TaskJobData>,
+): Promise<PanelVideoPersistMarker | null> {
+  const task = await prisma.task.findFirst({
+    where: {
+      id: job.data.taskId,
+      userId: job.data.userId,
+      projectId: job.data.projectId,
+      episodeId: job.data.episodeId || null,
+      type: TASK_TYPE.VIDEO_PANEL,
+      targetType: 'NovelPromotionPanel',
+      targetId: job.data.targetId,
+    },
+    select: { payload: true },
+  })
+  if (!task) throw new Error('VIDEO_PANEL_BATCH_TASK_SCOPE_MISMATCH')
+  const durablePayload = isRecord(task.payload) ? task.payload : {}
+  const rawMarker = durablePayload[PANEL_VIDEO_PERSIST_MARKER_KEY]
+  if (rawMarker === undefined || rawMarker === null) return null
+  const marker = readPanelVideoPersistMarker(rawMarker)
+  if (!marker) throw new Error('VIDEO_PANEL_PERSIST_MARKER_INVALID')
+  return marker
+}
+
+function assertPanelVideoPersistMarkerContext(
+  marker: PanelVideoPersistMarker,
+  job: Job<TaskJobData>,
+  payload: AnyObj,
+  quotedSource: StoryboardBatchVideoPanelSource,
+) {
+  const expectedMode: VideoGenerationMode = isRecord(payload.firstLastFrame)
+    ? 'firstlastframe'
+    : 'normal'
+  if (
+    marker.taskId !== job.data.taskId
+    || marker.panelId !== job.data.targetId
+    || marker.episodeId !== job.data.episodeId
+    || marker.generationMode !== expectedMode
+    || !isStoryboardBatchVideoPanelSourceCurrent(marker.quotedSnapshot, quotedSource)
+  ) {
+    throw new Error('VIDEO_PANEL_PERSIST_MARKER_CONTEXT_MISMATCH')
+  }
+}
+
+async function clearPanelVideoPersistMarker(job: Job<TaskJobData>) {
+  await updateTaskPayload(
+    job.data.taskId,
+    { [PANEL_VIDEO_PERSIST_MARKER_KEY]: null },
+    { preserveExistingTopLevel: true },
+  )
+}
+
+async function cleanupPanelVideoPersistUpload(
+  job: Job<TaskJobData>,
+  marker: PanelVideoPersistMarker,
+) {
+  await deleteCOSObject(marker.cosKey, { throwOnError: true })
+  await clearPanelVideoPersistMarker(job)
+}
+
+async function reconcilePanelVideoPersistMarker(
+  job: Job<TaskJobData>,
+  marker: PanelVideoPersistMarker,
+  panel: PanelRecord,
+) {
+  if (panel.storyboard.episodeId !== marker.episodeId) {
+    throw panelVideoPersistReconciliationRequired(
+      new Error('VIDEO_PANEL_TARGET_EPISODE_MISMATCH'),
+    )
+  }
+  if (panel.videoUrl === marker.cosKey) {
+    if (panel.videoGenerationMode !== marker.generationMode) {
+      throw panelVideoPersistReconciliationRequired(
+        new Error('VIDEO_PANEL_PERSIST_MODE_UNCONFIRMED'),
+      )
+    }
+    return { panelId: panel.id, videoUrl: marker.cosKey }
   }
 
-  // 兜底：通过 storyboardId + panelIndex 定位
-  const storyboardId = payload.storyboardId
-  const panelIndex = payload.panelIndex
-  if (typeof storyboardId !== 'string' || !storyboardId || panelIndex === undefined || panelIndex === null) {
-    throw new Error('Missing storyboardId/panelIndex for video task')
-  }
-
-  const panel = await fetchPanelByStoryboardIndex(storyboardId, Number(panelIndex))
-  if (!panel) throw new Error('Panel not found by storyboardId/panelIndex')
-  return panel
+  await cleanupPanelVideoPersistUpload(job, marker)
+  throw new Error('VIDEO_PANEL_BATCH_SOURCE_STALE')
 }
 
 async function generateVideoForPanel(
@@ -84,7 +234,11 @@ async function generateVideoForPanel(
   modelId: string,
   projectVideoRatio: string | null | undefined,
   generationOptions: VideoOptionMap,
-): Promise<{ cosKey: string; generationMode: VideoGenerationMode }> {
+): Promise<{
+  videoSource: string
+  downloadHeaders: Record<string, string> | undefined
+  generationMode: VideoGenerationMode
+}> {
   if (!panel.imageUrl) {
     throw new Error(`Panel ${panel.id} has no imageUrl`)
   }
@@ -143,12 +297,16 @@ async function generateVideoForPanel(
       firstLastFramePayload.lastFramePanelIndex !== undefined
     ) {
       const lastPanel = await fetchPanelByStoryboardIndex(
+        job.data.projectId,
         firstLastFramePayload.lastFrameStoryboardId,
         Number(firstLastFramePayload.lastFramePanelIndex),
       )
-      if (lastPanel?.imageUrl) {
-        lastFrameImageUrl = toSignedUrlIfCos(lastPanel.imageUrl, 3600) || undefined
+      if (!lastPanel) throw new Error('Last-frame panel not found in task project')
+      if (lastPanel.storyboard.episodeId !== panel.storyboard.episodeId) {
+        throw new Error('Last-frame panel is outside target episode')
       }
+      if (!lastPanel.imageUrl) throw new Error('Last-frame panel has no imageUrl')
+      lastFrameImageUrl = toSignedUrlIfCos(lastPanel.imageUrl, 3600) || undefined
     }
   }
 
@@ -198,18 +356,60 @@ async function generateVideoForPanel(
     }
   }
 
-  const cosKey = await uploadVideoSourceToCos(videoSource, 'panel-video', panel.id, downloadHeaders)
-  return { cosKey, generationMode }
+  return { videoSource, downloadHeaders, generationMode }
 }
 
-async function handleVideoPanelTask(job: Job<TaskJobData>) {
+export async function handleVideoPanelTask(job: Job<TaskJobData>) {
   const payload = (job.data.payload || {}) as AnyObj
+  const isBatch = payload.all === true
+  const hasBatchFields = payload.batchRunId !== undefined
+    || payload.panelSourceSnapshot !== undefined
+    || payload.batchGenerationIdentity !== undefined
+  let quotedSource: StoryboardBatchVideoPanelSource | null = null
+  if (isBatch) {
+    const batchRunId = typeof payload.batchRunId === 'string' ? payload.batchRunId.trim() : ''
+    const declaredIdentity = typeof payload.batchGenerationIdentity === 'string'
+      ? payload.batchGenerationIdentity
+      : ''
+    quotedSource = readStoryboardBatchVideoPanelSource(payload.panelSourceSnapshot)
+    if (
+      !job.data.episodeId
+      || !batchRunId
+      || !declaredIdentity
+      || !quotedSource
+      || readStoryboardBatchVideoTaskIdentity(payload) !== declaredIdentity
+      || (typeof quotedSource.videoUrl === 'string' && quotedSource.videoUrl.trim().length > 0)
+      || (typeof quotedSource.videoMediaId === 'string' && quotedSource.videoMediaId.trim().length > 0)
+    ) {
+      throw new Error('VIDEO_PANEL_BATCH_CONTRACT_INVALID')
+    }
+  } else if (hasBatchFields) {
+    throw new Error('VIDEO_PANEL_BATCH_CONTRACT_INVALID')
+  }
+
+  const pendingPersistMarker = isBatch
+    ? await readDurablePanelVideoPersistMarker(job)
+    : null
+  const panel = await getPanelForVideoTask(job)
+  if (job.data.episodeId && job.data.episodeId !== panel.storyboard.episodeId) {
+    throw new Error('VIDEO_PANEL_TARGET_EPISODE_MISMATCH')
+  }
+  if (quotedSource) {
+    if (pendingPersistMarker) {
+      assertPanelVideoPersistMarkerContext(pendingPersistMarker, job, payload, quotedSource)
+      return await reconcilePanelVideoPersistMarker(job, pendingPersistMarker, panel)
+    }
+    if (
+      hasStoredVideoOutput(panel)
+      || !isStoryboardBatchVideoPanelSourceCurrent(quotedSource, panel)
+    ) {
+      throw new Error('VIDEO_PANEL_BATCH_SOURCE_STALE')
+    }
+  }
   const projectModels = await getProjectModels(job.data.projectId, job.data.userId)
 
   const modelId = typeof payload.videoModel === 'string' ? payload.videoModel.trim() : ''
   if (!modelId) throw new Error('VIDEO_MODEL_REQUIRED: payload.videoModel is required')
-
-  const panel = await getPanelForVideoTask(job)
 
   const generationOptions = extractGenerationOptions(payload)
 
@@ -218,7 +418,7 @@ async function handleVideoPanelTask(job: Job<TaskJobData>) {
     panelId: panel.id,
   })
 
-  const { cosKey, generationMode } = await generateVideoForPanel(
+  const { videoSource, downloadHeaders, generationMode } = await generateVideoForPanel(
     job,
     panel,
     payload,
@@ -227,14 +427,96 @@ async function handleVideoPanelTask(job: Job<TaskJobData>) {
     generationOptions,
   )
 
-  await assertTaskActive(job, 'persist_panel_video')
-  await prisma.novelPromotionPanel.update({
-    where: { id: panel.id },
-    data: {
+  if (quotedSource) {
+    const currentPanel = await requireNovelPromotionPanelInProject(job.data.projectId, panel.id)
+    if (
+      currentPanel.storyboard.episodeId !== panel.storyboard.episodeId
+      || hasStoredVideoOutput(currentPanel)
+      || !isStoryboardBatchVideoPanelSourceCurrent(quotedSource, currentPanel)
+    ) {
+      throw new Error('VIDEO_PANEL_BATCH_SOURCE_STALE')
+    }
+  }
+
+  await assertTaskActive(job, 'upload_panel_video')
+
+  const cosKey = await uploadVideoSourceToCos(
+    videoSource,
+    'panel-video',
+    panel.id,
+    downloadHeaders,
+  )
+
+  if (quotedSource) {
+    const marker: PanelVideoPersistMarker = {
+      kind: 'panel_video_persist',
+      taskId: job.data.taskId,
+      panelId: panel.id,
+      episodeId: panel.storyboard.episodeId,
+      cosKey,
+      quotedSnapshot: quotedSource,
+      generationMode,
+    }
+    let markerStored: boolean
+    try {
+      markerStored = await tryUpdateTaskProgress(job.data.taskId, 94, {
+        [PANEL_VIDEO_PERSIST_MARKER_KEY]: marker,
+      })
+    } catch (markerError) {
+      try {
+        await cleanupPanelVideoPersistUpload(job, marker)
+      } catch (cleanupError) {
+        throw panelVideoPersistReconciliationRequired({ markerError, cleanupError })
+      }
+      throw markerError
+    }
+    if (!markerStored) {
+      await cleanupPanelVideoPersistUpload(job, marker)
+      throw new TaskTerminatedError(
+        job.data.taskId,
+        'Task terminated before panel video persistence marker was stored',
+      )
+    }
+
+    try {
+      await assertTaskActive(job, 'persist_panel_video')
+    } catch (error) {
+      await cleanupPanelVideoPersistUpload(job, marker)
+      throw error
+    }
+
+    let persisted: boolean
+    try {
+      persisted = await compareAndSetNovelPromotionPanelVideoFromBatchQuote(
+        job.data.projectId,
+        panel.id,
+        panel.storyboard.episodeId,
+        quotedSource,
+        { videoUrl: cosKey, videoGenerationMode: generationMode },
+      )
+    } catch (casError) {
+      let currentPanel: PanelRecord
+      try {
+        currentPanel = await requireNovelPromotionPanelInProject(job.data.projectId, panel.id)
+        if (currentPanel.storyboard.episodeId !== panel.storyboard.episodeId) {
+          throw new Error('VIDEO_PANEL_TARGET_EPISODE_MISMATCH')
+        }
+      } catch (readError) {
+        throw panelVideoPersistReconciliationRequired({ casError, readError })
+      }
+      return await reconcilePanelVideoPersistMarker(job, marker, currentPanel)
+    }
+    if (!persisted) {
+      await cleanupPanelVideoPersistUpload(job, marker)
+      throw new Error('VIDEO_PANEL_BATCH_SOURCE_STALE')
+    }
+  } else {
+    await assertTaskActive(job, 'persist_panel_video')
+    await updateNovelPromotionPanelInProject(job.data.projectId, panel.id, {
       videoUrl: cosKey,
       videoGenerationMode: generationMode,
-    },
-  })
+    })
+  }
 
   return {
     panelId: panel.id,
@@ -242,34 +524,36 @@ async function handleVideoPanelTask(job: Job<TaskJobData>) {
   }
 }
 
-async function handleLipSyncTask(job: Job<TaskJobData>) {
+export async function handleLipSyncTask(job: Job<TaskJobData>) {
   const payload = (job.data.payload || {}) as AnyObj
   const lipSyncModel = typeof payload.lipSyncModel === 'string' && payload.lipSyncModel.trim()
     ? payload.lipSyncModel.trim()
     : undefined
 
-  let panel: PanelRecord | null = null
-  if (job.data.targetType === 'NovelPromotionPanel') {
-    panel = await prisma.novelPromotionPanel.findUnique({ where: { id: job.data.targetId } })
+  if (job.data.targetType !== 'NovelPromotionPanel') {
+    throw new Error('LIP_SYNC_TARGET_MISMATCH')
   }
-
+  const panel = await requireNovelPromotionPanelInProject(job.data.projectId, job.data.targetId)
+  if (job.data.episodeId && job.data.episodeId !== panel.storyboard.episodeId) {
+    throw new Error('LIP_SYNC_TARGET_EPISODE_MISMATCH')
+  }
   if (
-    !panel &&
-    typeof payload.storyboardId === 'string' &&
-    payload.storyboardId &&
-    payload.panelIndex !== undefined
+    (typeof payload.storyboardId === 'string' && payload.storyboardId !== panel.storyboardId)
+    || (payload.panelIndex !== undefined && Number(payload.panelIndex) !== panel.panelIndex)
   ) {
-    panel = await fetchPanelByStoryboardIndex(payload.storyboardId, Number(payload.panelIndex))
+    throw new Error('LIP_SYNC_TARGET_MISMATCH')
   }
 
-  if (!panel) throw new Error('Lip-sync panel not found')
   if (!panel.videoUrl) throw new Error('Panel has no base video')
 
   const voiceLineId = typeof payload.voiceLineId === 'string' ? payload.voiceLineId : null
   if (!voiceLineId) throw new Error('Lip-sync task missing voiceLineId')
 
-  const voiceLine = await prisma.novelPromotionVoiceLine.findUnique({ where: { id: voiceLineId } })
-  if (!voiceLine || !voiceLine.audioUrl) {
+  const voiceLine = await requireNovelPromotionVoiceLineInProject(job.data.projectId, voiceLineId)
+  if (voiceLine.episodeId !== panel.storyboard.episodeId) {
+    throw new Error('LIP_SYNC_VOICE_EPISODE_MISMATCH')
+  }
+  if (!voiceLine.audioUrl) {
     throw new Error('Voice line or audioUrl not found')
   }
 
@@ -291,15 +575,16 @@ async function handleLipSyncTask(job: Job<TaskJobData>) {
 
   await reportTaskProgress(job, 93, { stage: 'persist_lip_sync' })
 
+  await assertTaskActive(job, 'persist_lip_sync_video')
+  const currentPanel = await requireNovelPromotionPanelInProject(job.data.projectId, panel.id)
+  if (currentPanel.storyboard.episodeId !== panel.storyboard.episodeId) {
+    throw new Error('LIP_SYNC_TARGET_EPISODE_MISMATCH')
+  }
   const cosKey = await uploadVideoSourceToCos(source, 'lip-sync', panel.id)
 
-  await assertTaskActive(job, 'persist_lip_sync_video')
-  await prisma.novelPromotionPanel.update({
-    where: { id: panel.id },
-    data: {
-      lipSyncVideoUrl: cosKey,
-      lipSyncTaskId: null,
-    },
+  await updateNovelPromotionPanelInProject(job.data.projectId, panel.id, {
+    lipSyncVideoUrl: cosKey,
+    lipSyncTaskId: null,
   })
 
   return {
@@ -342,7 +627,18 @@ export function createVideoWorker() {
   return new Worker<TaskJobData>(
     QUEUE_NAME.VIDEO,
     async (job) => {
-      return await withTaskLifecycle(job, processVideoTask)
+      return await withTaskLifecycle(
+        job,
+        processVideoTask,
+        job.data.type === TASK_TYPE.EPISODE_STITCH_MP4
+          ? {
+              completionClaim: async ({ result, billing }) =>
+                await claimEpisodePackageCompletion(job, result, billing),
+              terminalReconcile: async () =>
+                await reconcileEpisodePackageTerminalState(job),
+            }
+          : undefined,
+      )
     },
     {
       connection: queueRedis,

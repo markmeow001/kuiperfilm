@@ -6,6 +6,7 @@ import { requireProjectAuthLight, isErrorResponse } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
 import { attachMediaFieldsToProject } from '@/lib/media/attach'
 import { resolveMediaRefFromLegacyValue } from '@/lib/media/service'
+import { assertUserMediaWriteReferenceAllowed } from '@/lib/media/write-policy'
 
 /**
  * GET - 获取单个剧集的完整数据
@@ -86,6 +87,7 @@ export const PATCH = apiHandler(async (
   if (description !== undefined) updateData.description = description?.trim() || null
   if (novelText !== undefined) updateData.novelText = novelText
   if (audioUrl !== undefined) {
+    await assertUserMediaWriteReferenceAllowed(audioUrl)
     updateData.audioUrl = audioUrl
     // Q-005: tag MediaObject with the uploader so owner-checks pass downstream.
     const media = await resolveMediaRefFromLegacyValue(

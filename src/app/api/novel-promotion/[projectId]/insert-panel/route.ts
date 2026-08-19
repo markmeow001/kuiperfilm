@@ -6,7 +6,10 @@ import { resolveRequiredTaskLocale } from '@/lib/task/resolve-locale'
 import { TASK_TYPE } from '@/lib/task/types'
 import { buildDefaultTaskBillingInfo } from '@/lib/billing'
 import { getProjectModelConfig } from '@/lib/config-service'
-import { prisma } from '@/lib/prisma'
+import {
+  findNovelPromotionPanelInProject,
+  findNovelPromotionStoryboardInProject,
+} from '@/lib/novel-promotion/project-scope'
 
 export const POST = apiHandler(async (
   request: NextRequest,
@@ -33,16 +36,23 @@ export const POST = apiHandler(async (
   // when a concurrent script_to_storyboard_run / clips_build /
   // regenerate_storyboard_text is mutating the same episode's panel
   // graph.
-  const storyboardRef = await prisma.novelPromotionStoryboard.findUnique({
-    where: { id: storyboardId },
-    select: { episodeId: true },
-  })
+  const storyboardRef = await findNovelPromotionStoryboardInProject(projectId, storyboardId)
   if (!storyboardRef) {
     throw new ApiError('NOT_FOUND', { message: 'storyboard not found' })
   }
 
+  const insertAfterPanel = await findNovelPromotionPanelInProject(projectId, insertAfterPanelId)
+  if (!insertAfterPanel || insertAfterPanel.storyboardId !== storyboardRef.id) {
+    throw new ApiError('NOT_FOUND', { message: 'panel not found' })
+  }
+
   const projectModelConfig = await getProjectModelConfig(projectId, session.user.id)
-  const billingPayload = { ...body, ...(projectModelConfig.analysisModel ? { analysisModel: projectModelConfig.analysisModel } : {}) }
+  const billingPayload = {
+    ...body,
+    storyboardId: storyboardRef.id,
+    insertAfterPanelId: insertAfterPanel.id,
+    ...(projectModelConfig.analysisModel ? { analysisModel: projectModelConfig.analysisModel } : {}),
+  }
 
   const result = await submitTask({
     userId: session.user.id,

@@ -27,7 +27,6 @@
  */
 
 import type { Dispatch, ReactNode, SetStateAction } from 'react'
-import type { UseMutationResult } from '@tanstack/react-query'
 import {
   V2StoryboardTimelineStrip,
 } from './V2StoryboardTimelineStrip'
@@ -48,20 +47,21 @@ import type {
   MediaDisplayMode,
   VideoFamily,
   FailedTaskMeta,
-  EpisodeBinding,
   EpisodeWithNumber,
 } from './storyboard-client-helpers'
 import type {
   UpdatePanelTextMutation,
   CharacterRosterEntry,
 } from './V2GroupsLayout'
-import type { AutoGroupResult } from '@/lib/query/mutations/auto-group-multi-shot-mutation'
+import type { AutoGroupMutation } from '@/lib/query/mutations/auto-group-multi-shot-mutation'
 import type {
   useRegenerateProjectPanelImage,
   useUpdateProjectPanel,
 } from '@/lib/query/mutations/storyboard-panel-mutations'
 import type { useGenerateVideo } from '@/lib/query/hooks/useStoryboards'
 import type { useActiveTasks } from '@/lib/query/hooks/useTaskStatus'
+import { DarkMediaLightbox } from '@/components/v2/DarkMediaLightbox'
+import type { ActiveCharacterAppearanceBindingState } from '../subjects/active-character-appearance'
 
 export interface V2StoryboardTimelineViewProps {
   // ── identity / project shape ──
@@ -106,7 +106,7 @@ export interface V2StoryboardTimelineViewProps {
   analyzeState: AnalyzeState
   onAnalyzeStoryboard: () => void
   onStaleCleanupOpen: () => void
-  autoGroup: UseMutationResult<AutoGroupResult, Error, { episodeId: string }>
+  autoGroup: AutoGroupMutation
   onAutoGroup: () => void
 
   // ── multi-shot ──
@@ -115,7 +115,7 @@ export interface V2StoryboardTimelineViewProps {
 
   // ── batch ──
   batchImageState: { submitted: number; total: number } | null
-  batchVideoState: { submitted: number; total: number } | null
+  batchVideoMode: 'idle' | 'busy' | 'view'
   onBatchGenerateImages: () => void
   onBatchGenerateVideos: () => void
 
@@ -150,7 +150,8 @@ export interface V2StoryboardTimelineViewProps {
 
   // ── inspector ──
   characterRoster: CharacterRosterEntry[]
-  episodeBindings: EpisodeBinding[]
+  appearanceBindingState: ActiveCharacterAppearanceBindingState
+  appearanceGenerationBlocked: boolean
 
   // ── zoom modal ──
   zoomImageUrl: string | null
@@ -159,7 +160,7 @@ export interface V2StoryboardTimelineViewProps {
 
 export function V2StoryboardTimelineView(props: V2StoryboardTimelineViewProps) {
   return (
-    <div className="kuiper-storyboard-shell flex flex-col">
+    <div className="kuiper-storyboard-shell flex flex-col [&_a]:min-h-11 [&_a]:min-w-11 [&_button]:min-h-11 [&_button]:min-w-11">
       <V2StoryboardTimelineStrip
         allPanels={props.allPanels}
         selectedId={props.selectedId}
@@ -184,7 +185,7 @@ export function V2StoryboardTimelineView(props: V2StoryboardTimelineViewProps) {
         autoGroup={props.autoGroup}
         onAutoGroup={props.onAutoGroup}
         batchImageState={props.batchImageState}
-        batchVideoState={props.batchVideoState}
+        batchVideoMode={props.batchVideoMode}
         onBatchGenerateImages={props.onBatchGenerateImages}
         onBatchGenerateVideos={props.onBatchGenerateVideos}
         regenPanelPending={props.regenPanel.isPending}
@@ -195,6 +196,7 @@ export function V2StoryboardTimelineView(props: V2StoryboardTimelineViewProps) {
         serverInflightPanelVideoIds={props.serverInflightPanelVideoIds}
         failedPanelImageIds={props.failedPanelImageIds}
         failedPanelVideoIds={props.failedPanelVideoIds}
+        appearanceGenerationBlocked={props.appearanceGenerationBlocked}
       />
 
       {/*
@@ -259,6 +261,7 @@ export function V2StoryboardTimelineView(props: V2StoryboardTimelineViewProps) {
           failedPanelVideoIds={props.failedPanelVideoIds}
           setZoomImageUrl={props.setZoomImageUrl}
           canEdit={props.canEdit}
+          appearanceGenerationBlocked={props.appearanceGenerationBlocked}
         />
 
         {/* Inspector (cast / notes / multi-shot bindings) — rightmost (order-3).
@@ -272,39 +275,19 @@ export function V2StoryboardTimelineView(props: V2StoryboardTimelineViewProps) {
           selected={props.selected}
           selectedGroupTaskId={props.selectedGroupTaskId}
           selectedGroupLabel={props.selectedGroupLabel}
+          currentEpisodeId={props.currentEpisodeId}
           currentEpisode={props.currentEpisode}
           characterRoster={props.characterRoster}
-          episodeBindings={props.episodeBindings}
+          appearanceBindingState={props.appearanceBindingState}
         />
       </div>
-      {/*
-        Click-to-zoom lightbox for the Selected Shot. Renders only when
-        the user has tapped the thumbnail-sized preview. Click anywhere
-        (or hit Esc) to dismiss. Image is fit-contain so a 9:16 still
-        stays inside the viewport without cropping.
-      */}
-      {props.zoomImageUrl ? (
-        <div
-          role="dialog"
-          aria-modal="true"
-          onClick={() => props.setZoomImageUrl(null)}
-          onKeyDown={(e) => {
-            if (e.key === 'Escape') props.setZoomImageUrl(null)
-          }}
-          tabIndex={-1}
-          className="fixed inset-0 z-50 flex cursor-zoom-out items-center justify-center bg-canvas/95 p-8"
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={props.zoomImageUrl}
-            alt="Zoomed"
-            className="max-h-full max-w-full object-contain"
-          />
-          <div className="pointer-events-none absolute bottom-6 left-1/2 -translate-x-1/2 font-mono text-[14px] uppercase tracking-wider text-text-secondary">
-            click anywhere or press esc to close
-          </div>
-        </div>
-      ) : null}
+      <DarkMediaLightbox
+        src={props.zoomImageUrl}
+        alt="分鏡圖片"
+        closeLabel="關閉分鏡圖片預覽"
+        dismissHint="點擊背景或按 Esc 關閉"
+        onClose={() => props.setZoomImageUrl(null)}
+      />
 
       {props.globalOverlaysNode}
     </div>

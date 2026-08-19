@@ -23,6 +23,14 @@ import { apiHandler, ApiError } from '@/lib/api-errors'
 import { attachMediaFieldsToProp } from '@/lib/media/attach'
 import { propagatePropRename } from '@/lib/novel-promotion/rename-propagation'
 import { logInfo as _ulogInfo } from '@/lib/logging/core'
+import {
+  deriveManualUploadIds,
+  normalizeManualUploadIdempotencyKey,
+} from '@/lib/novel-promotion/manual-upload-idempotency'
+
+function throwManualUploadReplayConflict(): never {
+  throw new ApiError('CONFLICT', { code: 'MANUAL_UPLOAD_IDEMPOTENCY_CONFLICT' })
+}
 
 export const GET = apiHandler(async (
   _request: NextRequest,
@@ -68,14 +76,25 @@ export const POST = apiHandler(async (
   if (isErrorResponse(authResult)) return authResult
 
   const body = await request.json().catch(() => ({}))
-  const { name, summary, episodeId } = body as {
+  const { name, summary, episodeId, idempotencyKey: rawIdempotencyKey } = body as {
     name?: unknown
     summary?: unknown
     episodeId?: unknown
+    idempotencyKey?: unknown
   }
 
   if (typeof name !== 'string' || !name.trim()) {
     throw new ApiError('INVALID_PARAMS', { message: 'name is required' })
+  }
+  if (summary !== undefined && typeof summary !== 'string') {
+    throw new ApiError('INVALID_PARAMS')
+  }
+
+  let idempotencyKey: string | null
+  try {
+    idempotencyKey = normalizeManualUploadIdempotencyKey(rawIdempotencyKey)
+  } catch {
+    throw new ApiError('INVALID_PARAMS', { code: 'INVALID_IDEMPOTENCY_KEY' })
   }
 
   const npProject = await prisma.novelPromotionProject.findUnique({
@@ -86,6 +105,8 @@ export const POST = apiHandler(async (
     throw new ApiError('NOT_FOUND', { code: 'NOVEL_PROMOTION_NOT_FOUND' })
   }
 
+  const normalizedName = name.trim()
+  const normalizedSummary = typeof summary === 'string' ? summary.trim() || null : null
   const normalizedEpisodeId = typeof episodeId === 'string' ? episodeId.trim() : ''
   const prop = await prisma.$transaction(async (tx) => {
     if (normalizedEpisodeId) {
@@ -96,11 +117,68 @@ export const POST = apiHandler(async (
       if (!episode) throw new ApiError('NOT_FOUND', { code: 'EPISODE_NOT_FOUND' })
     }
 
+    if (idempotencyKey) {
+      const ids = deriveManualUploadIds('prop', npProject.id, idempotencyKey)
+      const inserted = await tx.novelPromotionProp.createMany({
+        data: [{
+          id: ids.entityId,
+          novelPromotionProjectId: npProject.id,
+          name: normalizedName,
+          summary: normalizedSummary,
+        }],
+        skipDuplicates: true,
+      })
+      const replayProp = await tx.novelPromotionProp.findUnique({
+        where: { id: ids.entityId },
+      })
+      if (
+        !replayProp
+        || replayProp.novelPromotionProjectId !== npProject.id
+        || replayProp.name !== normalizedName
+        || (replayProp.summary ?? null) !== normalizedSummary
+      ) {
+        throwManualUploadReplayConflict()
+      }
+
+      const existingBinding = await tx.episodeProp.findUnique({
+        where: { id: ids.bindingId },
+      })
+      if (inserted.count === 0) {
+        if (normalizedEpisodeId) {
+          if (
+            !existingBinding
+            || existingBinding.episodeId !== normalizedEpisodeId
+            || existingBinding.propId !== ids.entityId
+          ) {
+            throwManualUploadReplayConflict()
+          }
+        } else if (existingBinding) {
+          throwManualUploadReplayConflict()
+        }
+      }
+      if (normalizedEpisodeId) {
+        const binding = await tx.episodeProp.upsert({
+          where: { id: ids.bindingId },
+          update: {},
+          create: {
+            id: ids.bindingId,
+            episodeId: normalizedEpisodeId,
+            propId: ids.entityId,
+            role: 'manual',
+          },
+        })
+        if (binding.episodeId !== normalizedEpisodeId || binding.propId !== ids.entityId) {
+          throwManualUploadReplayConflict()
+        }
+      }
+      return replayProp
+    }
+
     const created = await tx.novelPromotionProp.create({
       data: {
         novelPromotionProjectId: npProject.id,
-        name: name.trim(),
-        summary: typeof summary === 'string' ? summary.trim() || null : null,
+        name: normalizedName,
+        summary: normalizedSummary,
       },
     })
     if (normalizedEpisodeId) {

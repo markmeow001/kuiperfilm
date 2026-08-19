@@ -59,6 +59,15 @@ describe('DepthRebuildGuidePlanPanel', () => {
     expect(onCriticalCenterChange).toHaveBeenCalledWith(6.4)
   })
 
+  it('[關鍵動作 slider] -> 放在獨立的可觸控 label', () => {
+    render(<DepthRebuildGuidePlanPanel {...buildProps()} />)
+
+    const hitArea = screen.getByRole('slider', { name: '關鍵動作位置' })
+      .closest('[data-live-composite-control-hit-area]')
+
+    expect(hitArea?.tagName).toBe('LABEL')
+  })
+
   it('完整雙引導 -> 顯示完整 RGB 且不顯示關鍵位置 slider', () => {
     render(
       <DepthRebuildGuidePlanPanel

@@ -1,6 +1,4 @@
-import { createHash } from 'node:crypto'
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
 import { requireProjectAuthLight, isErrorResponse } from '@/lib/api-auth'
 import { apiHandler, ApiError, getRequestId } from '@/lib/api-errors'
 import { submitTask } from '@/lib/task/submitter'
@@ -19,6 +17,9 @@ import { loadSkillConfigForProject } from '@/lib/skills/server'
 import { applySkillDefaultsToPayload } from '@/lib/skills/apply-defaults'
 import { resolveStageModel } from '@/lib/skills/resolve-stage-model'
 import { createScopedLogger } from '@/lib/logging/core'
+import { findNovelPromotionPanelSetInProject } from '@/lib/novel-promotion/project-scope'
+import { resolveMultiShotPanelLimitForModel } from '@/lib/novel-promotion/multi-shot-submission'
+import { buildMultiShotDedupeKey } from '@/lib/novel-promotion/multi-shot-dedupe'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value)
@@ -42,22 +43,29 @@ export const POST = apiHandler(async (
   const locale = resolveRequiredTaskLocale(request, body)
 
   // Validate panelIds
-  const panelIds = body.panelIds
-  if (!Array.isArray(panelIds) || panelIds.length < 1 || panelIds.length > 6) {
+  const rawPanelIds = body.panelIds
+  if (!Array.isArray(rawPanelIds) || rawPanelIds.length < 1 || rawPanelIds.length > 9) {
     throw new ApiError('INVALID_PARAMS', {
       code: 'PANEL_IDS_INVALID',
       field: 'panelIds',
-      details: { message: 'panelIds must be an array of 1-6 panel IDs' },
+      details: { message: 'panelIds must be an array of 1-9 panel IDs' },
     })
   }
 
-  for (const id of panelIds) {
+  for (const id of rawPanelIds) {
     if (typeof id !== 'string' || !id.trim()) {
       throw new ApiError('INVALID_PARAMS', {
         code: 'PANEL_IDS_INVALID',
         field: 'panelIds',
       })
     }
+  }
+  const panelIds = rawPanelIds.map((id) => (id as string).trim())
+  if (new Set(panelIds).size !== panelIds.length) {
+    throw new ApiError('INVALID_PARAMS', {
+      code: 'PANEL_IDS_DUPLICATE',
+      field: 'panelIds',
+    })
   }
 
   // Validate videoModel
@@ -67,6 +75,18 @@ export const POST = apiHandler(async (
       code: 'VIDEO_MODEL_REQUIRED',
       field: 'videoModel',
     })
+  }
+
+  const panelSet = await findNovelPromotionPanelSetInProject(projectId, panelIds)
+  if (!panelSet) {
+    throw new ApiError('NOT_FOUND', {
+      code: 'PANELS_NOT_FOUND_OR_MIXED_SCOPE',
+    })
+  }
+  const panels = panelSet.panels
+  const storyboard = {
+    id: panelSet.storyboardId,
+    episodeId: panelSet.episodeId,
   }
 
   // Optional multi-shot mode (B-path only). Defaults to model-decides
@@ -320,19 +340,6 @@ export const POST = apiHandler(async (
   const visualStyleId = readOptionalStyleId('visualStyleId')
   const lightingPresetId = readOptionalStyleId('lightingPresetId')
 
-  // Verify all panels exist and have imageUrl
-  const panels = await prisma.novelPromotionPanel.findMany({
-    where: { id: { in: panelIds } },
-    select: { id: true, imageUrl: true, storyboardId: true },
-  })
-
-  if (panels.length !== panelIds.length) {
-    throw new ApiError('NOT_FOUND', {
-      code: 'PANELS_NOT_FOUND',
-      details: { expected: panelIds.length, found: panels.length },
-    })
-  }
-
   // Panel imageUrl is required only on the C path (KieAI / image-to-video).
   // Routes that anchor identity outside per-panel imageUrl (B-path
   // SubjectInfos.N, Seedance composite via taijiai/atlascloud/ark/fal which
@@ -351,18 +358,6 @@ export const POST = apiHandler(async (
         },
       })
     }
-  }
-
-  // Use the storyboard of the first panel as target
-  const storyboard = await prisma.novelPromotionStoryboard.findFirst({
-    where: { id: panels[0].storyboardId },
-    select: { id: true, episodeId: true },
-  })
-
-  if (!storyboard) {
-    throw new ApiError('NOT_FOUND', {
-      code: 'STORYBOARD_NOT_FOUND',
-    })
   }
 
   // Phase 2.5 Step 4-A — resolve anchored Skill (if any).
@@ -442,6 +437,19 @@ export const POST = apiHandler(async (
     ? applySkillDefaultsToPayload({ ...userPayload, videoModel: resolvedVideoModel }, resolvedSkill.config)
     : { ...userPayload, videoModel: resolvedVideoModel }
 
+  const maxPanels = resolveMultiShotPanelLimitForModel(resolvedVideoModel)
+  if (panelIds.length > maxPanels) {
+    throw new ApiError('INVALID_PARAMS', {
+      code: 'PANEL_IDS_MODEL_LIMIT_EXCEEDED',
+      field: 'panelIds',
+      details: {
+        count: panelIds.length,
+        max: maxPanels,
+        videoModel: resolvedVideoModel,
+      },
+    })
+  }
+
   const result = await submitTask({
     userId: session.user.id,
     locale,
@@ -453,38 +461,15 @@ export const POST = apiHandler(async (
     targetId: storyboard.id,
     skillId: resolvedSkill?.id ?? null,
     payload: payloadWithSkillDefaults,
-    // 2026-05-01: include the panel set in the dedupe key. Without
-    // this, every group on the same storyboard shared the same key
-    // (`video_multi_shot:<storyboardId>`) and submitTask collapsed
-    // them into a single in-flight task — user-reported all groups
-    // showing the same video. Groups have non-overlapping panel sets,
-    // so a stable hash of (panelIds, overrides, mode, durations,
-    // prompt) gives each submission its own identity while still
-    // deduping rapid double-clicks with identical inputs.
-    //
-    // Hashed (not raw) because dedupeKey is VARCHAR(191) and a
-    // stringified override payload easily exceeds that — Prisma
-    // P2000 the moment a user passes rawPrompt or even mid-size
-    // characterOverrides. SHA-256 sliced to 16 hex chars = 64 bits
-    // of entropy, plenty for collision-free dedupe within a
-    // project's task set.
-    dedupeKey: (() => {
-      const fingerprint = JSON.stringify({
-        ids: [...panelIds].sort(),
-        c: characterOverrides ?? null,
-        l: locationOverrides ?? null,
-        d: panelDurations ?? null,
-        m: multiShotMode ?? null,
-        p: promptStyle ?? null,
-        r: rawPrompt ?? null,
-        f1: firstFrameImageUrl ?? null,
-        f2: lastFrameImageUrl ?? null,
-        vs: visualStyleId ?? null,
-        lp: lightingPresetId ?? null,
-      })
-      const hash = createHash('sha256').update(fingerprint).digest('hex').slice(0, 16)
-      return `video_multi_shot:${storyboard.id}:${hash}`
-    })(),
+    // Identity is the exact resolved render request, including ordered
+    // panels, model/settings and Skill source. A changed render contract
+    // must never attach to an older active task.
+    dedupeKey: buildMultiShotDedupeKey({
+      storyboardId: storyboard.id,
+      payload: payloadWithSkillDefaults,
+      skillId: resolvedSkill?.id ?? null,
+      videoModelSource,
+    }),
   })
 
   return NextResponse.json(result)

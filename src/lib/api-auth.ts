@@ -634,11 +634,13 @@ export async function requireProjectAccess(
     // Step 3.5 [LEGACY]: editorCanAccessProject preserves existing 4-tier
     // behavior for projects with workspaceId=NULL. Will be removed once
     // all projects have explicit workspaceId (Phase 2 migration).
-    // Only fires when step 3 didn't match — keep the call out of the hot
-    // path for new (workspaceId set) projects.
-    const legacyAllowed = await editorCanAccessProject(requesterId, project.userId)
-    if (legacyAllowed) {
-        return { allowed: true, effectiveRole: 'ws_owner_legacy' }
+    // Explicitly-scoped projects must never inherit access from an unrelated
+    // legacy workspace owned by the requester.
+    if (project.workspaceId === null) {
+        const legacyAllowed = await editorCanAccessProject(requesterId, project.userId)
+        if (legacyAllowed) {
+            return { allowed: true, effectiveRole: 'ws_owner_legacy' }
+        }
     }
 
     // Step 4: per-project collaborator (explicit grant, overrides workspace default).

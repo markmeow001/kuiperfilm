@@ -47,7 +47,6 @@ COPY --from=builder /app/standards ./standards
 COPY --from=builder /app/messages ./messages
 COPY --from=builder /app/tsconfig.json ./tsconfig.json
 COPY --from=builder /app/next.config.ts ./next.config.ts
-COPY --from=builder /app/middleware.ts ./middleware.ts
 COPY --from=builder /app/postcss.config.mjs ./postcss.config.mjs
 
 # 本地存储数据目录 + 空 .env（tsx --env-file=.env 需要文件存在，实际 env 由 docker-compose 注入）

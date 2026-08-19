@@ -32,9 +32,10 @@
  * Only visible to owner / admin (callers should gate the trigger button).
  */
 
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useLocale, useTranslations } from 'next-intl'
+import { Modal } from '@/components/v2/Modal'
 import { UserRole } from '@/lib/auth/user-role'
 
 type CollabRole = 'editor' | 'viewer'
@@ -91,15 +92,6 @@ export function ProjectCollaboratorsModal({
   const [pickerOpen, setPickerOpen] = useState(false)
   const [pickerFilter, setPickerFilter] = useState('')
   const [errMsg, setErrMsg] = useState<string | null>(null)
-
-  // ESC to close
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
 
   // Load current collaborators
   const collabQuery = useQuery({
@@ -257,19 +249,19 @@ export function ProjectCollaboratorsModal({
   })
 
   return (
-    <div
-      onClick={onClose}
-      className="fixed inset-0 z-[150] flex items-center justify-center bg-black/70 backdrop-blur-sm"
+    <Modal
+      open
+      onClose={onClose}
+      size="md"
+      className="flex max-h-[min(86vh,760px)] flex-col overflow-hidden"
     >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        className="relative w-full max-w-lg rounded-sm border border-amber-900/30 bg-stone-950 shadow-2xl"
+      <Modal.Header
+        heading={t('title')}
+        onClose={onClose}
+        closeAriaLabel={t('closeIcon')}
       >
-        <header className="flex items-start justify-between gap-4 border-b border-amber-900/20 px-5 py-4">
-          <div className="flex-1">
-            <h2 className="font-fraunces text-lg italic text-amber-300">{t('title')}</h2>
-            <div className="mt-2 flex items-center gap-2">
-              <span className="font-mono text-[11px] tracking-wider text-stone-500">{t('workspaceLabel')}</span>
+            <div className="mt-3 flex flex-col items-start gap-2 sm:flex-row sm:items-center">
+              <span className="font-mono text-[11px] tracking-wider text-[var(--production-ink-muted)]">{t('workspaceLabel')}</span>
               <select
                 value={workspaceId ?? ''}
                 onChange={(e) => {
@@ -277,7 +269,7 @@ export function ProjectCollaboratorsModal({
                   assignMutation.mutate(v === '' ? null : v)
                 }}
                 disabled={assignMutation.isPending || workspacesQuery.isLoading}
-                className="rounded-sm border border-stone-700 bg-stone-900 px-2 py-1 font-serif-cn text-xs text-stone-200 outline-none focus:border-amber-500/40 disabled:opacity-50"
+                className="min-h-11 w-full rounded-[10px] border border-[var(--production-border)] bg-[var(--production-muted)] px-3 py-2 font-serif-cn text-xs text-[var(--production-ink)] outline-none hover:border-[var(--production-border-dark)] focus-visible:border-[var(--production-focus)] focus-visible:ring-2 focus-visible:ring-[rgba(85,175,192,0.24)] disabled:opacity-50 sm:w-auto"
               >
                 <option value="">{t('personalOption')}</option>
                 {(workspacesQuery.data ?? []).map((w) => (
@@ -287,33 +279,25 @@ export function ProjectCollaboratorsModal({
                 ))}
               </select>
               {assignMutation.isPending ? (
-                <span className="font-mono text-[10px] text-stone-500">{t('savingChange')}</span>
+                <span className="font-mono text-[11px] text-[var(--production-ink-muted)]">{t('savingChange')}</span>
               ) : null}
             </div>
-            <p className="mt-2 font-mono text-[11px] tracking-wider text-stone-500">
+            <p className="mt-2 font-mono text-[11px] tracking-wider text-[var(--production-ink-muted)]">
               {workspaceId ? t('explainWorkspaceMember') : t('explainPersonal')}
             </p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-sm border border-stone-700 px-2 py-1 font-mono text-xs text-stone-400 hover:border-stone-500 hover:text-stone-200"
-          >
-            {t('closeIcon')}
-          </button>
-        </header>
+      </Modal.Header>
 
-        <div className="max-h-[60vh] overflow-y-auto px-5 py-4">
+      <Modal.Body className="overflow-y-auto px-4 py-4 sm:px-5">
           {collabQuery.isLoading ? (
-            <div className="font-mono text-xs text-stone-500">{t('loadingCollaborators')}</div>
+            <div className="font-mono text-xs text-[var(--production-ink-muted)]">{t('loadingCollaborators')}</div>
           ) : (
             <>
-              <div className="mb-3 font-mono text-[11px] uppercase tracking-[0.2em] text-amber-600/80">
+              <div className="mb-3 font-mono text-[11px] uppercase tracking-[0.2em] text-[var(--process-cyan-strong)]">
                 {t('grantsHeader', { count: collaborators.length })}
               </div>
 
               {collaborators.length === 0 ? (
-                <p className="rounded-sm border border-stone-800/60 bg-stone-900/40 px-3 py-3 font-fraunces text-xs italic text-stone-500">
+                <p className="rounded-[10px] border border-[var(--production-border)] bg-[var(--production-muted)] px-3 py-3 font-fraunces text-xs italic text-[var(--production-ink-muted)]">
                   {t('grantsEmpty')}
                 </p>
               ) : (
@@ -321,25 +305,25 @@ export function ProjectCollaboratorsModal({
                   {collaborators.map((c) => (
                     <li
                       key={c.userId}
-                      className="flex items-center justify-between gap-3 rounded-sm border border-stone-800/60 bg-stone-900/40 px-3 py-2"
+                      className="flex flex-col items-stretch gap-3 rounded-[10px] border border-[var(--production-border)] bg-[var(--production-muted)] px-3 py-3 sm:flex-row sm:items-center sm:justify-between"
                     >
                       <div className="min-w-0 flex-1">
-                        <div className="font-serif-cn text-sm text-stone-200">
+                        <div className="font-serif-cn text-sm text-[var(--production-ink)]">
                           @{c.user.name ?? t('userUnnamed')}
                           {c.user.displayName ? (
-                            <span className="ml-2 font-mono text-[11px] text-stone-500">
+                            <span className="ml-2 font-mono text-[11px] text-[var(--production-ink-muted)]">
                               {c.user.displayName}
                             </span>
                           ) : null}
                         </div>
-                        <div className="mt-0.5 font-mono text-[10px] tracking-wider text-stone-600">
+                        <div className="mt-0.5 font-mono text-[11px] tracking-wider text-[var(--production-ink-muted)]">
                           {t('grantedBy', {
                             by: c.granter.name ?? '?',
                             date: new Date(c.grantedAt).toLocaleString(dateLocale),
                           })}
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 sm:shrink-0">
                         <select
                           value={c.role}
                           onChange={(e) =>
@@ -349,7 +333,7 @@ export function ProjectCollaboratorsModal({
                             })
                           }
                           disabled={upsertMutation.isPending || revokeMutation.isPending}
-                          className="rounded-sm border border-stone-800 bg-stone-950 px-2 py-1 font-mono text-[12px] text-stone-200 disabled:opacity-50"
+                          className="min-h-11 flex-1 rounded-[9px] border border-[var(--production-border)] bg-[var(--production-paper)] px-3 py-2 font-mono text-[12px] text-[var(--production-ink)] outline-none hover:border-[var(--production-border-dark)] focus-visible:border-[var(--production-focus)] focus-visible:ring-2 focus-visible:ring-[rgba(85,175,192,0.24)] disabled:opacity-50"
                         >
                           <option value="editor">editor</option>
                           <option value="viewer">viewer</option>
@@ -358,7 +342,7 @@ export function ProjectCollaboratorsModal({
                           type="button"
                           onClick={() => revokeMutation.mutate(c.userId)}
                           disabled={revokeMutation.isPending || upsertMutation.isPending}
-                          className="rounded-sm border border-stone-800 px-2 py-1 font-mono text-[12px] tracking-wider text-stone-400 hover:border-rose-500/50 hover:text-rose-300 disabled:opacity-50"
+                          className="min-h-11 rounded-[9px] border border-[var(--production-border)] px-3 py-2 font-mono text-[12px] tracking-wider text-[var(--production-ink-muted)] transition-colors hover:border-rose-500/55 hover:bg-rose-500/10 hover:text-rose-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--production-focus)] disabled:opacity-50"
                         >
                           {t('remove')}
                         </button>
@@ -369,20 +353,20 @@ export function ProjectCollaboratorsModal({
               )}
 
               {errMsg ? (
-                <div className="mt-3 rounded-sm border border-rose-500/30 bg-rose-500/10 px-3 py-2 font-serif-cn text-xs text-rose-300">
+                <div className="mt-3 rounded-[10px] border border-rose-500/35 bg-rose-500/10 px-3 py-2 font-serif-cn text-xs text-rose-200" role="alert">
                   {errMsg}
                 </div>
               ) : null}
 
               {/* Add picker */}
               {workspaceId ? (
-                <div className="mt-4 border-t border-stone-800/60 pt-4">
+                <div className="mt-4 border-t border-[var(--production-border)] pt-4">
                   {!pickerOpen ? (
                     <button
                       type="button"
                       onClick={() => setPickerOpen(true)}
                       disabled={addableMembers.length === 0 && wsMembers.length > 0}
-                      className="w-full rounded-sm border border-amber-500/40 bg-amber-500/5 px-3 py-2 font-mono text-[12px] tracking-wider text-amber-300 transition-all hover:bg-amber-500/15 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="min-h-11 w-full rounded-[10px] bg-[var(--production-blue)] px-4 py-2 font-mono text-[12px] font-semibold tracking-wider text-white transition-colors hover:bg-[var(--production-blue-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--production-focus)] disabled:cursor-not-allowed disabled:opacity-50"
                       title={
                         addableMembers.length === 0 && wsMembers.length > 0
                           ? t('addableEmpty')
@@ -392,9 +376,9 @@ export function ProjectCollaboratorsModal({
                       {t('invite')}
                     </button>
                   ) : (
-                    <div className="rounded-sm border border-amber-500/40 bg-amber-500/5 p-3">
+                    <div className="rounded-[10px] border border-[color-mix(in_srgb,var(--process-cyan)_48%,var(--production-border))] bg-[var(--process-cyan-soft)] p-3">
                       <div className="mb-2 flex items-center justify-between">
-                        <span className="font-mono text-[11px] uppercase tracking-wider text-amber-400">
+                        <span className="font-mono text-[11px] uppercase tracking-wider text-[var(--process-cyan-strong)]">
                           {t('pickerTitle')}
                         </span>
                         <button
@@ -403,7 +387,7 @@ export function ProjectCollaboratorsModal({
                             setPickerOpen(false)
                             setPickerFilter('')
                           }}
-                          className="font-mono text-[11px] text-stone-500 hover:text-stone-300"
+                          className="min-h-11 rounded-[9px] px-3 font-mono text-[11px] text-[var(--production-ink-muted)] transition-colors hover:bg-[var(--production-muted)] hover:text-[var(--production-ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--production-focus)]"
                         >
                           {t('pickerCancel')}
                         </button>
@@ -413,12 +397,12 @@ export function ProjectCollaboratorsModal({
                         value={pickerFilter}
                         onChange={(e) => setPickerFilter(e.target.value)}
                         placeholder={t('pickerSearchPlaceholder')}
-                        className="mb-2 w-full rounded-sm border border-stone-800 bg-stone-950 px-2 py-1.5 font-mono text-[12px] text-stone-200 outline-none focus:border-amber-500/40"
+                        className="mb-2 min-h-11 w-full rounded-[9px] border border-[var(--production-border)] bg-[var(--production-paper)] px-3 py-2 font-mono text-[12px] text-[var(--production-ink)] outline-none placeholder:text-[var(--production-ink-muted)] hover:border-[var(--production-border-dark)] focus-visible:border-[var(--production-focus)] focus-visible:ring-2 focus-visible:ring-[rgba(85,175,192,0.24)]"
                       />
                       {membersQuery.isLoading ? (
-                        <div className="font-mono text-[12px] text-stone-500">{t('pickerLoading')}</div>
+                        <div className="font-mono text-[12px] text-[var(--production-ink-muted)]">{t('pickerLoading')}</div>
                       ) : addableMembers.length === 0 ? (
-                        <p className="font-fraunces text-xs italic text-stone-500">
+                        <p className="font-fraunces text-xs italic text-[var(--production-ink-muted)]">
                           {wsMembers.length === 0
                             ? t('pickerEmptyNoOthers')
                             : t('pickerEmptyAllAdded')}
@@ -428,24 +412,24 @@ export function ProjectCollaboratorsModal({
                           {addableMembers.map((m) => (
                             <li
                               key={m.userId}
-                              className="flex items-center justify-between gap-2 rounded-sm bg-stone-950/50 px-2 py-1.5"
+                              className="flex flex-col items-stretch gap-2 rounded-[9px] bg-[var(--production-paper)] px-2 py-2 sm:flex-row sm:items-center sm:justify-between"
                             >
-                              <div className="min-w-0 flex-1 truncate font-serif-cn text-sm text-stone-300">
+                              <div className="min-w-0 flex-1 truncate font-serif-cn text-sm text-[var(--production-ink)]">
                                 @{m.userName}
                                 {m.displayName ? (
-                                  <span className="ml-2 font-mono text-[11px] text-stone-500">
+                                  <span className="ml-2 font-mono text-[11px] text-[var(--production-ink-muted)]">
                                     {m.displayName}
                                   </span>
                                 ) : null}
                               </div>
-                              <div className="flex items-center gap-1.5">
+                              <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
                                 <button
                                   type="button"
                                   onClick={() =>
                                     upsertMutation.mutate({ userId: m.userId, role: UserRole.EDITOR })
                                   }
                                   disabled={upsertMutation.isPending}
-                                  className="rounded-sm border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 font-mono text-[11px] tracking-wider text-amber-300 hover:bg-amber-500/20 disabled:opacity-50"
+                                  className="min-h-11 rounded-[9px] bg-[var(--production-blue)] px-3 py-2 font-mono text-[11px] font-semibold tracking-wider text-white transition-colors hover:bg-[var(--production-blue-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--production-focus)] disabled:opacity-50"
                                 >
                                   {t('addEditor')}
                                 </button>
@@ -455,7 +439,7 @@ export function ProjectCollaboratorsModal({
                                     upsertMutation.mutate({ userId: m.userId, role: UserRole.VIEWER })
                                   }
                                   disabled={upsertMutation.isPending}
-                                  className="rounded-sm border border-stone-700 px-2 py-0.5 font-mono text-[11px] tracking-wider text-stone-400 hover:border-stone-500 hover:text-stone-200 disabled:opacity-50"
+                                  className="min-h-11 rounded-[9px] border border-[var(--production-border)] px-3 py-2 font-mono text-[11px] tracking-wider text-[var(--production-ink-muted)] transition-colors hover:border-[var(--production-border-dark)] hover:bg-[var(--production-muted)] hover:text-[var(--production-ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--production-focus)] disabled:opacity-50"
                                 >
                                   {t('addViewer')}
                                 </button>
@@ -468,14 +452,13 @@ export function ProjectCollaboratorsModal({
                   )}
                 </div>
               ) : (
-                <p className="mt-4 border-t border-stone-800/60 pt-4 font-serif-cn text-xs italic text-stone-500">
+                <p className="mt-4 border-t border-[var(--production-border)] pt-4 font-serif-cn text-xs italic text-[var(--production-ink-muted)]">
                   {t('noWorkspaceNoPool')}
                 </p>
               )}
             </>
           )}
-        </div>
-      </div>
-    </div>
+      </Modal.Body>
+    </Modal>
   )
 }

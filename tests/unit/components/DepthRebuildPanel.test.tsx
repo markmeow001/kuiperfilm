@@ -344,4 +344,28 @@ describe('DepthRebuildPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: '清除失敗任務' }))
     expect(onResetSubmittedRun).toHaveBeenCalledTimes(1)
   })
+
+  it('主要控制 -> 使用 44px darkroom/cyan 操作與鍵盤焦點', () => {
+    render(<DepthRebuildPanel {...buildProps()} />)
+
+    expect(screen.getByRole('button', { name: '更換表演影片' })).toHaveClass(
+      'h-11',
+      'focus-visible:ring-cyan-300/70',
+    )
+    expect(screen.getByRole('button', { name: '重新產生深度影片' })).toHaveClass(
+      'h-11',
+      'bg-cyan-300',
+    )
+    expect(screen.getByRole('button', { name: '重新檢查並建立 Prompt' })).toHaveClass(
+      'h-11',
+      'focus-visible:ring-2',
+    )
+    expect(screen.getByLabelText('模型')).toHaveClass('h-11', 'focus-visible:ring-cyan-300/70')
+    expect(screen.getByLabelText('輸出解析度')).toHaveClass('h-11', 'focus-visible:ring-cyan-300/70')
+    expect(screen.getByRole('button', { name: '確認費用並生成影片' })).toHaveClass(
+      'h-11',
+      'bg-cyan-300',
+      'focus-visible:ring-cyan-300/70',
+    )
+  })
 })

@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
-import { uploadToCOS, generateUniqueKey, cosKeyToSignedUrl } from '@/lib/cos'
+import { uploadToCOS, generateUniqueKey, cosKeyToSignedUrl, deleteCOSObject } from '@/lib/cos'
 import sharp from 'sharp'
 import { requireProjectAuthLight, isErrorResponse } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
+import {
+  findNovelPromotionPanelInProject,
+  NovelPromotionProjectScopeError,
+  updateNovelPromotionPanelInProject,
+} from '@/lib/novel-promotion/project-scope'
 
 /**
  * POST /api/novel-promotion/[projectId]/upload-panel-image
@@ -26,6 +30,12 @@ export const POST = apiHandler(async (
     throw new ApiError('INVALID_PARAMS')
   }
 
+  // Resolve ownership before image processing or any external storage write.
+  const panel = await findNovelPromotionPanelInProject(projectId, panelId)
+  if (!panel) {
+    throw new ApiError('NOT_FOUND')
+  }
+
   // Read and compress the image
   const arrayBuffer = await file.arrayBuffer()
   const buffer = Buffer.from(arrayBuffer)
@@ -38,25 +48,23 @@ export const POST = apiHandler(async (
   const key = generateUniqueKey(`panel-${panelId}-upload`, 'jpg')
   await uploadToCOS(processed, key)
 
-  // Find the panel and save old imageUrl for undo
-  const panel = await prisma.novelPromotionPanel.findUnique({
-    where: { id: panelId },
-  })
-
-  if (!panel) {
-    throw new ApiError('NOT_FOUND')
-  }
-
   const previousImageUrl = panel.imageUrl
 
   // Update panel with new image
-  await prisma.novelPromotionPanel.update({
-    where: { id: panelId },
-    data: {
+  try {
+    await updateNovelPromotionPanelInProject(projectId, panel.id, {
       imageUrl: key,
       previousImageUrl: previousImageUrl,
-    },
-  })
+    })
+  } catch (error) {
+    // A project transfer/delete racing the upload must not leave a durable
+    // object that no longer has an owned database row.
+    await deleteCOSObject(key).catch(() => undefined)
+    if (error instanceof NovelPromotionProjectScopeError) {
+      throw new ApiError('NOT_FOUND')
+    }
+    throw error
+  }
 
   const signedUrl = cosKeyToSignedUrl(key)
 

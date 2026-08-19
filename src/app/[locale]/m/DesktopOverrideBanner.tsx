@@ -68,14 +68,14 @@ export function DesktopOverrideBanner() {
   if (hidden) return null
 
   return (
-    <div className="sticky top-0 z-40 flex items-center gap-2 border-b border-amber-900/30 bg-stone-950/95 px-3 py-2 backdrop-blur-sm">
-      <div className="flex-1 font-mono text-[11px] leading-tight tracking-wider text-stone-400">
+    <div className="sticky top-0 z-40 flex items-center gap-2 border-b border-[#263642] bg-[#0D141B]/96 px-3 py-2 backdrop-blur-sm">
+      <div className="min-w-0 flex-1 font-mono text-[11px] leading-tight tracking-wider text-[#A7B3BC]">
         手機版 · 完整創作流程請切桌面版
       </div>
       <button
         type="button"
         onClick={handleSwitchToDesktop}
-        className="rounded-sm border border-amber-500/40 bg-amber-500/10 px-3 py-1 font-serif-cn text-xs text-amber-300 transition-colors hover:bg-amber-500/20"
+        className="inline-flex min-h-11 shrink-0 items-center whitespace-nowrap rounded-lg border border-[#31505D] bg-[#13262F] px-3 font-serif-cn text-xs font-medium text-[#79C7D4] transition-colors hover:bg-[#18333E] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#55AFC0]"
       >
         切到桌面版
       </button>
@@ -83,7 +83,7 @@ export function DesktopOverrideBanner() {
         type="button"
         onClick={handleDismiss}
         aria-label="關閉提示"
-        className="rounded-sm px-2 py-1 font-mono text-[14px] leading-none text-stone-500 transition-colors hover:text-stone-300"
+        className="grid min-h-11 min-w-11 shrink-0 place-items-center rounded-lg font-mono text-[18px] leading-none text-[#7F909C] transition-colors hover:bg-[#17232D] hover:text-[#F2F6F7] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#55AFC0]"
       >
         ×
       </button>

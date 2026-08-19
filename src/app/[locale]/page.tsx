@@ -1,62 +1,52 @@
 'use client'
 
-/**
- * Public landing — restyled to match the V2 cinematic palette.
- *
- * Replaces the legacy blue/glass theme with the stone-950 + amber-500
- * + fraunces-italic / serif-cn / mono-tracked stack used by the
- * /v2/workspace shell so the brand reads consistently before login.
- */
-
+import { useSession } from 'next-auth/react'
 import { useTranslations } from 'next-intl'
 import Link from 'next/link'
-import { useSession } from 'next-auth/react'
-import { UserRole } from '@/lib/auth/user-role'
+import { useParams } from 'next/navigation'
+
+import { LandingProductionRail } from './LandingProductionRail'
+import { ProductionBrand } from '@/components/v2/ProductionBrand'
 
 export default function Home() {
   const t = useTranslations('landing')
   const { data: session } = useSession()
-  const userName = session?.user?.name ?? null
-  const userRole = (session?.user as { role?: string } | undefined)?.role ?? null
+  const params = useParams<{ locale: string }>()
+  const locale = params?.locale ?? 'zh'
+  const workspaceHref = `/${locale}/v2`
+  const signInHref = `/${locale}/auth/signin`
+  const signUpHref = `/${locale}/auth/signup`
+
+  const railLabels: [string, string, string, string, string, string] = [
+    t('projectLabel'),
+    t('episodeLabel'),
+    t('sceneLabel'),
+    t('shotLabel'),
+    t('takeLabel'),
+    t('deliveryLabel'),
+  ]
 
   return (
-    <div className="font-body grain min-h-screen bg-stone-950 text-stone-200">
-      {/* Top brand bar — matches v2 sidebar / shell typography */}
-      <header className="border-b border-amber-900/15 px-8 py-5">
-        <div className="mx-auto flex max-w-7xl items-center justify-between">
-          <Link href="/" className="flex items-baseline gap-1.5">
-            <span className="font-display text-2xl font-semibold italic tracking-tight text-amber-400">
-              Kuiper
-            </span>
-            <span className="font-serif-cn text-base font-medium text-stone-100">影界</span>
-            <span className="ml-3 font-mono text-[10px] tracking-[0.3em] text-stone-500">
-              AI · MANHUA · STUDIO
-            </span>
-          </Link>
+    <div
+      data-testid="landing-root"
+      className="min-h-screen overflow-x-hidden bg-[#070B0F] text-[#F2F6F7] [--primary-400:#55AFC0]"
+    >
+      <header className="relative z-20 border-b border-[#263642] bg-[#0D141B]/94 px-4 py-4 backdrop-blur-xl sm:px-8">
+        <div className="mx-auto flex max-w-[1440px] items-center justify-between gap-4">
+          <ProductionBrand locale={locale} href={`/${locale}`} tone="dark" />
 
-          <nav className="flex items-center gap-6 font-mono text-[11px] tracking-wider text-stone-400">
+          <nav aria-label="Account" className="flex items-center gap-2 sm:gap-3">
             {session ? (
-              <>
-                <span className="text-stone-500">
-                  {userName} · {(userRole ?? UserRole.MEMBER).toUpperCase()}
-                </span>
-                <Link
-                  href="/zh/v2"
-                  className="rounded-sm border border-amber-500/40 bg-amber-500/10 px-4 py-1.5 font-serif-cn text-sm font-medium text-amber-400 transition-all hover:bg-amber-500/20"
-                >
-                  進入工作區
-                </Link>
-              </>
+              <Link href={workspaceHref} className="inline-flex min-h-11 items-center rounded-lg bg-[#3E73B9] px-4 text-sm font-semibold text-white transition-colors hover:bg-[#4B82C8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#55AFC0]">
+                {t('enterWorkspace')}
+              </Link>
             ) : (
               <>
-                <Link href="/zh/auth/signin" className="hover:text-amber-400">
-                  登入
+                <Link href={signInHref} className="inline-flex min-h-11 items-center rounded-lg px-3 text-sm text-[#A7B3BC] transition-colors hover:text-[#F2F6F7] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#55AFC0]">
+                  {t('signIn')}
                 </Link>
-                <Link
-                  href="/zh/auth/signup"
-                  className="rounded-sm bg-amber-500 px-4 py-1.5 font-serif-cn text-sm font-medium text-stone-950 transition-all hover:bg-amber-400"
-                >
-                  註冊 / 取得邀請碼
+                <Link href={signUpHref} className="hidden min-h-11 items-center rounded-lg border border-[#31505D] bg-[#13262F] px-4 text-sm font-medium text-[#79C7D4] transition-colors hover:bg-[#18333E] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#55AFC0] sm:inline-flex">
+                  {t('invitationOnly')}
                 </Link>
               </>
             )}
@@ -64,134 +54,69 @@ export default function Home() {
         </div>
       </header>
 
-      {/* Backdrop — amber/rose radial like the v2 sidebar accent area */}
-      <div className="pointer-events-none fixed inset-0 z-0">
-        <div className="absolute inset-0 bg-[radial-gradient(1100px_540px_at_85%_-10%,rgba(245,158,11,0.08),transparent),radial-gradient(900px_500px_at_-5%_110%,rgba(190,18,60,0.10),transparent)]" />
-      </div>
-
-      <main className="relative z-10 mx-auto max-w-7xl px-8 pt-20 pb-24">
-        <div className="grid items-center gap-20 lg:grid-cols-2">
-          {/* Left — copy block */}
-          <div className="space-y-8">
-            <div className="font-mono text-[11px] tracking-[0.3em] text-amber-600/80">
-              CHAPTER 01 — FROM SPARK TO SCREEN
-            </div>
-
-            <h1 className="font-serif-cn text-4xl font-medium leading-tight tracking-wide text-stone-100 md:text-6xl">
-              {t('title')}
-              <span className="mt-3 block font-display text-3xl font-normal italic text-amber-400 md:text-5xl">
-                {t('subtitle')}
-              </span>
+      <main className="relative">
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-[680px] bg-[radial-gradient(900px_520px_at_78%_5%,rgba(85,175,192,0.12),transparent_70%)]" />
+        <section className="relative mx-auto grid max-w-[1440px] items-center gap-12 px-5 py-16 sm:px-8 sm:py-24 lg:grid-cols-[0.82fr_1.18fr] lg:gap-16 lg:py-28">
+          <div>
+            <div className="font-mono text-[10px] tracking-[0.28em] text-[#79C7D4]">{t('eyebrow')}</div>
+            <h1 className="mt-5 max-w-2xl font-serif-cn text-4xl font-semibold leading-[1.08] tracking-[-0.035em] sm:text-5xl lg:text-6xl">
+              {t('heroTitle')}
             </h1>
+            <p className="mt-6 max-w-xl text-base leading-8 text-[#A7B3BC] sm:text-lg">{t('heroBody')}</p>
 
-            <p className="max-w-xl font-fraunces text-base italic leading-relaxed text-stone-400 md:text-lg">
-              貼一段小說 → AI 拆解角色 / 場景 / 分鏡 → Kling 多鏡頭生成 → FFmpeg 串成完整短劇。
-              整段創作鏈在一個畫面跑完。
-            </p>
-
-            <div className="flex flex-wrap items-center gap-4 pt-2">
+            <div className="mt-9 flex flex-wrap gap-3">
               {session ? (
-                <Link
-                  href="/zh/v2"
-                  className="inline-flex items-center gap-2 rounded-sm bg-amber-500 px-7 py-3 font-serif-cn text-base font-medium text-stone-950 transition-all hover:bg-amber-400"
-                >
-                  {t('enterWorkspace') ?? '進入工作區'}
-                  <span className="font-mono text-xs">→</span>
+                <Link href={workspaceHref} className="inline-flex min-h-12 items-center rounded-lg bg-[#3E73B9] px-6 font-semibold text-white transition-colors hover:bg-[#4B82C8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#55AFC0] focus-visible:ring-offset-2 focus-visible:ring-offset-[#070B0F]">
+                  {t('enterWorkspace')} <span className="ml-2">→</span>
                 </Link>
               ) : (
                 <>
-                  <Link
-                    href="/zh/auth/signup"
-                    className="inline-flex items-center gap-2 rounded-sm bg-amber-500 px-7 py-3 font-serif-cn text-base font-medium text-stone-950 transition-all hover:bg-amber-400"
-                  >
-                    {t('getStarted') ?? '開始創作'}
-                    <span className="font-mono text-xs">→</span>
+                  <Link href={signUpHref} className="inline-flex min-h-12 items-center rounded-lg bg-[#3E73B9] px-6 font-semibold text-white transition-colors hover:bg-[#4B82C8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#55AFC0] focus-visible:ring-offset-2 focus-visible:ring-offset-[#070B0F]">
+                    {t('getStarted')} <span className="ml-2">→</span>
                   </Link>
-                  <Link
-                    href="/zh/auth/signin"
-                    className="inline-flex items-center gap-2 rounded-sm border border-amber-500/40 px-7 py-3 font-serif-cn text-base font-medium text-amber-400 transition-all hover:bg-amber-500/10"
-                  >
-                    已有帳號?登入
+                  <Link href={signInHref} className="inline-flex min-h-12 items-center rounded-lg border border-[#263642] bg-[#111B24] px-6 font-medium text-[#DDE6E9] transition-colors hover:border-[#3D5664] hover:bg-[#17232D] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#55AFC0]">
+                    {t('signIn')}
                   </Link>
                 </>
               )}
             </div>
 
-            {/* Pipeline preview chips */}
-            <div className="flex flex-wrap items-center gap-2 pt-6">
-              {['劇本', '主體', '分鏡', '配音', '成片'].map((label, i) => (
-                <span
-                  key={label}
-                  className="font-mono text-[10px] uppercase tracking-[0.2em] text-stone-500"
-                >
-                  {String(i + 1).padStart(2, '0')} · {label}
-                  {i < 4 ? <span className="ml-2 text-amber-700">→</span> : null}
-                </span>
-              ))}
-            </div>
-          </div>
-
-          {/* Right — animated frame stack mimicking the storyboard preview */}
-          <div className="relative hidden h-[520px] items-center justify-center lg:flex">
-            <div className="relative h-full w-full max-w-md">
-              {/* Halo */}
-              <div className="absolute left-1/2 top-1/2 h-[110%] w-[110%] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(circle,rgba(245,158,11,0.18),transparent_60%)] blur-3xl" />
-
-              {/* Back card */}
-              <div className="absolute right-4 top-6 h-72 w-56 rotate-6 rounded-sm border border-amber-900/30 bg-stone-900/40">
-                <div className="m-4 h-32 rounded-sm bg-gradient-to-br from-stone-800 to-stone-900" />
-                <div className="mx-4 h-2 w-3/4 rounded-full bg-stone-800" />
-                <div className="mx-4 mt-2 h-2 w-1/2 rounded-full bg-stone-800" />
-              </div>
-
-              {/* Mid card */}
-              <div className="absolute bottom-10 left-6 h-72 w-56 -rotate-3 rounded-sm border border-rose-900/30 bg-stone-900/50">
-                <div className="m-4 h-32 rounded-sm bg-gradient-to-br from-rose-900/30 to-stone-900" />
-                <div className="mx-4 h-2 w-3/4 rounded-full bg-stone-800" />
-                <div className="mx-4 mt-2 h-2 w-1/2 rounded-full bg-stone-800" />
-              </div>
-
-              {/* Front feature card */}
-              <div className="absolute left-1/2 top-1/2 h-80 w-72 -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-sm border border-amber-500/30 bg-stone-900/80 shadow-2xl">
-                <div className="p-5">
-                  <div className="font-mono text-[10px] tracking-[0.3em] text-amber-500/80">
-                    EP 01 · OPENING SEQUENCE
-                  </div>
-                  <div className="mt-3 aspect-video rounded-sm bg-gradient-to-br from-amber-500/10 via-stone-900 to-rose-900/20" />
-                  <div className="mt-4 space-y-2">
-                    <div className="font-fraunces text-sm italic text-stone-300">
-                      Storyboard Strip
-                    </div>
-                    <div className="flex gap-1">
-                      {[0, 1, 2, 3, 4].map((i) => (
-                        <div
-                          key={i}
-                          className={`h-10 flex-1 rounded-sm ${
-                            i === 2 ? 'bg-amber-500/30' : 'bg-stone-800/60'
-                          }`}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                  <div className="mt-4 flex items-center justify-between">
-                    <div className="font-mono text-[9px] tracking-wider text-stone-500">
-                      05 SHOTS · DRAFT 03
-                    </div>
-                    <div className="rounded-sm bg-amber-500 px-3 py-1.5 font-serif-cn text-xs font-medium text-stone-950">
-                      匯出 MP4
-                    </div>
-                  </div>
-                </div>
+            <div className="mt-10 flex items-center gap-3 border-l-2 border-[#55AFC0] pl-4">
+              <div>
+                <div className="font-mono text-[9px] tracking-[0.22em] text-[#7F909C]">{t('statusLabel')}</div>
+                <div className="mt-1 text-sm text-[#DDE6E9]">{t('statusValue')}</div>
               </div>
             </div>
           </div>
-        </div>
+
+          <LandingProductionRail
+            title={t('pipelineTitle')}
+            description={t('pipelineDescription')}
+            labels={railLabels}
+          />
+        </section>
+
+        <section className="relative border-y border-[#263642] bg-[#0D141B]">
+          <div className="mx-auto grid max-w-[1440px] gap-px bg-[#263642] sm:grid-cols-3">
+            {[
+              [t('capabilityScript'), t('capabilityScriptBody'), '01'],
+              [t('capabilityVisual'), t('capabilityVisualBody'), '02'],
+              [t('capabilityFinish'), t('capabilityFinishBody'), '03'],
+            ].map(([title, body, index]) => (
+              <article key={index} className="min-h-48 bg-[#0D141B] p-7 sm:p-8">
+                <div className="font-mono text-[10px] tracking-[0.2em] text-[#79C7D4]">{index}</div>
+                <h2 className="mt-7 font-serif-cn text-xl font-semibold">{title}</h2>
+                <p className="mt-3 max-w-sm text-sm leading-7 text-[#A7B3BC]">{body}</p>
+              </article>
+            ))}
+          </div>
+        </section>
       </main>
 
-      <footer className="relative z-10 border-t border-amber-900/15 px-8 py-6">
-        <div className="mx-auto flex max-w-7xl items-center justify-between font-mono text-[10px] tracking-wider text-stone-600">
-          <span>© KuiperAI · Beta v0.2</span>
-          <span>FROM SPARK TO SCREEN</span>
+      <footer className="border-t border-[#263642] bg-[#070B0F] px-5 py-7 sm:px-8">
+        <div className="mx-auto flex max-w-[1440px] flex-col gap-3 font-mono text-[10px] tracking-[0.16em] text-[#7F909C] sm:flex-row sm:items-center sm:justify-between">
+          <span>© 2026 KUIPER 影界</span>
+          <span>{t('footerLine')}</span>
         </div>
       </footer>
     </div>
