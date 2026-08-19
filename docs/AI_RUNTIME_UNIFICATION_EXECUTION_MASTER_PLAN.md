@@ -916,6 +916,24 @@ Header 点 project 从 `/workspace/[id]` redirect `/v2/workspace/[id]`。旧 `/w
 稀释镜头语言。属既有行为（脚本→镜头边一直存在），本轮未改语义；建议后续把
 script 对 `pickUpstreamText` 的贡献改为可选或仅原始剧本。
 
+## Canvas 全局 AI 输入条 + 脚本三入口（LibTV 对标追加，2026-08-19）
+
+- ✅ **底部全局 AI 输入条 `CanvasAiBar`**：常驻画布底部（取代弹窗式
+  CanvasAssistantPanel，单一助理入口）；自然语言指令 → CANVAS_TEXT(assistant)
+  → 操作计画预览 → 确认套用。新增：文本模型选择（`/api/user/models` 的 llm
+  清单；`/api/canvas/text` 接受可选 modelKey，经 resolveModelSelection('llm')
+  验证，不可解析 → 400 MODEL_NOT_ENABLED，绝不静默换模型）；剧本上传
+  （.txt/.md/.pdf/.docx，走既有 /api/files/extract-episodes 抽纯文本，上限
+  100k 字）。**附件全文不进 LLM**：context 只带 {name, chars, preview≤800}，
+  套用计画时全文由前端填进「第一个 prompt 为空的新建 script 节点」
+  （canvas-assistant-apply.scriptAttachmentText，行为测试钉住不覆盖 LLM 给
+  的 prompt、不落到 text 节点）。assistant 契约新增 scene/prop 节点型别。
+- ✅ **脚本节点空状态三入口**（用户截图完全对标）：尝试：①剧本生成分镜脚本
+  （原文字入口）②角色生成分镜脚本（连入并命名的角色节点为卡司 + 可选故事
+  方向，CANVAS_STORYBOARD 新增 mode:'characters'——先原创短剧再拆分镜，缺卡
+  司显式失败不回退）③自己编写分镜脚本（直接开全屏表格手写一行空镜头）。
+  storyboardMode 持久化在节点 data，↻ 重新生成沿用同一入口。
+
 ## Canvas 脚本生成器（LibTV 三步流程对标，2026-08-19，分支 feat/kling-o3-playground）
 
 脚本节点升级为「脚本生成器」：紧凑卡（三步进度 + 打开全屏编辑器）＋全屏三步

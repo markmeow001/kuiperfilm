@@ -129,6 +129,26 @@ export function shotEditInvalidatesPrompt(patch: Partial<CanvasStoryboardShot>):
   return promptInputs.some((key) => key in patch)
 }
 
+/**
+ * 入口二「角色生成分镜脚本」的卡司：连进脚本节点、已命名的角色节点标题。
+ * 名称去重保序；空标题（还没命名）不算——没名字的角色写不进剧本。
+ */
+export function upstreamCharacterCast(
+  upstream: ReadonlyArray<{ type?: string | null; data?: unknown } | null | undefined>,
+): Array<{ name: string }> {
+  const seen = new Set<string>()
+  const cast: Array<{ name: string }> = []
+  for (const node of upstream) {
+    if (!node || node.type !== 'character') continue
+    const title = (node.data as { title?: unknown } | null | undefined)?.title
+    const name = typeof title === 'string' ? title.trim() : ''
+    if (!name || seen.has(name)) continue
+    seen.add(name)
+    cast.push({ name })
+  }
+  return cast
+}
+
 export function newScriptAssetId(): string {
   return `asset_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
 }

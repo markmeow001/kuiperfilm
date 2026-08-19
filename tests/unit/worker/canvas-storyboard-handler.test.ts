@@ -156,6 +156,35 @@ describe('handleCanvasStoryboardTask', () => {
     expect(res.shots[0].description).toBe('有效镜头')
   })
 
+  it('[characters 入口] -> [prompt 由卡司+故事方向原创，且沿用同一输出契约]', async () => {
+    aiMock.executeAiTextStep.mockResolvedValueOnce({
+      text: '{"globalStyle":"x","assets":[],"shots":[{"description":"ok"}]}',
+      reasoning: '',
+    })
+    const res = await handleCanvasStoryboardTask(makeJob({
+      mode: 'characters',
+      characters: [{ name: 'Hayes', description: '颓废青年' }, { name: 'Maeve' }],
+      brief: '牧场重逢，先冲突后和解',
+      model: 'm',
+    }))
+    expect(res.count).toBe(1)
+    const calls = aiMock.executeAiTextStep.mock.calls as unknown as Array<[
+      { messages?: Array<{ content?: string }> },
+    ]>
+    const prompt = String(calls.at(-1)?.[0]?.messages?.[0]?.content ?? '')
+    expect(prompt).toContain('原创一部适合竖屏短视频的完整短剧')
+    expect(prompt).toContain('- Hayes：颓废青年')
+    expect(prompt).toContain('- Maeve')
+    expect(prompt).toContain('故事方向：牧场重逢，先冲突后和解')
+  })
+
+  it('[characters 入口缺卡司] -> [显式失败，不退回 script 模式]', async () => {
+    await expect(handleCanvasStoryboardTask(makeJob({ mode: 'characters', model: 'm' })))
+      .rejects.toThrow(/1-12 cast members/)
+    await expect(handleCanvasStoryboardTask(makeJob({ mode: 'characters', characters: [{ foo: 1 }], model: 'm' })))
+      .rejects.toThrow(/needs a name/)
+  })
+
   it('throws when script is missing', async () => {
     await expect(handleCanvasStoryboardTask(makeJob({ model: 'm' }))).rejects.toThrow(/script is required/)
   })

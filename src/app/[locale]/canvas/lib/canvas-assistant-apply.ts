@@ -8,6 +8,12 @@ import { arrangeSelectedNodes } from './canvas-layout'
 export interface CanvasAssistantApplyOptions {
   center: { x: number; y: number }
   createId: () => string
+  /**
+   * 底部 AI 输入条附带的剧本全文。LLM 只见摘要（省 token、避开长度上限、
+   * 零复述漂移）；套用计画时把全文填进「第一个 prompt 为空的新建 script
+   * 节点」。没有这样的节点则不落地（不隐式塞进别的节点）。
+   */
+  scriptAttachmentText?: string | null
 }
 
 export interface CanvasAssistantApplyResult {
@@ -30,6 +36,8 @@ export function applyCanvasAssistantPlan(
   let nodes = currentNodes.map((node) => ({ ...node, data: { ...node.data } }))
   let edges = currentEdges.map((edge) => ({ ...edge, data: edge.data ? { ...edge.data } : undefined }))
   const aliases = new Map<string, string>()
+  // 附件全文只落一次：第一个 prompt 为空的新建 script 节点。
+  let attachmentText = options.scriptAttachmentText?.trim() || null
 
   for (const operation of plan.operations) {
     if (operation.kind === 'create_node') {
@@ -37,6 +45,11 @@ export function applyCanvasAssistantPlan(
       if (aliases.has(operation.alias)) throw new Error(`重复的节点别名：${operation.alias}`)
       aliases.set(operation.alias, id)
       const index = aliases.size - 1
+      const injectAttachment = Boolean(
+        attachmentText && operation.nodeType === 'script' && !operation.prompt,
+      )
+      const injectedPrompt = injectAttachment ? attachmentText : null
+      if (injectAttachment) attachmentText = null
       nodes = [
         ...nodes.map((node) => ({ ...node, selected: false })),
         {
@@ -48,6 +61,7 @@ export function applyCanvasAssistantPlan(
             title: operation.title || NODE_META[operation.nodeType].label,
             ...DEFAULT_NODE_DATA,
             ...(operation.prompt ? { prompt: operation.prompt } : {}),
+            ...(injectedPrompt ? { prompt: injectedPrompt } : {}),
             ...(operation.aspectRatio ? { aspectRatio: operation.aspectRatio } : {}),
           },
         },

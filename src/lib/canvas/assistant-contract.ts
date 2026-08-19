@@ -10,6 +10,8 @@ export const CANVAS_ASSISTANT_NODE_TYPES = [
   'composition',
   'director',
   'character',
+  'scene',
+  'prop',
 ] as const satisfies readonly CanvasNodeType[]
 
 export type CanvasAssistantNodeType = (typeof CANVAS_ASSISTANT_NODE_TYPES)[number]

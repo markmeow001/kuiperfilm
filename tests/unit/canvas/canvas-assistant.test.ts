@@ -47,6 +47,46 @@ describe('Canvas Assistant plan', () => {
     expect(locked[0].data.prompt).toBe('')
   })
 
+  it('[附件剧本] -> [context 只带摘要，套用时全文填入第一个空 prompt 的新建脚本节点]', () => {
+    const fullScript = '第一集：' + '很长的剧本全文'.repeat(500)
+    const context = JSON.parse(buildCanvasAssistantContext('根据剧本建流程', [], [], {
+      name: '我的剧本.pdf',
+      chars: fullScript.length,
+      preview: fullScript.slice(0, 800),
+    })) as { scriptAttachment: { name: string; chars: number; preview: string } }
+    // 全文绝不进 LLM context——只有摘要三件套
+    expect(context.scriptAttachment.name).toBe('我的剧本.pdf')
+    expect(context.scriptAttachment.chars).toBe(fullScript.length)
+    expect(context.scriptAttachment.preview.length).toBeLessThanOrEqual(800)
+    expect(JSON.stringify(context)).not.toContain(fullScript)
+
+    let serial = 0
+    const result = applyCanvasAssistantPlan([], [], parseCanvasAssistantPlan({
+      summary: '建脚本流程',
+      operations: [
+        { kind: 'create_node', alias: 'note', nodeType: 'text', title: '备注', prompt: '保留原 prompt' },
+        { kind: 'create_node', alias: 'script', nodeType: 'script', title: '剧本' },
+        { kind: 'create_node', alias: 'script2', nodeType: 'script', title: '第二个脚本' },
+      ],
+    }), { center: { x: 0, y: 0 }, createId: () => `new-${++serial}`, scriptAttachmentText: fullScript })
+
+    const scripts = result.nodes.filter((item) => item.type === 'script')
+    // 只填第一个空 prompt 的脚本节点；text 节点与第二个脚本都不受影响
+    expect(scripts[0]?.data.prompt).toBe(fullScript)
+    expect(scripts[1]?.data.prompt).toBe('')
+    expect(result.nodes.find((item) => item.type === 'text')?.data.prompt).toBe('保留原 prompt')
+  })
+
+  it('[附件存在但计画的脚本节点已带 prompt] -> [不覆盖 LLM 给的 prompt]', () => {
+    const result = applyCanvasAssistantPlan([], [], parseCanvasAssistantPlan({
+      summary: 'x',
+      operations: [
+        { kind: 'create_node', alias: 's', nodeType: 'script', title: '剧本', prompt: 'LLM 摘要版' },
+      ],
+    }), { center: { x: 0, y: 0 }, createId: () => 'id-1', scriptAttachmentText: '全文' })
+    expect(result.nodes[0]?.data.prompt).toBe('LLM 摘要版')
+  })
+
   it('bounds the context sent to AI and marks truncation', () => {
     const nodes = Array.from({ length: 61 }, (_, index) => node(`n-${index}`, 'text', index === 0))
     const edges: Edge[] = Array.from({ length: 101 }, (_, index) => ({ id: `e-${index}`, source: 'n-0', target: `n-${index % 60}` }))

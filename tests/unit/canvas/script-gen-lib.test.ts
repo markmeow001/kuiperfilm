@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   assetImagePrompt,
+  upstreamCharacterCast,
   scriptGenProgress,
   shotEditInvalidatesPrompt,
   shotReferenceKeys,
@@ -112,5 +113,18 @@ describe('shotEditInvalidatesPrompt', () => {
     expect(shotEditInvalidatesPrompt({ sfx: 'x' })).toBe(true)
     expect(shotEditInvalidatesPrompt({ durationSec: 8 })).toBe(false)
     expect(shotEditInvalidatesPrompt({ finalPrompt: 'x' })).toBe(false)
+  })
+})
+
+describe('upstreamCharacterCast — 入口二卡司', () => {
+  it('[已命名角色节点] -> [取标题为角色名，去重保序；未命名与非角色跳过]', () => {
+    expect(upstreamCharacterCast([
+      { type: 'character', data: { title: ' Hayes ' } },
+      { type: 'character', data: { title: 'Maeve' } },
+      { type: 'character', data: { title: 'Hayes' } },
+      { type: 'character', data: { title: '' } },
+      { type: 'scene', data: { title: '牧场客厅' } },
+      null,
+    ])).toEqual([{ name: 'Hayes' }, { name: 'Maeve' }])
   })
 })

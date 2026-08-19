@@ -143,6 +143,10 @@ export interface CanvasNodeData extends Record<string, unknown> {
   globalStyle?: string | null
   /** Script node: 准备资产步骤的资产清单（LLM 抽取 + 用户增删改）。 */
   scriptAssets?: CanvasScriptAsset[] | null
+  /** Script node: 分镜来源入口（重新生成沿用同一模式）。 */
+  storyboardMode?: 'script' | 'characters'
+  /** Script node: 角色生成模式的故事方向。 */
+  storyboardBrief?: string | null
   /** Script node: 合成提示词任务轮询句柄。 */
   promptsTaskId?: string | null
   /**
@@ -342,6 +346,7 @@ export const DEFAULT_NODE_DATA = {
   storyboardTaskId: null as string | null,
   globalStyle: null as string | null,
   scriptAssets: null as CanvasScriptAsset[] | null,
+  storyboardBrief: null as string | null,
   promptsTaskId: null as string | null,
   promptsSig: null as string | null,
   refUrls: null as string[] | null,

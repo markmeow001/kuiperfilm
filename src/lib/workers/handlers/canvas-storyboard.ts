@@ -59,6 +59,21 @@ export interface CanvasStoryboardResult {
 
 const MAX_SHOTS = 40
 
+export interface CanvasStoryboardCastMember {
+  name: string
+  description?: string
+}
+
+/** 入口二「角色生成分镜脚本」：以给定卡司原创短剧再拆分镜。 */
+function buildCharactersSource(cast: CanvasStoryboardCastMember[], brief: string): string {
+  return [
+    '（没有现成剧本——请先以下列角色为主角，原创一部适合竖屏短视频的完整短剧，再按要求拆解。）',
+    '主要角色：',
+    ...cast.map((member) => `- ${member.name}${member.description ? `：${member.description}` : ''}`),
+    ...(brief ? ['', `故事方向：${brief}`] : []),
+  ].join('\n')
+}
+
 function buildPrompt(script: string): string {
   return [
     '你是一位专业短剧分镜师兼摄影指导。把下面的剧本/故事拆解成一份完整的分镜表与制作资产清单。',
@@ -178,13 +193,37 @@ function parseStoryboard(text: string): CanvasStoryboardResult {
   return { shots, globalStyle, assets }
 }
 
+function parseCast(raw: unknown): CanvasStoryboardCastMember[] {
+  if (!Array.isArray(raw) || raw.length === 0 || raw.length > 12) {
+    throw new Error('CANVAS_STORYBOARD: characters mode needs 1-12 cast members')
+  }
+  return raw.map((item, i) => {
+    if (!item || typeof item !== 'object') {
+      throw new Error(`CANVAS_STORYBOARD: cast member ${i + 1} is not an object`)
+    }
+    const record = item as Record<string, unknown>
+    const name = trimmedString(record.name)
+    if (!name) throw new Error(`CANVAS_STORYBOARD: cast member ${i + 1} needs a name`)
+    const description = trimmedString(record.description)
+    return { name, ...(description ? { description } : {}) }
+  })
+}
+
 export async function handleCanvasStoryboardTask(job: Job<TaskJobData>) {
   const payload = (job.data.payload || {}) as Record<string, unknown>
-  const script = typeof payload.script === 'string' ? payload.script.trim() : ''
+  const mode = payload.mode === 'characters' ? 'characters' : 'script'
   const model = typeof payload.model === 'string' ? payload.model : ''
-
-  if (!script) throw new Error('CANVAS_STORYBOARD: script is required')
   if (!model) throw new Error('CANVAS_STORYBOARD: model not resolved')
+
+  let script: string
+  if (mode === 'characters') {
+    const cast = parseCast(payload.characters)
+    const brief = trimmedString(payload.brief) ?? ''
+    script = buildCharactersSource(cast, brief)
+  } else {
+    script = typeof payload.script === 'string' ? payload.script.trim() : ''
+    if (!script) throw new Error('CANVAS_STORYBOARD: script is required')
+  }
 
   await reportTaskProgress(job, 20, { stage: 'canvas_storyboard_generate' })
   await assertTaskActive(job, 'canvas_storyboard_llm')

@@ -54,8 +54,8 @@ import { CANVAS_SOURCE_HANDLE, CANVAS_TARGET_HANDLE, canConnectCanvasNodes, canv
 import { arrangeSelectedNodes, setSelectedLayer, setSelectedLocked, type CanvasArrangeMode, type CanvasLayerMode } from './lib/canvas-layout'
 import { EMPTY_CANVAS_HISTORY, recordCanvasSnapshot, redoCanvasSnapshot, undoCanvasSnapshot, type CanvasHistoryState } from './lib/canvas-history'
 import { clearCanvasImportAssetFromHref, type CanvasImportIntent } from './lib/canvas-import-intent'
-import { CanvasAssistantPanel } from './CanvasAssistantPanel'
-import { buildCanvasAssistantContext } from './lib/canvas-assistant-context'
+import { CanvasAiBar } from './CanvasAiBar'
+import { buildCanvasAssistantContext, type CanvasAssistantAttachment } from './lib/canvas-assistant-context'
 import { applyCanvasAssistantPlan } from './lib/canvas-assistant-apply'
 import type { CanvasAssistantPlan } from '@/lib/canvas/assistant-contract'
 import { CreativeToolShell } from '@/components/v2/CreativeToolShell'
@@ -124,7 +124,8 @@ function CanvasInner({ locale, importIntent }: CanvasClientProps) {
   const [showMinimap, setShowMinimap] = useState(false)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
   const [resourcesOpen, setResourcesOpen] = useState(false)
-  const [assistantOpen, setAssistantOpen] = useState(false)
+  // 底部 AI 输入条常驻；dock/选取工具列的按钮只负责聚焦它。
+  const [aiBarFocus, setAiBarFocus] = useState(0)
   const [resourceError, setResourceError] = useState<string | null>(null)
   const [canvasTitle, setCanvasTitle] = useState('未命名畫布')
   const [activeCanvasId, setActiveCanvasId] = useState<string | null>(null)
@@ -792,14 +793,16 @@ function CanvasInner({ locale, importIntent }: CanvasClientProps) {
   }, [nodes, edges, canvasTitle, save])
 
   const assistantContext = useCallback(
-    (instruction: string) => buildCanvasAssistantContext(instruction, nodes, edges),
+    (instruction: string, attachment: CanvasAssistantAttachment | null) =>
+      buildCanvasAssistantContext(instruction, nodes, edges, attachment),
     [nodes, edges],
   )
-  const applyAssistantPlan = useCallback((plan: CanvasAssistantPlan) => {
+  const applyAssistantPlan = useCallback((plan: CanvasAssistantPlan, scriptAttachmentText: string | null) => {
     const center = centerFlow()
     const next = applyCanvasAssistantPlan(nodes, edges, plan, {
       center: { x: center.x - 140, y: center.y - 80 },
       createId: uid,
+      scriptAttachmentText,
     })
     captureHistory()
     setNodes(next.nodes)
@@ -882,7 +885,7 @@ function CanvasInner({ locale, importIntent }: CanvasClientProps) {
       { key: 'toolbox', label: '工具箱', onClick: () => setToolbox((v) => !v) },
       { key: 'sequence', label: '鏡頭序列', onClick: () => setShowSequence((v) => !v) },
       { key: 'character', label: '資產庫', onClick: () => setCharLib((v) => !v) },
-      { key: 'assistant', label: 'AI 助理', onClick: () => setAssistantOpen((value) => !value) },
+      { key: 'assistant', label: 'AI 助理', onClick: () => setAiBarFocus((value) => value + 1) },
       { key: 'clear', label: '清空畫布', onClick: clearCanvas },
       { key: 'shortcuts', label: '快捷鍵', onClick: () => setShortcutsOpen((v) => !v) },
     ],
@@ -1315,7 +1318,7 @@ function CanvasInner({ locale, importIntent }: CanvasClientProps) {
         >
           <span className="px-1.5 text-[12px]" style={{ color: CANVAS_TOKENS.text.muted }}>已選取 {selectedNodes.length}</span>
           <button type="button" onClick={zoomToSelection} className="h-7 rounded-lg px-2 text-[12px] hover:bg-white/10" style={{ color: CANVAS_TOKENS.text.primary }}>聚焦</button>
-          <button type="button" onClick={() => setAssistantOpen(true)} className="h-7 rounded-lg px-2 text-[12px] hover:bg-white/10" style={{ color: CANVAS_TOKENS.accent }}>✨ AI 助理</button>
+          <button type="button" onClick={() => setAiBarFocus((value) => value + 1)} className="h-7 rounded-lg px-2 text-[12px] hover:bg-white/10" style={{ color: CANVAS_TOKENS.accent }}>✨ AI 助理</button>
           <button type="button" onClick={() => setSelectionLocked(!selectionLocked)} className="h-7 rounded-lg px-2 text-[12px] hover:bg-white/10" style={{ color: selectionLocked ? CANVAS_TOKENS.gold : CANVAS_TOKENS.text.primary }}>{selectionLocked ? '解鎖' : '鎖定'}</button>
           <button type="button" disabled={selectedTopLevelNodes.length === 0} onClick={() => changeSelectedLayer('front')} className="h-7 rounded-lg px-2 text-[12px] hover:bg-white/10 disabled:opacity-35" style={{ color: CANVAS_TOKENS.text.primary }}>置顶</button>
           <button type="button" disabled={selectedTopLevelNodes.length === 0} onClick={() => changeSelectedLayer('back')} className="h-7 rounded-lg px-2 text-[12px] hover:bg-white/10 disabled:opacity-35" style={{ color: CANVAS_TOKENS.text.primary }}>置底</button>
@@ -1366,15 +1369,13 @@ function CanvasInner({ locale, importIntent }: CanvasClientProps) {
         </div>
       ) : null}
 
-      {assistantOpen ? (
-        <CanvasAssistantPanel
-          locale={locale}
-          selectedCount={selectedNodes.length}
-          buildContext={assistantContext}
-          onApply={applyAssistantPlan}
-          onClose={() => setAssistantOpen(false)}
-        />
-      ) : null}
+      <CanvasAiBar
+        locale={locale}
+        selectedCount={selectedNodes.length}
+        focusSignal={aiBarFocus}
+        buildContext={assistantContext}
+        onApply={applyAssistantPlan}
+      />
 
       {/* 快捷键 panel */}
       {shortcutsOpen ? (

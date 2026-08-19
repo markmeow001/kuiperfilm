@@ -29,6 +29,7 @@ import {
   scriptGenProgress,
   shotEditInvalidatesPrompt,
   shotReferenceKeys,
+  upstreamCharacterCast,
 } from '../script-gen/script-gen-lib'
 import { NodeShell } from './node-shell'
 
@@ -60,6 +61,8 @@ export function ScriptNode({ id, data, selected }: NodeProps) {
   const [error, setError] = useState<string | null>(null)
   const [synthError, setSynthError] = useState<string | null>(null)
   const [stage, setStage] = useState<ScriptGenStep | null>(null)
+  // 空节点的入口选择（LibTV「尝试：」序列）；生成过一次后由 storyboardMode 记住。
+  const [entry, setEntry] = useState<'script' | 'characters' | null>(null)
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const connections = useNodeConnections()
@@ -67,6 +70,7 @@ export function ScriptNode({ id, data, selected }: NodeProps) {
   const upstream = useNodesData(incoming)
   const upstreamText = useMemo(() => pickUpstreamText(upstream), [upstream])
   const upstreamRefs = useMemo(() => pickUpstreamReferenceUrls(upstream, id), [upstream, id])
+  const characterCast = useMemo(() => upstreamCharacterCast(upstream), [upstream])
 
   const script = (upstreamText || d.prompt || '').trim()
   const shots = useMemo(() => d.shots ?? [], [d.shots])
@@ -270,24 +274,42 @@ export function ScriptNode({ id, data, selected }: NodeProps) {
   const deleteAsset = useCallback((assetId: string) => setAssets(assets.filter((a) => a.id !== assetId)), [assets, setAssets])
   const setGlobalStyle = useCallback((value: string) => updateNodeData(id, { globalStyle: value || null }), [id, updateNodeData])
 
-  // ── 拆分镜 ──
-  async function handleGenerate() {
-    if (!script) { setError('请输入或连入剧本'); return }
+  // ── 拆分镜（两种入口共用提交；重新生成沿用 storyboardMode） ──
+  async function submitStoryboard(body: Record<string, unknown>, mode: 'script' | 'characters') {
     setError(null)
     setPhase('submitting')
     try {
       const res = await fetch('/api/canvas/storyboard', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ script }),
+        body: JSON.stringify(body),
       })
       const json = await res.json()
       if (!res.ok || !json?.taskId) throw new Error(json?.error?.message ?? json?.error ?? '提交失败')
-      updateNodeData(id, { storyboardTaskId: json.taskId })
+      updateNodeData(id, { storyboardTaskId: json.taskId, storyboardMode: mode })
     } catch (err) {
       setError((err as Error)?.message ?? '提交失败')
       setPhase('failed')
     }
+  }
+  async function handleGenerateFromScript() {
+    if (!script) { setError('请输入或连入剧本'); return }
+    await submitStoryboard({ script }, 'script')
+  }
+  async function handleGenerateFromCharacters() {
+    if (characterCast.length === 0) {
+      setError('先把「角色」节点连进来并命名（节点标题就是角色名）')
+      return
+    }
+    await submitStoryboard({
+      mode: 'characters',
+      characters: characterCast,
+      brief: (d.storyboardBrief ?? '').trim(),
+    }, 'characters')
+  }
+  async function handleRegenerate() {
+    if (d.storyboardMode === 'characters') await handleGenerateFromCharacters()
+    else await handleGenerateFromScript()
   }
 
   // ── 一键合成全部提示词 ──
@@ -447,35 +469,136 @@ export function ScriptNode({ id, data, selected }: NodeProps) {
     },
   ]
 
+  const entryRows = [
+    { key: 'script' as const, icon: '☰', label: '剧本生成分镜脚本' },
+    { key: 'characters' as const, icon: '👤', label: '角色生成分镜脚本' },
+    { key: 'manual' as const, icon: '📝', label: '自己编写分镜脚本' },
+  ]
+
+  function pickEntry(key: 'script' | 'characters' | 'manual') {
+    setError(null)
+    if (key === 'manual') {
+      // 直接进空表手写：先铺一行空镜头（幂等——已有镜头时不会走到这里）。
+      addShot()
+      updateNodeData(id, { storyboardMode: undefined })
+      setStage(1)
+      return
+    }
+    setEntry(key)
+  }
+
+  const generateBusyLabel = phase === 'submitting' ? '提交中…' : phase === 'running' ? '拆分镜中…' : null
+
   return (
     <NodeShell accent={meta.accent} label="脚本生成器" hint={meta.hint} selected={selected} locked={Boolean(d.locked)} width={380}>
       <div className="space-y-2 p-4">
-        {upstreamText ? (
-          <div className="rounded-md px-2 py-1.5 text-[12px]" style={{ background: `${meta.accent}18`, color: CANVAS_TOKENS.text.secondary, border: `1px solid ${meta.accent}33` }}>
-            剧本 ← 上游：{upstreamText.length > 60 ? upstreamText.slice(0, 60) + '…' : upstreamText}
+        {/* ── 空节点：LibTV「尝试：」三入口序列 ── */}
+        {!hasShots && entry === null && !busy ? (
+          <div className="rounded-xl px-4 py-5" style={{ border: `1px solid ${CANVAS_TOKENS.hairline}` }}>
+            <div className="mb-5 flex flex-col items-center gap-1.5 pt-2" aria-hidden>
+              {[56, 56, 56, 32].map((w, i) => (
+                <span key={i} className="h-1.5 rounded-full" style={{ width: w, background: CANVAS_TOKENS.hairline }} />
+              ))}
+            </div>
+            <div className="mb-2 text-[12px]" style={{ color: CANVAS_TOKENS.text.muted }}>尝试：</div>
+            <div className="space-y-1">
+              {entryRows.map((row) => (
+                <button
+                  key={row.key}
+                  type="button"
+                  onClick={() => pickEntry(row.key)}
+                  className="nodrag flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left text-[13px] transition-colors hover:bg-white/5"
+                  style={{ color: CANVAS_TOKENS.text.primary }}
+                >
+                  <span aria-hidden className="text-[13px]" style={{ color: CANVAS_TOKENS.text.secondary }}>{row.icon}</span>
+                  {row.label}
+                </button>
+              ))}
+            </div>
           </div>
-        ) : (
-          <textarea
-            value={d.prompt}
-            onChange={(e) => updateNodeData(id, { prompt: e.target.value })}
-            placeholder="粘贴剧本 / 故事梗概，或连入一个「文本」节点…"
-            rows={hasShots ? 3 : 7}
-            className="nodrag nowheel w-full resize-y rounded-md px-2.5 py-2 text-[13px] leading-relaxed outline-none"
-            style={{ background: CANVAS_TOKENS.bg.input, color: CANVAS_TOKENS.text.primary, border: `1px solid ${CANVAS_TOKENS.hairline}` }}
-          />
-        )}
+        ) : null}
+
+        {/* ── 入口一：剧本生成分镜脚本 ── */}
+        {(!hasShots && entry === 'script') || (hasShots && d.storyboardMode !== 'characters') ? (
+          <>
+            {upstreamText ? (
+              <div className="rounded-md px-2 py-1.5 text-[12px]" style={{ background: `${meta.accent}18`, color: CANVAS_TOKENS.text.secondary, border: `1px solid ${meta.accent}33` }}>
+                剧本 ← 上游：{upstreamText.length > 60 ? upstreamText.slice(0, 60) + '…' : upstreamText}
+              </div>
+            ) : (
+              <textarea
+                value={d.prompt}
+                onChange={(e) => updateNodeData(id, { prompt: e.target.value })}
+                placeholder="粘贴剧本 / 故事梗概，或连入一个「文本」节点…"
+                rows={hasShots ? 3 : 7}
+                className="nodrag nowheel w-full resize-y rounded-md px-2.5 py-2 text-[13px] leading-relaxed outline-none"
+                style={{ background: CANVAS_TOKENS.bg.input, color: CANVAS_TOKENS.text.primary, border: `1px solid ${CANVAS_TOKENS.hairline}` }}
+              />
+            )}
+            <button
+              type="button"
+              onClick={hasShots ? handleRegenerate : handleGenerateFromScript}
+              disabled={busy || !script}
+              className="nodrag w-full rounded-md py-1.5 font-mono text-[12px] font-semibold tracking-wide transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
+              style={{ background: meta.accent, color: '#241A06' }}
+            >
+              {generateBusyLabel ?? (hasShots ? '↻ 重新生成' : '生成分镜')}
+            </button>
+            {!hasShots ? (
+              <button type="button" onClick={() => setEntry(null)} className="nodrag text-[11px]" style={{ color: CANVAS_TOKENS.text.muted }}>
+                ‹ 返回选择
+              </button>
+            ) : null}
+          </>
+        ) : null}
+
+        {/* ── 入口二：角色生成分镜脚本 ── */}
+        {(!hasShots && entry === 'characters') || (hasShots && d.storyboardMode === 'characters') ? (
+          <>
+            {characterCast.length > 0 ? (
+              <div className="flex flex-wrap items-center gap-1 rounded-md px-2 py-1.5 text-[12px]" style={{ background: `${meta.accent}18`, border: `1px solid ${meta.accent}33` }}>
+                <span style={{ color: CANVAS_TOKENS.text.muted }}>卡司：</span>
+                {characterCast.map((member) => (
+                  <span key={member.name} className="rounded px-1.5 py-0.5" style={{ background: CANVAS_TOKENS.bg.hover, color: CANVAS_TOKENS.text.primary }}>
+                    {member.name}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-md px-2 py-1.5 text-[12px] leading-relaxed" style={{ background: CANVAS_TOKENS.bg.hover, color: CANVAS_TOKENS.text.muted, border: `1px solid ${CANVAS_TOKENS.hairline}` }}>
+                把「角色」节点连到本节点左侧的 ＋ 口并命名（节点标题＝角色名），AI 会以这些角色原创短剧并拆分镜。
+              </div>
+            )}
+            <textarea
+              value={d.storyboardBrief ?? ''}
+              onChange={(e) => updateNodeData(id, { storyboardBrief: e.target.value || null })}
+              placeholder="故事方向（可选）：题材 / 关系 / 冲突 / 结局倾向…"
+              rows={3}
+              className="nodrag nowheel w-full resize-y rounded-md px-2.5 py-2 text-[13px] leading-relaxed outline-none"
+              style={{ background: CANVAS_TOKENS.bg.input, color: CANVAS_TOKENS.text.primary, border: `1px solid ${CANVAS_TOKENS.hairline}` }}
+            />
+            <button
+              type="button"
+              onClick={hasShots ? handleRegenerate : handleGenerateFromCharacters}
+              disabled={busy || characterCast.length === 0}
+              className="nodrag w-full rounded-md py-1.5 font-mono text-[12px] font-semibold tracking-wide transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
+              style={{ background: meta.accent, color: '#241A06' }}
+            >
+              {generateBusyLabel ?? (hasShots ? '↻ 重新生成' : `生成分镜（${characterCast.length} 角色）`)}
+            </button>
+            {!hasShots ? (
+              <button type="button" onClick={() => setEntry(null)} className="nodrag text-[11px]" style={{ color: CANVAS_TOKENS.text.muted }}>
+                ‹ 返回选择
+              </button>
+            ) : null}
+          </>
+        ) : null}
+
+        {!hasShots && entry === null && busy ? (
+          <div className="text-center text-[12px]" style={{ color: CANVAS_TOKENS.text.secondary }}>{generateBusyLabel}</div>
+        ) : null}
 
         {error ? <div className="text-[11px]" style={{ color: '#FF8A8A' }}>{error}</div> : null}
-
-        <button
-          type="button"
-          onClick={handleGenerate}
-          disabled={busy || !script}
-          className="nodrag w-full rounded-md py-1.5 font-mono text-[12px] font-semibold tracking-wide transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
-          style={{ background: meta.accent, color: '#241A06' }}
-        >
-          {phase === 'submitting' ? '提交中…' : phase === 'running' ? '拆分镜中…' : hasShots ? '↻ 重新生成' : '生成分镜'}
-        </button>
 
         {hasShots ? (
           <>

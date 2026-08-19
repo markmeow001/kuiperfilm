@@ -18,6 +18,7 @@ import { apiHandler, ApiError } from '@/lib/api-errors'
 import { submitTask } from '@/lib/task/submitter'
 import { TASK_TYPE } from '@/lib/task/types'
 import { getProjectModelConfig } from '@/lib/config-service'
+import { resolveModelSelection } from '@/lib/api-config'
 import { prisma } from '@/lib/prisma'
 import {
   getR2VCanvasTextPolicy,
@@ -69,6 +70,7 @@ export const POST = apiHandler(async (request: NextRequest) => {
   const body = (await request.json()) as {
     text?: unknown
     mode?: unknown
+    modelKey?: unknown
     locale?: unknown
     requestKey?: unknown
   }
@@ -127,17 +129,36 @@ export const POST = apiHandler(async (request: NextRequest) => {
     }
   }
 
-  // Resolve the user's analysis (LLM) model — project → own /profile → admin
-  // fallback. Pinned into payload so billing freezes on it and the worker uses it.
-  const models = await getProjectModelConfig(CANVAS_PROJECT_ID, userId)
-  const model = models.analysisModel
-  if (!model) {
-    throw new ApiError('FORBIDDEN', {
-      code: 'ANALYSIS_MODEL_NOT_CONFIGURED',
-      // message 顶层放置——ApiError 从 details.message 提取用户可读文案，
-      // 嵌套进 details.details 会显示裸 'Forbidden'（2026-07-13 画布实测发现）
-      message: '请先在 /profile 配置文本分析模型',
-    })
+  // Resolve the LLM model. Caller may pin an explicit enabled model (画布底部
+  // AI 输入条的模型选择)；否则走 project → own /profile → admin fallback。
+  // 显式选择必须能在用户已启用的 llm 清单中解析——解析失败就显式 400，
+  // 绝不静默换成别的模型（no-provider-guessing 铁则）。
+  const requestedModelKey = typeof body.modelKey === 'string' ? body.modelKey.trim() : ''
+  let model: string
+  if (requestedModelKey) {
+    try {
+      const selection = await resolveModelSelection(userId, requestedModelKey, 'llm')
+      model = selection.modelKey
+    } catch (error) {
+      throw new ApiError('INVALID_PARAMS', {
+        code: 'MODEL_NOT_ENABLED',
+        message: '指定的文本模型未启用，请在 /profile 启用后重试',
+        details: { requestedModelKey },
+        cause: error instanceof Error ? error.message : String(error),
+      })
+    }
+  } else {
+    const models = await getProjectModelConfig(CANVAS_PROJECT_ID, userId)
+    const fallback = models.analysisModel
+    if (!fallback) {
+      throw new ApiError('FORBIDDEN', {
+        code: 'ANALYSIS_MODEL_NOT_CONFIGURED',
+        // message 顶层放置——ApiError 从 details.message 提取用户可读文案，
+        // 嵌套进 details.details 会显示裸 'Forbidden'（2026-07-13 画布实测发现）
+        message: '请先在 /profile 配置文本分析模型',
+      })
+    }
+    model = fallback
   }
 
   const targetId = crypto.randomUUID()
