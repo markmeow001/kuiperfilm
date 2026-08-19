@@ -15,6 +15,10 @@ function source(relativePath: string): string {
 }
 
 describe('project custom voice UI source contract', () => {
+  // These are source-shape assertions only: they stop the UI from growing a
+  // new caller. The authoritative guard that the endpoints themselves refuse
+  // is tests/integration/api/voice-design-consent-boundary.test.ts, which
+  // asserts the actual 400 + VOICE_SOURCE_CONSENT_REQUIRED response.
   it('[Consent schema is absent] -> [reachable project UI has no custom upload or AI-design mutation hook]', () => {
     const combinedSource = projectUiFiles.map(source).join('\n')
 
@@ -22,6 +26,16 @@ describe('project custom voice UI source contract', () => {
     expect(combinedSource).not.toContain('useDesignProjectVoice')
     expect(source(projectUiFiles[2])).not.toContain('useTTSGeneration')
     expect(source(projectUiFiles[3])).not.toContain('<VoiceDesignDialog')
+  })
+
+  it('[AI voice design is closed] -> [the mutation hook is absent from the whole query layer, not just the UI]', () => {
+    const queryLayer = [
+      'src/lib/query/mutations/useVoiceMutations.ts',
+      'src/lib/query/hooks/index.ts',
+    ].map(source).join('\n')
+
+    expect(queryLayer).not.toContain('useDesignProjectVoice')
+    expect(queryLayer).not.toContain('/voice-design')
   })
 
   it('[zh/en catalogs load] -> [both locales explain the consent and revocation gate]', () => {

@@ -44,9 +44,20 @@ function buildJob(type: TaskJobData['type'], payload: Record<string, unknown>): 
   } as unknown as Job<TaskJobData>
 }
 
-describe('worker voice-design behavior', () => {
+function unreadablePayload(label: string): Record<string, unknown> {
+  return new Proxy({} as Record<string, unknown>, {
+    get() {
+      throw new Error(`${label} payload was read`)
+    },
+  })
+}
+
+describe('worker voice-design consent boundary', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    // Deliberately arm every downstream mock for success. The boundary must
+    // fail even when the provider path would otherwise have worked, so a
+    // green assertion cannot come from a missing mock.
     qwenMock.validateVoicePrompt.mockReturnValue({ valid: true })
     qwenMock.validatePreviewText.mockReturnValue({ valid: true })
     apiConfigMock.getProviderConfig.mockResolvedValue({ apiKey: 'qwen-key' })
@@ -62,61 +73,32 @@ describe('worker voice-design behavior', () => {
     })
   })
 
-  it('missing required fields -> explicit error', async () => {
-    const job = buildJob(TASK_TYPE.VOICE_DESIGN, { previewText: 'hello' })
-    await expect(handleVoiceDesignTask(job)).rejects.toThrow('voicePrompt is required')
-  })
+  for (const taskType of [TASK_TYPE.VOICE_DESIGN, TASK_TYPE.ASSET_HUB_VOICE_DESIGN] as const) {
+    it(`[queued ${taskType}] -> [consent boundary before payload/progress/provider]`, async () => {
+      const job = buildJob(taskType, unreadablePayload(taskType))
 
-  it('invalid prompt validation -> explicit error message from validator', async () => {
-    qwenMock.validateVoicePrompt.mockReturnValue({ valid: false, error: 'bad prompt' })
+      await expect(handleVoiceDesignTask(job)).rejects.toThrow('VOICE_SOURCE_CONSENT_REQUIRED')
 
-    const job = buildJob(TASK_TYPE.VOICE_DESIGN, {
-      voicePrompt: 'x',
-      previewText: 'hello',
-    })
-    await expect(handleVoiceDesignTask(job)).rejects.toThrow('bad prompt')
-  })
-
-  it('[queued ASSET_HUB_VOICE_DESIGN] -> [consent boundary before payload/progress/provider]', async () => {
-    const unreadablePayload = new Proxy({} as Record<string, unknown>, {
-      get() {
-        throw new Error('ASSET_HUB_VOICE_DESIGN payload was read')
-      },
-    })
-    const job = buildJob(TASK_TYPE.ASSET_HUB_VOICE_DESIGN, unreadablePayload)
-
-    await expect(handleVoiceDesignTask(job)).rejects.toThrow('VOICE_SOURCE_CONSENT_REQUIRED')
-
-    expect(qwenMock.validateVoicePrompt).not.toHaveBeenCalled()
-    expect(qwenMock.validatePreviewText).not.toHaveBeenCalled()
-    expect(workerMock.reportTaskProgress).not.toHaveBeenCalled()
-    expect(workerMock.assertTaskActive).not.toHaveBeenCalled()
-    expect(apiConfigMock.getProviderConfig).not.toHaveBeenCalled()
-    expect(qwenMock.createVoiceDesign).not.toHaveBeenCalled()
-  })
-
-  it('project VOICE_DESIGN success -> submits normalized input and returns typed result', async () => {
-    const job = buildJob(TASK_TYPE.VOICE_DESIGN, {
-      voicePrompt: '  calm female narrator  ',
-      previewText: '  hello world  ',
-      preferredName: '  custom_name  ',
-      language: 'en',
+      expect(qwenMock.validateVoicePrompt).not.toHaveBeenCalled()
+      expect(qwenMock.validatePreviewText).not.toHaveBeenCalled()
+      expect(workerMock.reportTaskProgress).not.toHaveBeenCalled()
+      expect(workerMock.assertTaskActive).not.toHaveBeenCalled()
+      expect(apiConfigMock.getProviderConfig).not.toHaveBeenCalled()
+      expect(qwenMock.createVoiceDesign).not.toHaveBeenCalled()
     })
 
-    const result = await handleVoiceDesignTask(job)
+    it(`[well-formed ${taskType} payload from before the gate] -> [still refuses, zero paid provider call]`, async () => {
+      const job = buildJob(taskType, {
+        voicePrompt: 'calm female narrator',
+        previewText: 'hello world',
+        preferredName: 'custom_name',
+        language: 'en',
+      })
 
-    expect(apiConfigMock.getProviderConfig).toHaveBeenCalledWith('user-1', 'qwen')
-    expect(qwenMock.createVoiceDesign).toHaveBeenCalledWith({
-      voicePrompt: 'calm female narrator',
-      previewText: 'hello world',
-      preferredName: 'custom_name',
-      language: 'en',
-    }, 'qwen-key')
+      await expect(handleVoiceDesignTask(job)).rejects.toThrow('VOICE_SOURCE_CONSENT_REQUIRED')
 
-    expect(result).toEqual(expect.objectContaining({
-      success: true,
-      voiceId: 'voice-id-1',
-      taskType: TASK_TYPE.VOICE_DESIGN,
-    }))
-  })
+      expect(qwenMock.createVoiceDesign).not.toHaveBeenCalled()
+      expect(apiConfigMock.getProviderConfig).not.toHaveBeenCalled()
+    })
+  }
 })

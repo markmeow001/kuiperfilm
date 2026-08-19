@@ -262,10 +262,6 @@ vi.mock('@/lib/task/has-output', () => hasOutputMock)
 vi.mock('@/lib/billing', () => ({
   buildDefaultTaskBillingInfo: vi.fn(() => ({ mode: 'default' })),
 }))
-vi.mock('@/lib/qwen-voice-design', () => ({
-  validateVoicePrompt: vi.fn(() => ({ valid: true })),
-  validatePreviewText: vi.fn(() => ({ valid: true })),
-}))
 vi.mock('@/lib/media/outbound-image', () => outboundImageMock)
 vi.mock('@/lib/model-capabilities/lookup', () => ({
   resolveBuiltinCapabilitiesByModelKey: vi.fn(() => ({ video: { firstlastframe: true } })),
@@ -445,14 +441,6 @@ const DIRECT_CASES: ReadonlyArray<DirectRouteCase> = [
     expectedProjectId: 'project-1',
   },
   {
-    routeFile: 'src/app/api/novel-promotion/[projectId]/voice-design/route.ts',
-    body: { voicePrompt: 'warm female voice', previewText: 'This is preview text' },
-    params: { projectId: 'project-1' },
-    expectedTaskType: TASK_TYPE.VOICE_DESIGN,
-    expectedTargetType: 'NovelPromotionProject',
-    expectedProjectId: 'project-1',
-  },
-  {
     routeFile: 'src/app/api/novel-promotion/[projectId]/voice-generate/route.ts',
     body: {
       episodeId: 'episode-1',
@@ -493,7 +481,7 @@ describe('api contract - direct submit routes (behavior)', () => {
   })
 
   it('keeps expected coverage size', () => {
-    expect(DIRECT_CASES.length).toBe(16)
+    expect(DIRECT_CASES.length).toBe(15)
   })
 
   for (const routeCase of DIRECT_CASES) {

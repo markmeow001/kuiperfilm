@@ -131,7 +131,6 @@ export {
     useDownloadProjectVoices,
     useBatchGenerateCharacterImages,
     useBatchGenerateLocationImages,
-    useDesignProjectVoice,
     useAnalyzeProjectShotVariants,
     useUpdateProjectPhotographyPlan,
     useUpdateProjectPanelActingNotes,

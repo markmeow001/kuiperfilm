@@ -314,7 +314,7 @@ describe('worker voice processor behavior', () => {
     expect(generateVoiceLineMock).not.toHaveBeenCalled()
   })
 
-  it('VOICE_DESIGN: 路由到 voice design handler', async () => {
+  it('[queued project VOICE_DESIGN] -> [progress 與 handler 前 consent fail-closed]', async () => {
     const processor = workerState.processor
     expect(processor).toBeTruthy()
 
@@ -324,10 +324,10 @@ describe('worker voice processor behavior', () => {
       targetId: 'voice-design-1',
     })
 
-    await processor!(designJob)
+    await expect(processor!(designJob)).rejects.toThrow('VOICE_SOURCE_CONSENT_REQUIRED')
 
-    expect(handleVoiceDesignTaskMock).toHaveBeenCalledOnce()
-    expect(handleVoiceDesignTaskMock).toHaveBeenCalledWith(designJob)
+    expect(reportTaskProgressMock).not.toHaveBeenCalled()
+    expect(handleVoiceDesignTaskMock).not.toHaveBeenCalled()
     expect(generateVoiceLineMock).not.toHaveBeenCalled()
   })
 

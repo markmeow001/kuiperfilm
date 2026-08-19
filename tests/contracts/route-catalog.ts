@@ -316,10 +316,6 @@ function resolveContractGroup(routeFile: string): RouteContractGroup {
     routeFile.endsWith('/generate-image/route.ts')
     || routeFile.endsWith('/generate-video/route.ts')
     || routeFile.endsWith('/modify-image/route.ts')
-    || (
-      routeFile.endsWith('/voice-design/route.ts')
-      && !routeFile.startsWith('src/app/api/asset-hub/')
-    )
     || routeFile.endsWith('/insert-panel/route.ts')
     || routeFile.endsWith('/lip-sync/route.ts')
     || routeFile.endsWith('/modify-asset-image/route.ts')
