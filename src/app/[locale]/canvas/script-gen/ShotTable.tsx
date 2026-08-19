@@ -23,12 +23,14 @@ export interface ShotTableProps {
   onAddShot: () => void
 }
 
-const CELL_FIELDS = [
-  ['shotSize', '景别', 'w-[72px]'],
-  ['lighting', '光影氛围', 'min-w-[150px]'],
-  ['dialogue', '对白·旁白', 'min-w-[190px]'],
-  ['sfx', '音效', 'min-w-[150px]'],
-  ['cameraMove', '运镜', 'min-w-[140px]'],
+const LEFT_CELL_FIELDS = [
+  ['shotSize', '景别'],
+  ['lighting', '光影氛围'],
+] as const
+
+const RIGHT_CELL_FIELDS = [
+  ['sfx', '音效'],
+  ['cameraMove', '运镜'],
 ] as const
 
 const DETAIL_FIELDS = [
@@ -53,8 +55,9 @@ export function ShotTable({
   onMoveShot,
   onAddShot,
 }: ShotTableProps) {
-  // 画面描述默认渲染高亮只读视图，点击进入编辑（textarea 与高亮层难以并存）。
-  const [editingDesc, setEditingDesc] = useState<number | null>(null)
+  // 画面描述/对白默认渲染高亮只读视图（实体与说话人名字蓝字），点击进入
+  // 编辑（textarea 与高亮层难以并存）。
+  const [editing, setEditing] = useState<{ row: number; field: 'description' | 'dialogue' } | null>(null)
   const [expanded, setExpanded] = useState<Set<number>>(new Set())
 
   const toggleExpanded = (i: number) => {
@@ -78,7 +81,9 @@ export function ShotTable({
               <th className={th} style={{ width: 48 }}>镜号</th>
               <th className={th} style={{ width: 64 }}>时长</th>
               <th className={`${th} min-w-[260px]`}>画面描述</th>
-              {CELL_FIELDS.map(([key, label]) => <th key={key} className={th}>{label}</th>)}
+              {LEFT_CELL_FIELDS.map(([key, label]) => <th key={key} className={th}>{label}</th>)}
+              <th className={`${th} min-w-[190px]`}>对白·旁白</th>
+              {RIGHT_CELL_FIELDS.map(([key, label]) => <th key={key} className={th}>{label}</th>)}
               <th
                 className={th}
                 style={focusFinal ? { background: `${CANVAS_TOKENS.accent}22`, color: CANVAS_TOKENS.text.primary } : undefined}
@@ -97,10 +102,10 @@ export function ShotTable({
                 total={shots.length}
                 assetNames={assetNames}
                 focusFinal={Boolean(focusFinal)}
-                editingDesc={editingDesc === i}
+                editingField={editing?.row === i ? editing.field : null}
                 expanded={expanded.has(i)}
-                onStartEditDesc={() => setEditingDesc(i)}
-                onStopEditDesc={() => setEditingDesc(null)}
+                onStartEdit={(field) => setEditing({ row: i, field })}
+                onStopEdit={() => setEditing(null)}
                 onToggleExpanded={() => toggleExpanded(i)}
                 onEditShot={onEditShot}
                 onDeleteShot={onDeleteShot}
@@ -131,10 +136,10 @@ function ShotRow({
   total,
   assetNames,
   focusFinal,
-  editingDesc,
+  editingField,
   expanded,
-  onStartEditDesc,
-  onStopEditDesc,
+  onStartEdit,
+  onStopEdit,
   onToggleExpanded,
   onEditShot,
   onDeleteShot,
@@ -146,17 +151,48 @@ function ShotRow({
   total: number
   assetNames: readonly string[]
   focusFinal: boolean
-  editingDesc: boolean
+  editingField: 'description' | 'dialogue' | null
   expanded: boolean
-  onStartEditDesc: () => void
-  onStopEditDesc: () => void
+  onStartEdit: (field: 'description' | 'dialogue') => void
+  onStopEdit: () => void
   onToggleExpanded: () => void
   onEditShot: ShotTableProps['onEditShot']
   onDeleteShot: ShotTableProps['onDeleteShot']
   onMoveShot: ShotTableProps['onMoveShot']
   td: string
 }) {
+  const [menuOpen, setMenuOpen] = useState(false)
   const rowBorder = { borderTop: `1px solid ${CANVAS_TOKENS.hairline}` }
+
+  // 高亮只读视图 ⇄ 点击编辑（画面描述与对白共用；对白里的说话人名字因为
+  // 就是资产名，同一套实体高亮直接命中）。
+  const highlightCell = (field: 'description' | 'dialogue', placeholder: string) => {
+    const value = shot[field] ?? ''
+    if (editingField === field) {
+      return (
+        <textarea
+          autoFocus
+          value={value}
+          rows={field === 'description' ? 3 : 2}
+          onChange={(e) => onEditShot(index, { [field]: e.target.value })}
+          onBlur={onStopEdit}
+          className="w-full resize-y outline-none"
+          style={cellInputStyle}
+        />
+      )
+    }
+    return (
+      <button
+        type="button"
+        onClick={() => onStartEdit(field)}
+        className="w-full cursor-text text-left"
+        style={{ color: value ? CANVAS_TOKENS.text.primary : CANVAS_TOKENS.text.muted }}
+      >
+        {value ? <EntityText text={value} names={assetNames} /> : placeholder}
+      </button>
+    )
+  }
+
   return (
     <>
       <tr style={{ ...rowBorder, background: CANVAS_TOKENS.bg.card }}>
@@ -175,31 +211,21 @@ function ShotRow({
             <span style={{ color: CANVAS_TOKENS.text.muted }}>s</span>
           </div>
         </td>
-        <td className={td}>
-          {editingDesc ? (
+        <td className={td}>{highlightCell('description', '＋ 画面描述')}</td>
+        {LEFT_CELL_FIELDS.map(([key, label]) => (
+          <td key={key} className={td}>
             <textarea
-              autoFocus
-              value={shot.description}
-              rows={3}
-              onChange={(e) => onEditShot(index, { description: e.target.value })}
-              onBlur={onStopEditDesc}
-              className="w-full resize-y outline-none"
+              value={shot[key] ?? ''}
+              rows={2}
+              placeholder={`＋ ${label}`}
+              onChange={(e) => onEditShot(index, { [key]: e.target.value })}
+              className="w-full resize-none outline-none placeholder:opacity-40"
               style={cellInputStyle}
             />
-          ) : (
-            <button
-              type="button"
-              onClick={onStartEditDesc}
-              className="w-full cursor-text text-left"
-              style={{ color: shot.description ? CANVAS_TOKENS.text.primary : CANVAS_TOKENS.text.muted }}
-            >
-              {shot.description
-                ? <EntityText text={shot.description} names={assetNames} />
-                : '＋ 画面描述'}
-            </button>
-          )}
-        </td>
-        {CELL_FIELDS.map(([key, label]) => (
+          </td>
+        ))}
+        <td className={td}>{highlightCell('dialogue', '＋')}</td>
+        {RIGHT_CELL_FIELDS.map(([key, label]) => (
           <td key={key} className={td}>
             <textarea
               value={shot[key] ?? ''}
@@ -229,13 +255,43 @@ function ShotRow({
             </span>
           )}
         </td>
-        <td className={td}>
-          <div className="flex items-center gap-1.5" style={{ color: CANVAS_TOKENS.text.muted }}>
-            <button type="button" title="镜头详情（机位/焦段/表演/站位）" onClick={onToggleExpanded}>{expanded ? '▾' : '▸'}</button>
-            <button type="button" title="上移" disabled={index === 0} onClick={() => onMoveShot(index, -1)} className="disabled:opacity-25">↑</button>
-            <button type="button" title="下移" disabled={index === total - 1} onClick={() => onMoveShot(index, 1)} className="disabled:opacity-25">↓</button>
-            <button type="button" title="删除镜头" onClick={() => onDeleteShot(index)} style={{ color: '#FF8A8A' }}>×</button>
-          </div>
+        <td className={`${td} relative`}>
+          <button
+            type="button"
+            aria-label="镜头操作"
+            onClick={() => setMenuOpen((v) => !v)}
+            className="rounded px-2 py-0.5 tracking-widest"
+            style={{ color: CANVAS_TOKENS.text.muted }}
+          >
+            …
+          </button>
+          {menuOpen ? (
+            <>
+              <button type="button" aria-label="关闭菜单" className="fixed inset-0 z-10 cursor-default" onClick={() => setMenuOpen(false)} />
+              <div
+                className="absolute right-2 top-8 z-20 w-36 overflow-hidden rounded-lg py-1"
+                style={{ background: CANVAS_TOKENS.bg.popover, border: `1px solid ${CANVAS_TOKENS.hairline}`, boxShadow: CANVAS_TOKENS.shadowPopover }}
+              >
+                {[
+                  { label: expanded ? '收起详情' : '镜头详情', disabled: false, danger: false, run: onToggleExpanded },
+                  { label: '上移', disabled: index === 0, danger: false, run: () => onMoveShot(index, -1) },
+                  { label: '下移', disabled: index === total - 1, danger: false, run: () => onMoveShot(index, 1) },
+                  { label: '删除镜头', disabled: false, danger: true, run: () => onDeleteShot(index) },
+                ].map((item) => (
+                  <button
+                    key={item.label}
+                    type="button"
+                    disabled={item.disabled}
+                    onClick={() => { setMenuOpen(false); item.run() }}
+                    className="block w-full px-3 py-1.5 text-left text-[12px] hover:bg-white/5 disabled:opacity-30"
+                    style={{ color: item.danger ? '#FF8A8A' : CANVAS_TOKENS.text.primary }}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : null}
         </td>
       </tr>
       {expanded ? (
