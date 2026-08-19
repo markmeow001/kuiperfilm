@@ -159,3 +159,99 @@ E2E_USERNAME=admin E2E_PASSWORD=... ./scripts/e2e/cascade-smoke.sh
 ```
 
 详细使用见 `scripts/e2e/README.md`。
+
+---
+
+## AtlasCloud 配音 cutover 收尾（2026-08-19）
+
+配音生成已收敛为 AtlasCloud Seed Audio 1.0 单一路径，FAL voice 全链移除。以下为本轮**未收口**的项目。
+
+### G-1 production 仍可能存在未完成的 FAL voice 任务（需人工对帐）
+
+FAL voice 已从代码中完全移除。残留的 `FAL:VOICE:*` external id 现在被
+`classifyPaidVoiceProviderHandoff()` 归类为 `malformed`，而 `malformed` 仍被
+`isProtectedVoiceLineProviderHandoff()` 视为**受保护**：
+
+- `voice-line-job-recovery` 不再重建这类 job，一律 `quarantined`
+- `tryMarkPaidVoiceProviderTerminalFailure` 拒绝为其打终态标记
+- 因此**不会退款、不会重送、不会重复扣款**，但也**不会自动完成**
+
+这些 task 会停在 QUEUED/PROCESSING 直到人工处理。cutover 当下无法连到 production
+DB 确认数量（本机 `.env` 指向 dev 库）。**需要执行的只读盘点**：
+
+```sql
+SELECT id, type, status, externalId, createdAt
+FROM Task
+WHERE externalId LIKE 'FAL:VOICE:%'
+  AND status IN ('QUEUED', 'PROCESSING');
+```
+
+若有结果，逐笔到 FAL 后台确认该 request 是否已产出音频，再决定补发或退款。若为 0，本项即可关闭。
+
+### G-2 `qwen-voice-design.ts` 已无 import 端
+
+AI 声音设计的两个入口（项目 / Asset Hub）都已在 HTTP 层与 worker 层关闭于
+`VOICE_SOURCE_CONSENT_REQUIRED`，`handleVoiceDesignTask` 的 provider 主体因此不可达，
+`src/lib/qwen-voice-design.ts` 不再被任何产品代码 import（`billing/task-policy.ts` 与
+`billing/cost.ts` 只引用字符串 `'qwen-voice-design'` 作为 model id，非模块依赖）。
+
+未删除，因为 `TASK_TYPE.VOICE_DESIGN` / `ASSET_HUB_VOICE_DESIGN` 仍需保留给既有 Task 行与
+计费历史。待 VoiceSource + Consent + Revocation schema 落地时一并决定是重写还是移除。
+
+### G-3 Asset Hub 声音 UI 仍呈现已被后端拒绝的能力
+
+`src/app/[locale]/workspace/asset-hub/components/VoiceSettings.tsx` 仍保留
+`type="file"` 上传与 `onVoiceDesign` 入口，且
+`tests/unit/voice/project-custom-voice-ui-source-contract.test.ts` 明确断言其存在。
+但对应的 `/api/asset-hub/voices/upload` 与 `/api/asset-hub/voice-design` 已一律回
+400 `VOICE_SOURCE_CONSENT_REQUIRED`。使用者会看到可点击但必定失败的按钮。
+
+项目侧已改为 fail-closed placeholder（`VoiceDesignDialog.tsx`），Asset Hub 侧尚未对齐。
+
+### G-4 `useUploadProjectCharacterVoice` 仍是已关闭端点的活 client hook
+
+`src/lib/query/mutations/character-voice-mutations.ts` 导出、且
+`src/lib/query/hooks/index.ts` 再导出该 hook，但
+`POST /api/novel-promotion/[projectId]/character-voice` 已回 400
+`VOICE_SOURCE_CONSENT_REQUIRED`。与本轮已删除的 `useDesignProjectVoice` 属同一类残留，
+本轮未一并处理（不在授权范围内）。
+
+### G-5 `reference-to-character-api.test.ts` 在完整 api 套件内是 flaky（既有问题）
+
+`tests/integration/api/specific/reference-to-character-api.test.ts` 的
+`[safe wrapped reference]` 用例在完整 `test:integration:api` 套件中会**间歇性**失去
+`@/lib/api-auth` mock，落到真实实作并抛
+``` `headers` was called outside a request scope ``` → 500（期望 200）。
+
+**已证实为 flaky，非确定性失败。** 同一份程式码连跑两次完整 `npm run test`：
+
+| 执行 | 程式码 | 结果 |
+|---|---|---|
+| 基准 `9acd5e7` 完整链路 | 未改动 | 绿 |
+| 基准 `9acd5e7` api 单跑（worktree） | 未改动 | 绿 |
+| 本轮最终版 api 单跑 | 同下 | 绿（86 files / 859 tests） |
+| 本轮最终版 完整链路 第 1 次 | 同上 | **1 失败**（本用例） |
+| 本轮最终版 完整链路 第 2 次 | 同上 | 绿（505 files / 4312 tests） |
+
+调查过程中另外观察到 `playground-run-seedance-normalization.test.ts`（mock 呼叫累积
+成 2 笔而非 1 笔）与 `direct-submit-routes.test.ts` lip-sync 401 用例也曾一起失败，
+显示这不是单一用例的问题，而是整个 api 套件的状态残留。
+
+**成因**：该档以 runtime `installAuthMocks()`（`vi.doMock`）搭配 `beforeEach` 的
+`vi.resetModules()` 建立 auth mock，而非专案其他档案惯用的顶层 hoisted `vi.mock`
+（例：`voice-presets-catalog.test.ts`）。`vitest.config.ts` 又使用 `pool: 'forks'` 且
+`minForks/maxForks = 1`，86 个档案在同一个 fork 内依序执行，放大状态残留。
+
+**尝试过但退回的修法**：把该档改成顶层 hoisted `vi.mock('@/lib/api-auth', ...)`
+搭配从 helper 汇出的 factory。失败 —— `beforeEach` 的 `vi.resetModules()` 会让
+factory 内 `await import(helper)` 拿到全新的 helper 实例（`state` 重置），与静态
+汇入的 `mockAuthenticated()` 操作的不是同一份 state，7 个用例全变 500。已完整还原，
+未留下任何改动。正确修法需要一并处理 helper 的 state 生命周期，属测试基础设施重构，
+超出本轮授权范围。
+
+**对本轮的影响**：voice-design route 原本要从 `direct-submit-routes` 重新归类到 crud
+群组。观察到该变更似乎会提高失败频率，因此退回原分组（已在 `route-catalog.ts` 加注），
+关闭契约改由专用档 `tests/integration/api/voice-design-consent-boundary.test.ts`
+断言（5 cases，涵盖专案与 Asset Hub 两个入口）。**但须诚实说明：这个归类决定是在
+带噪声的证据下做的** —— 既然本用例已证实为 flaky，当初「移进 crud 群组会破坏套件」
+的推论就不可靠。修掉 flake 之后应重新评估该 route 的正确分组。

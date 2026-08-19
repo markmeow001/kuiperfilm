@@ -841,6 +841,47 @@ Header 点 project 从 `/workspace/[id]` redirect `/v2/workspace/[id]`。旧 `/w
 - ✅ Q-004(已修,Session B,2026-04-30):`src/app/api/novel-promotion/[projectId]/safe-rewrite/route.ts` 改走 `executeAiTextStep` (ai-runtime),不再直連 `chatCompletion`。`node scripts/guards/no-api-direct-llm-call.mjs` OK。
 - ✅ Q-005(已修,Session B,2026-05-01):cascade chain locale heisenbug + Tencent VOD multi-shot video 500 — 详见 `docs/ai-runtime/08-open-gaps.md` 「E2E pipeline 验证」段。Commits `871d560` (workers/shared.ts withFlowFields preserve locale) + `eaadf9f` (billing/task-policy.ts 寬容 uncatalogued video pricing)。E2E 脚本 `scripts/e2e/cascade-smoke.sh` 落地,deploy 后跑一次 ~15 min 验证主链路。
 
+## AtlasCloud 配音 cutover（2026-08-19，分支 feat/kling-o3-playground）
+
+配音生成收敛为 AtlasCloud Seed Audio 1.0 (`atlascloud::bytedance/seed-audio-1.0`) 单一路径。
+
+- ✅ 新 VoiceLine 与 Canvas TTS 提交在四层独立收敛到 AtlasCloud：能力目录
+  `standards/capabilities/audio.catalog.json`（单条 audio 条目）、两支 route
+  (`voice-generate` / `canvas/tts`)、两支 worker handler。
+- ✅ **FAL voice 全链移除**（commit `<本轮>`）：删除 `src/lib/voice/fal-voice-provider.ts`
+  (438 行) 与其测试 (685 行 / 27 cases)、`generateVoiceWithIndexTTS2` 墓碑、以及仅
+  FAL 分支使用的 `getWavDurationFromBuffer()`。后者 `catch` 后以硬编码 128kbps 猜时长
+  并写入 DB，属「隐式回退／静默吞错」违规，随本次移除一并消失；`inspectWaveAudio()`
+  成为唯一时长来源（严格校验 RIFF/WAVE，不合格 fail-closed）。
+  FAL 在图片／影片端（`multi-shot-video-fal-path.ts` 等 20+ 支）不受影响。
+- ✅ 退役 provider 的残留 handoff 一律 fail-safe：`classifyPaidVoiceProviderHandoff()`
+  归为 `malformed` → 仍受 `isProtectedVoiceLineProviderHandoff()` 保护；
+  `voice-line-job-recovery` 改为 `quarantined` 不再 requeue（否则会把付费请求交给
+  已拒绝该 pinned model 的 worker，非重试性失败后进入退款路径）；
+  `tryMarkPaidVoiceProviderTerminalFailure` 拒绝为其打终态标记。
+- ✅ **专案级 AI 声音设计 consent 洞已封**（commit `34c763e`）：
+  `POST /api/novel-promotion/[projectId]/voice-design` 先前无任何 consent 闸门，
+  仍会提交计费 qwen 任务；其 Asset Hub 孪生端点早已关闭，UI 也已换成 disabled
+  placeholder，因此该洞在表面上「看起来已关」。现改为 auth 后立即
+  `rejectLegacyCustomVoiceWrite()`；`enforceVoiceDesignConsentBoundary()` 同时涵盖
+  `TASK_TYPE.VOICE_DESIGN`，使 cutover 前已入列的 job 也无 provider 副作用。
+- ✅ 守卫质量：consent 封闭原本只由「grep UI 原始码字串」断言，挡不住 curl 或新
+  caller。新增 `tests/integration/api/voice-design-consent-boundary.test.ts`，在所有
+  下游 mock 都备妥成功回应的前提下断言真实 400 + `VOICE_SOURCE_CONSENT_REQUIRED`。
+- ✅ `package.json` 补 `"test": "npm run test:regression"`；此前 `npm run test` 直接
+  `Missing script`，CI 与外部工具无标准入口。
+- ⚠️ 未收口项（G-1 ~ G-5）见 `docs/ai-runtime/08-open-gaps.md`。其中 **G-1 需要对
+  production 执行一次只读盘点**，确认是否仍有 `FAL:VOICE:%` 的 QUEUED/PROCESSING
+  task 待人工对帐 —— cutover 当下无法连线 production 确认。
+- ⚠️ voice-design route 原本要一并从 `direct-submit-routes` 重新归类到 crud 群组，
+  已退回原分组并加注，关闭契约改由专用档
+  `tests/integration/api/voice-design-consent-boundary.test.ts` 断言（5 cases）。
+  该决定是在带噪声的证据下做的：`reference-to-character-api.test.ts` 已证实在完整
+  api 套件内 flaky（同一份程式码连跑两次，一次红一次全绿），因此当初的推论不可靠。
+  详见 G-5，修掉 flake 后应重新评估分组。
+- ✅ 最终验证（同一份程式码第二次完整链路）：`npm run test` 505 files / 4312 tests
+  全绿；`npx tsc --noEmit`、`npm run lint`、`npm run build`、`git diff --check` 皆通过。
+
 # 5:备注
 - 本文档是唯一执行来源，必须与代码库保持同步。
 - 禁止隐式回退、禁止兼容层、禁止静默吞错。

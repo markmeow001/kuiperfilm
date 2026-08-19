@@ -5,7 +5,6 @@ import { getSignedUrl, getStorageObjectSize, toFetchableUrl, uploadToCOS } from 
 import { parseModelKeyStrict } from '@/lib/model-config-contract'
 import type { TaskJobData } from '@/lib/task/types'
 import { resolveDurableAtlasCloudVoiceAudioUrl } from '@/lib/voice/atlascloud-voice-provider'
-import { resolveDurableFalVoiceAudioUrl } from '@/lib/voice/fal-voice-provider'
 import { fetchVoiceAudioResource } from '@/lib/voice/safe-audio-fetch'
 import { inspectWaveAudio } from '@/lib/voice/wave-audio'
 import {
@@ -29,66 +28,6 @@ import {
 } from '@/lib/voice/voice-line-publication'
 
 type CheckCancelled = (stage: string) => Promise<void>
-
-function getWavDurationFromBuffer(buffer: Buffer): number {
-  try {
-    const riff = buffer.slice(0, 4).toString('ascii')
-    if (riff !== 'RIFF') {
-      return Math.round((buffer.length * 8) / 128)
-    }
-
-    const byteRate = buffer.readUInt32LE(28)
-    let offset = 12
-    let dataSize = 0
-
-    while (offset < buffer.length - 8) {
-      const chunkId = buffer.slice(offset, offset + 4).toString('ascii')
-      const chunkSize = buffer.readUInt32LE(offset + 4)
-
-      if (chunkId === 'data') {
-        dataSize = chunkSize
-        break
-      }
-
-      offset += 8 + chunkSize
-    }
-
-    if (dataSize > 0 && byteRate > 0) {
-      return Math.round((dataSize / byteRate) * 1000)
-    }
-
-    return Math.round((buffer.length * 8) / 128)
-  } catch {
-    return Math.round((buffer.length * 8) / 128)
-  }
-}
-
-export async function generateVoiceWithIndexTTS2(params: {
-  endpoint: string
-  referenceAudioUrl: string
-  text: string
-  emotionPrompt?: string | null
-  strength?: number
-  falApiKey?: string
-  checkCancelled?: CheckCancelled
-  fetchOutputAudio?: (url: string) => Promise<Buffer>
-  resolveProviderAudioUrl?: (input: {
-    endpoint: string
-    providerInput: {
-      audio_url: string
-      prompt: string
-      should_use_prompt_for_emotion: boolean
-      strength: number
-      emotion_prompt?: string
-    }
-    apiKey: string
-  }) => Promise<string>
-}) {
-  void params
-  throw Object.assign(new Error('FAL_VOICE_NEW_SUBMISSIONS_DISABLED'), {
-    code: 'INVALID_PARAMS',
-  })
-}
 
 export async function generateVoiceLine(params: {
   job: Job<TaskJobData>
@@ -144,14 +83,9 @@ export async function generateVoiceLine(params: {
 
   const audioModel = params.audioModel?.trim() || ''
   const pinnedAudioModel = parseModelKeyStrict(audioModel)
-  const providerFamily = pinnedAudioModel
-    ? getProviderKey(pinnedAudioModel.provider).toLowerCase()
-    : ''
-  const isAtlasCloudTask = providerFamily === 'atlascloud'
-  const isLegacyFalDrainTask = providerFamily === 'fal'
   if (
     !pinnedAudioModel
-    || (!isAtlasCloudTask && !isLegacyFalDrainTask)
+    || getProviderKey(pinnedAudioModel.provider).toLowerCase() !== 'atlascloud'
     || !/^[a-f0-9]{64}$/.test(params.sourceFingerprint)
   ) {
     throw Object.assign(new Error('VOICE_LINE_PINNED_INPUT_REQUIRED'), { code: 'INVALID_PARAMS' })
@@ -159,24 +93,20 @@ export async function generateVoiceLine(params: {
 
   const inspectProviderOutput = (resource: { data: Buffer; contentType: string }) => ({
     data: resource.data,
-    durationMs: isAtlasCloudTask
-      ? inspectWaveAudio(resource.data, resource.contentType).durationMs
-      : getWavDurationFromBuffer(resource.data),
+    durationMs: inspectWaveAudio(resource.data, resource.contentType).durationMs,
   })
 
-  if (isAtlasCloudTask) {
-    const canonicalProviderText = buildAtlasCloudSeedAudioText({
-      dialogue: pinnedInput.line.content,
-      emotionPrompt: pinnedInput.line.emotionPrompt,
-      emotionStrength: pinnedInput.line.emotionPrompt?.trim()
-        ? pinnedInput.line.emotionStrength ?? 0.4
-        : null,
+  const canonicalProviderText = buildAtlasCloudSeedAudioText({
+    dialogue: pinnedInput.line.content,
+    emotionPrompt: pinnedInput.line.emotionPrompt,
+    emotionStrength: pinnedInput.line.emotionPrompt?.trim()
+      ? pinnedInput.line.emotionStrength ?? 0.4
+      : null,
+  })
+  if (params.providerText !== canonicalProviderText) {
+    throw Object.assign(new Error('VOICE_LINE_PROVIDER_TEXT_MISMATCH'), {
+      code: 'INVALID_PARAMS',
     })
-    if (params.providerText !== canonicalProviderText) {
-      throw Object.assign(new Error('VOICE_LINE_PROVIDER_TEXT_MISMATCH'), {
-        code: 'INVALID_PARAMS',
-      })
-    }
   }
 
   const pinnedFingerprint = voiceLineGenerationFingerprint({
@@ -198,11 +128,6 @@ export async function generateVoiceLine(params: {
   }
 
   const assertAtlasCloudModelEnabledForNewSubmit = async () => {
-    if (!isAtlasCloudTask) {
-      throw Object.assign(new Error('VOICE_LINE_LEGACY_FAL_NEW_SUBMIT_DISABLED'), {
-        code: 'INVALID_PARAMS',
-      })
-    }
     const audioSelection = await resolveModelSelectionOrSingle(params.userId, audioModel, 'audio')
     const providerKey = getProviderKey(audioSelection.provider).toLowerCase()
     if (
@@ -292,19 +217,12 @@ export async function generateVoiceLine(params: {
 
     // Marker exists but the exact object is absent. Resume only a previously
     // checkpointed provider request; never submit another paid request here.
-    const providerAudioUrl = isAtlasCloudTask
-      ? await resolveDurableAtlasCloudVoiceAudioUrl({
-          job: params.job,
-          modelId: pinnedAudioModel.modelId,
-          resolveApiKey: resolvePinnedProviderApiKey,
-          checkCancelled,
-        })
-      : await resolveDurableFalVoiceAudioUrl({
-          job: params.job,
-          endpoint: pinnedAudioModel.modelId,
-          resolveApiKey: resolvePinnedProviderApiKey,
-          checkCancelled,
-        })
+    const providerAudioUrl = await resolveDurableAtlasCloudVoiceAudioUrl({
+      job: params.job,
+      modelId: pinnedAudioModel.modelId,
+      resolveApiKey: resolvePinnedProviderApiKey,
+      checkCancelled,
+    })
     await checkCancelled?.('voice_line_pre_output_fetch')
     const providerOutput = inspectProviderOutput(await fetchProviderOutputAudio(providerAudioUrl))
     return await uploadPreparedAudio(
@@ -354,20 +272,13 @@ export async function generateVoiceLine(params: {
       loudness_rate: 0,
     }
   }
-  const providerAudioUrl = isAtlasCloudTask
-    ? await resolveDurableAtlasCloudVoiceAudioUrl({
-        job: params.job,
-        modelId: pinnedAudioModel.modelId,
-        resolveInput: resolveAtlasCloudInput,
-        resolveApiKey: resolvePinnedProviderApiKey,
-        checkCancelled,
-      })
-    : await resolveDurableFalVoiceAudioUrl({
-        job: params.job,
-        endpoint: pinnedAudioModel.modelId,
-        resolveApiKey: resolvePinnedProviderApiKey,
-        checkCancelled,
-      })
+  const providerAudioUrl = await resolveDurableAtlasCloudVoiceAudioUrl({
+    job: params.job,
+    modelId: pinnedAudioModel.modelId,
+    resolveInput: resolveAtlasCloudInput,
+    resolveApiKey: resolvePinnedProviderApiKey,
+    checkCancelled,
+  })
   await checkCancelled?.('voice_line_pre_output_fetch')
   const providerOutput = inspectProviderOutput(await fetchProviderOutputAudio(providerAudioUrl))
   const generated = {
@@ -384,9 +295,7 @@ export async function generateVoiceLine(params: {
     audioUrl: storageKey,
     storageKey,
     audioDuration: generated.audioDuration || null,
-    ...(isAtlasCloudTask
-      ? { actualCharacters: countUnicodeCodePoints(params.providerText || '') }
-      : {}),
+    actualCharacters: countUnicodeCodePoints(params.providerText || ''),
   }
   const marker: VoiceLinePreparedOutput = {
     kind: 'voice_line_publication_v1',

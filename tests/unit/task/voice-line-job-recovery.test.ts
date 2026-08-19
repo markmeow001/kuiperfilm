@@ -243,26 +243,23 @@ describe('durable VoiceLine BullMQ job recovery', () => {
     expect(queueMock.addTaskJob).toHaveBeenCalledOnce()
   })
 
-  it('[legacy paid FAL actual id + exact pinned endpoint] -> [same Task job is rebuilt for drain only]', async () => {
+  it('[retired provider paid id + exact pinned endpoint] -> [quarantined, never requeued]', async () => {
     const task = legacyFalRecoveryTask()
 
+    // Voice is AtlasCloud-only, so this handoff can no longer be rebuilt into
+    // a runnable job. Requeueing it would hand a paid request to a worker that
+    // rejects the pinned model, failing the task non-retryably and refunding a
+    // request we cannot prove was rejected.
     await expect(recoverMissingVoiceLineJob(task)).resolves.toEqual({
       protected: true,
-      state: 'requeued',
+      state: 'quarantined',
     })
-    expect(queueMock.addTaskJob).toHaveBeenCalledWith(expect.objectContaining({
-      taskId: task.id,
-      payload: task.payload,
-      providerExternalId: LEGACY_FAL_AUDIO_EXTERNAL_ID,
-    }), {
-      priority: 7,
-      attempts: 3,
-    })
+    expect(queueMock.addTaskJob).not.toHaveBeenCalled()
+    expect(prismaMock.task.updateMany).not.toHaveBeenCalled()
   })
 
   it.each([
     ['Canvas Atlas failed job', canvasRecoveryTask(), 'failed'],
-    ['VoiceLine legacy FAL completed job', legacyFalRecoveryTask(), 'completed'],
   ] as const)('[%s has a valid actual id] -> [rewrites and retries the same terminal BullMQ job]', async (_label, task, terminalState) => {
     const terminalJob = {
       id: task.id,

@@ -23,10 +23,11 @@ export { isProtectedVoiceLineProviderHandoff } from '@/lib/task/voice-line-recov
 const ACTIVE_STATUSES = [TASK_STATUS.QUEUED, TASK_STATUS.PROCESSING] as const
 const ATLASCLOUD_AUDIO_PREFIX = 'ATLASCLOUD:AUDIO:'
 const ATLASCLOUD_AUDIO_CLAIM_PREFIX = 'ATLASCLOUD:AUDIO:CLAIM:'
-const FAL_VOICE_PREFIX = 'FAL:VOICE:'
-const FAL_VOICE_CLAIM_PREFIX = 'FAL:VOICE:CLAIM:'
+// Voice generation is AtlasCloud-only. This prefix is still recognised so a
+// retired provider's leftover id is logged as such, never resumed.
+const RETIRED_VOICE_PROVIDER_CLAIM_PREFIX = 'FAL:VOICE:CLAIM:'
 
-type RecoverableVoiceProvider = 'atlascloud' | 'fal'
+type RecoverableVoiceProvider = 'atlascloud'
 
 type ActualVoiceProviderHandoff = {
   provider: RecoverableVoiceProvider
@@ -73,25 +74,18 @@ function nonEmptyString(value: unknown): value is string {
 function parseActualVoiceProviderHandoff(
   value: string,
 ): ActualVoiceProviderHandoff | null {
-  let provider: RecoverableVoiceProvider
-  let prefix: string
+  // Only an AtlasCloud handoff can be rebuilt into a runnable job. Any other
+  // provider id returns null and is quarantined by the caller: requeueing it
+  // would hand a paid request to a worker that now rejects the pinned model,
+  // which would fail the task non-retryably and refund it.
   if (
-    value.startsWith(ATLASCLOUD_AUDIO_PREFIX)
-    && !value.startsWith(ATLASCLOUD_AUDIO_CLAIM_PREFIX)
+    !value.startsWith(ATLASCLOUD_AUDIO_PREFIX)
+    || value.startsWith(ATLASCLOUD_AUDIO_CLAIM_PREFIX)
   ) {
-    provider = 'atlascloud'
-    prefix = ATLASCLOUD_AUDIO_PREFIX
-  } else if (
-    value.startsWith(FAL_VOICE_PREFIX)
-    && !value.startsWith(FAL_VOICE_CLAIM_PREFIX)
-  ) {
-    // Resume-only compatibility for an already-paid FAL handoff. New voice
-    // submissions are AtlasCloud-only; recovery never creates a provider id.
-    provider = 'fal'
-    prefix = FAL_VOICE_PREFIX
-  } else {
     return null
   }
+  const provider: RecoverableVoiceProvider = 'atlascloud'
+  const prefix = ATLASCLOUD_AUDIO_PREFIX
 
   const remainder = value.slice(prefix.length)
   const separator = remainder.lastIndexOf(':')
@@ -190,7 +184,7 @@ function recoveryJobData(
 
 function isVoiceProviderSubmitClaim(externalId: string): boolean {
   return externalId.startsWith(ATLASCLOUD_AUDIO_CLAIM_PREFIX)
-    || externalId.startsWith(FAL_VOICE_CLAIM_PREFIX)
+    || externalId.startsWith(RETIRED_VOICE_PROVIDER_CLAIM_PREFIX)
 }
 
 function exactActiveHandoffWhere(task: VoiceLineRecoveryTask, externalId: string) {

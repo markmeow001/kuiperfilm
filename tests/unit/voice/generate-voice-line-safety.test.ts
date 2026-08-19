@@ -26,9 +26,6 @@ const providerMock = vi.hoisted(() => ({
   resolveDurableAtlasCloudVoiceAudioUrl: vi.fn(),
   submittedInput: null as unknown,
 }))
-const legacyFalProviderMock = vi.hoisted(() => ({
-  resolveDurableFalVoiceAudioUrl: vi.fn(),
-}))
 const publicationMock = vi.hoisted(() => ({
   readVoiceLinePreparedOutput: vi.fn(),
   persistVoiceLinePreparedOutput: vi.fn(),
@@ -41,19 +38,14 @@ vi.mock('@/lib/voice/safe-audio-fetch', () => safeAudioMock)
 vi.mock('@/lib/cos', () => cosMock)
 vi.mock('@/lib/api-config', () => apiConfigMock)
 vi.mock('@/lib/voice/atlascloud-voice-provider', () => providerMock)
-vi.mock('@/lib/voice/fal-voice-provider', () => legacyFalProviderMock)
 vi.mock('@/lib/voice/voice-line-publication', () => publicationMock)
 
-import {
-  generateVoiceLine,
-  generateVoiceWithIndexTTS2,
-} from '@/lib/voice/generate-voice-line'
+import { generateVoiceLine } from '@/lib/voice/generate-voice-line'
 
 const SOURCE_FINGERPRINT = 'f'.repeat(64)
 const AUDIO_MODEL = 'atlascloud::bytedance/seed-audio-1.0'
 const AUDIO_ENDPOINT = 'bytedance/seed-audio-1.0'
-const LEGACY_FAL_AUDIO_MODEL = 'fal::fal-ai/index-tts-2/text-to-speech'
-const LEGACY_FAL_ENDPOINT = 'fal-ai/index-tts-2/text-to-speech'
+const RETIRED_NON_ATLAS_AUDIO_MODEL = 'fal::fal-ai/index-tts-2/text-to-speech'
 const PROVIDER_TEXT = '@audio1 [emotion: calm; intensity: 0.5] Hello'
 
 function wavBuffer(durationSeconds = 1): Buffer {
@@ -220,29 +212,31 @@ describe('generateVoiceLine durable preparation', () => {
       await input.resolveApiKey?.()
       return 'https://provider.example/generated.wav'
     })
-    legacyFalProviderMock.resolveDurableFalVoiceAudioUrl
-      .mockReset()
-      .mockImplementation(async (input) => {
-        if (!input.job.data.providerExternalId) {
-          throw new Error('VOICE_PROVIDER_EXTERNAL_ID_REQUIRED')
-        }
-        await input.resolveApiKey?.()
-        return 'https://legacy-provider.example/generated.wav'
-      })
   })
 
-  it('[legacy direct IndexTTS2 helper is invoked] -> [fails before any FAL submission]', async () => {
-    await expect(generateVoiceWithIndexTTS2({
-      endpoint: LEGACY_FAL_ENDPOINT,
-      referenceAudioUrl: 'https://example.com/reference.wav',
-      text: 'legacy submission',
-      resolveProviderAudioUrl: legacyFalProviderMock.resolveDurableFalVoiceAudioUrl,
-    })).rejects.toMatchObject({
-      message: 'FAL_VOICE_NEW_SUBMISSIONS_DISABLED',
+
+  it('[pinned audio model is not AtlasCloud] -> [fails closed before provider, model selection, or source work]', async () => {
+    const params = request({
+      audioModel: RETIRED_NON_ATLAS_AUDIO_MODEL,
+      providerText: undefined,
+    })
+    params.job.data.payload = {
+      ...params.job.data.payload,
+      audioModel: RETIRED_NON_ATLAS_AUDIO_MODEL,
+    }
+    params.job.data.providerExternalId = 'FAL:VOICE:fal-ai/index-tts-2/text-to-speech:request-paid'
+
+    await expect(generateVoiceLine(params)).rejects.toMatchObject({
+      message: 'VOICE_LINE_PINNED_INPUT_REQUIRED',
       code: 'INVALID_PARAMS',
     })
 
-    expect(legacyFalProviderMock.resolveDurableFalVoiceAudioUrl).not.toHaveBeenCalled()
+    expect(providerMock.resolveDurableAtlasCloudVoiceAudioUrl).not.toHaveBeenCalled()
+    expect(apiConfigMock.resolveModelSelectionOrSingle).not.toHaveBeenCalled()
+    expect(apiConfigMock.getProviderConfig).not.toHaveBeenCalled()
+    expect(scopeMock.resolveSystemVoicePresetSource).not.toHaveBeenCalled()
+    expect(safeAudioMock.fetchVoiceAudioResource).not.toHaveBeenCalled()
+    expect(publicationMock.persistVoiceLinePreparedOutput).not.toHaveBeenCalled()
   })
 
   it('[正常生成] -> [先存 exact marker，再單次上傳，0 VoiceLine DB write]', async () => {
@@ -371,64 +365,7 @@ describe('generateVoiceLine durable preparation', () => {
     expect(safeAudioMock.fetchVoiceAudioResource).toHaveBeenCalledTimes(1)
   })
 
-  it('[legacy FAL paid handoff] -> [只續跑 exact request，0 Atlas submit / 0 model selection / 0 source fetch]', async () => {
-    const params = request({
-      audioModel: LEGACY_FAL_AUDIO_MODEL,
-      providerText: undefined,
-    })
-    params.job.data.payload = {
-      ...params.job.data.payload,
-      audioModel: LEGACY_FAL_AUDIO_MODEL,
-    }
-    params.job.data.providerExternalId = `FAL:VOICE:${LEGACY_FAL_ENDPOINT}:request-paid`
-    safeAudioMock.fetchVoiceAudioResource.mockReset().mockResolvedValueOnce({
-      data: GENERATED_WAV,
-      contentType: 'audio/wav',
-    })
 
-    const result = await generateVoiceLine(params)
-
-    expect(legacyFalProviderMock.resolveDurableFalVoiceAudioUrl).toHaveBeenCalledWith(
-      expect.objectContaining({
-        job: params.job,
-        endpoint: LEGACY_FAL_ENDPOINT,
-        resolveApiKey: expect.any(Function),
-      }),
-    )
-    expect(legacyFalProviderMock.resolveDurableFalVoiceAudioUrl.mock.calls[0]?.[0])
-      .not.toHaveProperty('resolveInput')
-    expect(providerMock.resolveDurableAtlasCloudVoiceAudioUrl).not.toHaveBeenCalled()
-    expect(apiConfigMock.resolveModelSelectionOrSingle).not.toHaveBeenCalled()
-    expect(scopeMock.resolveSystemVoicePresetSource).not.toHaveBeenCalled()
-    expect(apiConfigMock.getProviderConfig).toHaveBeenCalledWith('user-a', 'fal')
-    expect(result).not.toHaveProperty('actualCharacters')
-  })
-
-  it('[legacy FAL model without a durable paid handoff] -> [fails closed before provider submit or source work]', async () => {
-    const params = request({
-      audioModel: LEGACY_FAL_AUDIO_MODEL,
-      providerText: undefined,
-    })
-    params.job.data.payload = {
-      ...params.job.data.payload,
-      audioModel: LEGACY_FAL_AUDIO_MODEL,
-    }
-
-    await expect(generateVoiceLine(params)).rejects.toThrow('VOICE_PROVIDER_EXTERNAL_ID_REQUIRED')
-
-    expect(legacyFalProviderMock.resolveDurableFalVoiceAudioUrl).toHaveBeenCalledWith(
-      expect.objectContaining({
-        job: params.job,
-        endpoint: LEGACY_FAL_ENDPOINT,
-      }),
-    )
-    expect(legacyFalProviderMock.resolveDurableFalVoiceAudioUrl.mock.calls[0]?.[0])
-      .not.toHaveProperty('resolveInput')
-    expect(providerMock.resolveDurableAtlasCloudVoiceAudioUrl).not.toHaveBeenCalled()
-    expect(apiConfigMock.resolveModelSelectionOrSingle).not.toHaveBeenCalled()
-    expect(scopeMock.resolveSystemVoicePresetSource).not.toHaveBeenCalled()
-    expect(safeAudioMock.fetchVoiceAudioResource).not.toHaveBeenCalled()
-  })
 
   it('[new submit 的 pinned model 已停用] -> [enabled model 驗證失敗且 0 credential/provider POST/output]', async () => {
     apiConfigMock.resolveModelSelectionOrSingle.mockRejectedValueOnce(new Error('MODEL_NOT_FOUND'))

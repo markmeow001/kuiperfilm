@@ -316,6 +316,17 @@ function resolveContractGroup(routeFile: string): RouteContractGroup {
     routeFile.endsWith('/generate-image/route.ts')
     || routeFile.endsWith('/generate-video/route.ts')
     || routeFile.endsWith('/modify-image/route.ts')
+    // The project voice-design route no longer submits a task (it is closed on
+    // VOICE_SOURCE_CONSENT_REQUIRED), so this group is a misnomer for it. It is
+    // kept here deliberately: reclassifying it into the crud group makes
+    // crud-routes.test.ts import it, which destabilises the unrelated and
+    // already order-fragile tests/integration/api/specific/
+    // reference-to-character-api.test.ts. See 08-open-gaps.md G-5.
+    // direct-submit-routes.test.ts asserts its closed contract explicitly.
+    || (
+      routeFile.endsWith('/voice-design/route.ts')
+      && !routeFile.startsWith('src/app/api/asset-hub/')
+    )
     || routeFile.endsWith('/insert-panel/route.ts')
     || routeFile.endsWith('/lip-sync/route.ts')
     || routeFile.endsWith('/modify-asset-image/route.ts')

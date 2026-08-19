@@ -2,10 +2,8 @@ import { TASK_TYPE } from '@/lib/task/types'
 
 const ATLASCLOUD_AUDIO_PREFIX = 'ATLASCLOUD:AUDIO:'
 const ATLASCLOUD_AUDIO_CLAIM_PREFIX = 'ATLASCLOUD:AUDIO:CLAIM:'
-const FAL_VOICE_PREFIX = 'FAL:VOICE:'
-const FAL_VOICE_CLAIM_PREFIX = 'FAL:VOICE:CLAIM:'
 
-export type PaidVoiceProvider = 'atlascloud' | 'fal'
+export type PaidVoiceProvider = 'atlascloud'
 export type PaidVoiceProviderTerminalStatus = 'failed' | 'timeout'
 
 export type PaidVoiceProviderHandoffClassification =
@@ -47,10 +45,7 @@ export function classifyPaidVoiceProviderHandoff(
   const externalId = raw?.trim() || ''
   if (!externalId) return { kind: 'none', externalId: null }
   if (raw !== externalId) return { kind: 'malformed', externalId: raw! }
-  if (
-    externalId.startsWith(ATLASCLOUD_AUDIO_CLAIM_PREFIX)
-    || externalId.startsWith(FAL_VOICE_CLAIM_PREFIX)
-  ) {
+  if (externalId.startsWith(ATLASCLOUD_AUDIO_CLAIM_PREFIX)) {
     return { kind: 'claim', externalId }
   }
   if (
@@ -59,12 +54,10 @@ export function classifyPaidVoiceProviderHandoff(
   ) {
     return { kind: 'actual', provider: 'atlascloud', externalId }
   }
-  if (
-    externalId.startsWith(FAL_VOICE_PREFIX)
-    && isActualProviderId(externalId, FAL_VOICE_PREFIX)
-  ) {
-    return { kind: 'actual', provider: 'fal', externalId }
-  }
+  // Voice generation is AtlasCloud-only. A retired provider's external id
+  // therefore falls through to 'malformed', which isProtectedVoiceLineProvider
+  // Handoff still treats as protected: such a task is quarantined for manual
+  // reconciliation rather than refunded or resubmitted.
   return { kind: 'malformed', externalId }
 }
 

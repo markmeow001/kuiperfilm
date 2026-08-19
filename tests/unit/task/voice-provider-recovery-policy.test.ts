@@ -39,10 +39,6 @@ describe('paid voice provider handoff protection policy', () => {
       externalId: 'ATLASCLOUD:AUDIO:bytedance/seed-audio-1.0:prediction-1',
       provider: 'atlascloud',
     },
-    {
-      externalId: 'FAL:VOICE:fal-ai/index-tts-2/text-to-speech:req-legacy',
-      provider: 'fal',
-    },
   ])('[actual $provider handoff] -> [classifies an exact resumable provider id]', ({ externalId, provider }) => {
     expect(classifyPaidVoiceProviderHandoff({
       type: TASK_TYPE.VOICE_LINE,
@@ -52,9 +48,12 @@ describe('paid voice provider handoff protection policy', () => {
 
   it.each([
     ['ATLASCLOUD:AUDIO:CLAIM:123:owner', 'claim'],
-    ['FAL:VOICE:CLAIM:123:owner', 'claim'],
     ['ATLASCLOUD:AUDIO:missing-request-id:', 'malformed'],
     ['malformed-nonempty-handoff', 'malformed'],
+    // Voice is AtlasCloud-only. A retired provider's ids are unrecognised
+    // rather than resumable, and must stay quarantined, never refunded.
+    ['FAL:VOICE:fal-ai/index-tts-2/text-to-speech:req-legacy', 'malformed'],
+    ['FAL:VOICE:CLAIM:123:owner', 'malformed'],
   ] as const)('[handoff %s] -> [classifies as %s and never as an actual provider id]', (externalId, kind) => {
     expect(classifyPaidVoiceProviderHandoff({
       type: TASK_TYPE.CANVAS_TTS,

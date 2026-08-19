@@ -63,6 +63,7 @@
     "billing:cleanup-pending-freezes": "tsx scripts/billing-cleanup-pending-freezes.ts",
     "billing:reconcile-ledger": "tsx scripts/billing-reconcile-ledger.ts",
     "cleanup:remove-legacy-voice-data": "tsx scripts/cleanup-remove-legacy-voice-data.ts",
+    "test": "npm run test:regression",
     "test:billing": "npm run test:billing:coverage",
     "test:billing:unit": "cross-env BILLING_TEST_BOOTSTRAP=0 vitest run tests/unit/billing",
     "test:billing:integration": "cross-env BILLING_TEST_BOOTSTRAP=1 vitest run tests/integration/billing",

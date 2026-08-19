@@ -87,7 +87,7 @@ describe('paid voice provider terminal lifecycle service', () => {
     expect(prismaMock.task.updateMany.mock.calls.at(-1)?.[0].data).not.toHaveProperty('dedupeKey')
   })
 
-  it('[legacy FAL reports terminal failed] -> [uses the same explicit terminal marker without clearing its external id]', async () => {
+  it('[retired provider id reports terminal failed] -> [refuses the terminal marker and leaves the handoff quarantined]', async () => {
     const externalId = 'FAL:VOICE:fal-ai/index-tts-2/text-to-speech:req-terminal'
     prismaMock.task.findUnique.mockResolvedValue({
       type: TASK_TYPE.VOICE_LINE,
@@ -96,21 +96,19 @@ describe('paid voice provider terminal lifecycle service', () => {
       externalId,
     })
 
+    // Voice is AtlasCloud-only, so this id is unrecognised rather than an
+    // actual resumable handoff. Marking it terminal here would hand it to the
+    // generic fail/refund lifecycle for a request we cannot prove was
+    // rejected; it must stay put for manual reconciliation instead.
     await expect(tryMarkPaidVoiceProviderTerminalFailure({
-      taskId: 'task-fal-legacy',
+      taskId: 'task-retired-provider',
       expectedTaskType: TASK_TYPE.VOICE_LINE,
       externalId,
       terminalStatus: 'failed',
       errorMessage: 'VOICE_PROVIDER_REQUEST_FAILED',
-    })).resolves.toBe(true)
+    })).resolves.toBe(false)
 
-    expect(prismaMock.task.updateMany.mock.calls.at(-1)?.[0]).toMatchObject({
-      where: { externalId },
-      data: {
-        errorCode: 'VOICE_PROVIDER_TERMINAL_FAILED',
-      },
-    })
-    expect(prismaMock.task.updateMany.mock.calls.at(-1)?.[0].data).not.toHaveProperty('dedupeKey')
+    expect(prismaMock.task.updateMany).not.toHaveBeenCalled()
   })
 
   it('[Canvas idempotency request reaches explicit provider terminal] -> [fails but retains its replay key]', async () => {
