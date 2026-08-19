@@ -10,8 +10,9 @@
  * rounded-12 surface with a hairline border, and selection is an inset 2px
  * #A8A8A8 ring (not an accent border). Handles are circular "+" ports.
  */
-import { Handle, Position } from '@xyflow/react'
+import { Handle, NodeResizeControl, Position } from '@xyflow/react'
 import type { ReactNode } from 'react'
+import { AppIcon } from '@/components/ui/icons'
 import { CANVAS_TOKENS } from '../lib/canvas-tokens'
 import { CANVAS_SOURCE_HANDLE, CANVAS_TARGET_HANDLE } from '../lib/canvas-connections'
 
@@ -29,6 +30,8 @@ interface NodeShellProps {
   /** Hide the right source handle. */
   noSource?: boolean
   width?: number
+  /** Hide the bottom-right resize grip (LibTV 每卡右下角放大手柄)。 */
+  noResize?: boolean
 }
 
 // Circular "+" port, LibTV-style: dark disc + hairline ring + plus glyph.
@@ -55,11 +58,22 @@ export function NodeShell({
   noTarget,
   noSource,
   width = 280,
+  noResize,
 }: NodeShellProps) {
   return (
-    <div style={{ width }}>
+    // Sizing contract with the resize grip:
+    // - width: the fixed design width. Pre-resize the RF wrapper is
+    //   shrink-to-fit and a fixed-width child contributes exactly this, so
+    //   long unbreakable text can never balloon the card (width:100% here
+    //   would make the wrapper take max-content width).
+    // - minWidth:'100%': percentages resolve to 0 during intrinsic sizing, so
+    //   it is inert pre-resize; once the grip writes an explicit node width
+    //   (always ≥ design width) it stretches the card to follow the wrapper.
+    // - h-full + flex-col: the card absorbs resized height (grows, never
+    //   shrinks below its content).
+    <div className="flex h-full flex-col" style={{ width, minWidth: '100%' }}>
       {/* Type header — outside the card (LibTV 20px muted row) */}
-      <div className="flex h-5 items-center justify-between px-0.5 pb-1">
+      <div className="flex h-5 shrink-0 items-center justify-between px-0.5 pb-1">
         <div className="flex min-w-0 items-center gap-1.5">
           <span aria-hidden style={{ color: accent, fontSize: 10 }}>◆</span>
           {titleSlot ?? (
@@ -76,7 +90,7 @@ export function NodeShell({
         )}
       </div>
       <div
-        className="relative"
+        className="relative flex-1"
         style={{
           background: CANVAS_TOKENS.bg.card,
           borderRadius: CANVAS_TOKENS.radius.lg,
@@ -93,6 +107,25 @@ export function NodeShell({
           </Handle>
         )}
         {children}
+        {/* LibTV 右下角放大手柄 — writes explicit node width/height
+            (persisted by canvas-serialize). minWidth = design width: the grip
+            enlarges, it never squeezes a card below its layout. */}
+        {!noResize && !locked ? (
+          <NodeResizeControl
+            position="bottom-right"
+            minWidth={width}
+            minHeight={96}
+            style={{ background: 'transparent', border: 'none', width: 18, height: 18, cursor: 'nwse-resize' }}
+          >
+            <AppIcon
+              name="maximize"
+              size={10}
+              aria-hidden
+              className="pointer-events-none absolute bottom-[3px] right-[3px]"
+              style={{ color: CANVAS_TOKENS.text.muted }}
+            />
+          </NodeResizeControl>
+        ) : null}
         {!noSource && (
           <Handle id={CANVAS_SOURCE_HANDLE} type="source" position={Position.Right} style={handleStyle}>
             <span className="pointer-events-none block" aria-hidden>＋</span>

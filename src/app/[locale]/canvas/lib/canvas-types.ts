@@ -250,7 +250,8 @@ export interface SerializedNode {
   data: CanvasNodeData
   /** Group membership (成组): child positions are relative to the parent. */
   parentId?: string
-  /** Group container size (type 'group' only). */
+  /** Explicit node size: group container, or a card enlarged via the
+   *  bottom-right resize grip. Absent = content-sized at the design width. */
   w?: number
   h?: number
   /** Explicit canvas stacking order. */

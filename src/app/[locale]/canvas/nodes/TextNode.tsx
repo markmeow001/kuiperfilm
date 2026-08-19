@@ -101,18 +101,20 @@ export function TextNode({ id, data, selected }: NodeProps) {
 
   return (
     <NodeShell accent={meta.accent} label={meta.label} hint={meta.hint} selected={selected} locked={Boolean(d.locked)} width={280}>
-      <div className="space-y-2 p-3">
+      {/* flex-col + flex-1 textarea: enlarging the node via the corner grip
+          gives the extra space to the text, not to empty card padding. */}
+      <div className="flex h-full flex-col gap-2 p-3">
         <textarea
           value={d.prompt}
           onChange={(e) => updateNodeData(id, { prompt: e.target.value })}
           placeholder="脚本 / 提示词 / 旁白…"
           rows={5}
           disabled={busy}
-          className="nodrag w-full resize-none rounded-md px-2 py-1.5 text-[12px] leading-relaxed outline-none disabled:opacity-60"
+          className="nodrag min-h-[96px] w-full flex-1 resize-none rounded-md px-2 py-1.5 text-[12px] leading-relaxed outline-none disabled:opacity-60"
           style={{ background: CANVAS_TOKENS.bg.input, color: CANVAS_TOKENS.text.primary, border: `1px solid ${CANVAS_TOKENS.hairline}` }}
         />
-        {error ? <div className="text-[10px]" style={{ color: '#FF8A8A' }}>{error}</div> : null}
-        <div className="flex items-center gap-1">
+        {error ? <div className="shrink-0 text-[10px]" style={{ color: '#FF8A8A' }}>{error}</div> : null}
+        <div className="flex shrink-0 items-center gap-1">
           <span className="text-[10px]" style={{ color: CANVAS_TOKENS.text.muted }}>✨</span>
           {AI_MODES.map((m) => (
             <button

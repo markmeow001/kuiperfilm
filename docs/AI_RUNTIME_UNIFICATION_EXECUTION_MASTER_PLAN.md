@@ -904,6 +904,12 @@ Header 点 project 从 `/workspace/[id]` redirect `/v2/workspace/[id]`。旧 `/w
   已绑参考标签显示「角色·男主·Hayes」式命名；新建参考节点 title 留空以显示
   命名 placeholder（三张卡都叫「角色」正是「谁是谁」问题的根源）。
 - ✅ **添加节点菜单宽度自适应**：`w-48` 固定宽改 `w-max`＋nowrap，不再折行。
+- ✅ **每卡右下角放大手柄**（LibTV 对标，2026-08-19 追加）：NodeShell 挂
+  `NodeResizeControl`（minWidth=设计宽,只放大不压缩;锁定节点无手柄），
+  尺寸经 `canvas-serialize` 以既有 `w`/`h` 字段持久化（未调过的节点不冻结,
+  保持内容自适应）；TextNode 文字区 flex-1 跟随放大。sizing 契约：root
+  `width=设计宽 + minWidth:'100%'` —— 固定宽避免 shrink-to-fit 阶段被长文
+  max-content 撑爆,百分比 minWidth 在 intrinsic 阶段归零、resize 后跟随。
 
 已知未动的既有问题：`MediaNode` 的 `basePrompt = [upstreamText, d.prompt]`
 （MediaNode.tsx:209）会把上游脚本节点「全部分镜文字」拼进单镜重生 prompt，

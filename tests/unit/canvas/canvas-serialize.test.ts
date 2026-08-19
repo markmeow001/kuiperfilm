@@ -49,6 +49,34 @@ describe('deserializeCanvas', () => {
     expect(back.viewport).toEqual({ x: 1, y: 2, zoom: 1.2 })
   })
 
+  it('右下角手柄放大过的节点 -> round-trip 后保留 width/height（继续从持久化尺寸拉伸）', () => {
+    const resized: Node<CanvasNodeData> = { ...node('a', 'text', 0, 0), width: 420, height: 360 }
+    const untouched = node('b', 'image', 10, 10)
+
+    const serialized = serializeCanvas([resized, untouched], [], { x: 0, y: 0, zoom: 1 })
+    expect(serialized.nodes[0]).toMatchObject({ id: 'a', w: 420, h: 360 })
+    // 未调过的节点不冻结成量测值——保持内容自适应
+    expect(serialized.nodes[1].w).toBeUndefined()
+    expect(serialized.nodes[1].h).toBeUndefined()
+
+    const back = deserializeCanvas(serialized)
+    expect(back.nodes.find((n) => n.id === 'a')).toMatchObject({ width: 420, height: 360 })
+    const b = back.nodes.find((n) => n.id === 'b')!
+    expect(b.width).toBeUndefined()
+    expect(b.height).toBeUndefined()
+  })
+
+  it('只放大宽度（横向拉）-> 只持久化 w，不发明 h', () => {
+    const wideOnly: Node<CanvasNodeData> = { ...node('a', 'script', 0, 0), width: 720 }
+    const serialized = serializeCanvas([wideOnly], [], { x: 0, y: 0, zoom: 1 })
+    expect(serialized.nodes[0].w).toBe(720)
+    expect(serialized.nodes[0].h).toBeUndefined()
+
+    const back = deserializeCanvas(serialized)
+    expect(back.nodes[0].width).toBe(720)
+    expect(back.nodes[0].height).toBeUndefined()
+  })
+
   it('鎖定與圖層狀態 -> round-trip 後仍不可拖曳且保留 zIndex', () => {
     const locked = {
       ...node('a', 'image', 10, 20, { locked: true }),

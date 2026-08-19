@@ -46,7 +46,13 @@ export function serializeCanvas(
             w: Number(n.style?.width ?? n.measured?.width) || 400,
             h: Number(n.style?.height ?? n.measured?.height) || 300,
           }
-        : {}),
+        : {
+            // 右下角手柄放大过的节点：NodeResizeControl 写的是顶层
+            // width/height,只在用户真的调过时才持久化(未调过的节点保持
+            // 内容自适应,不冻结成当时的量测值)。
+            ...(typeof n.width === 'number' && n.width > 0 ? { w: n.width } : {}),
+            ...(typeof n.height === 'number' && n.height > 0 ? { h: n.height } : {}),
+          }),
     })),
     edges: edges.map((e) => {
       const sourceType = nodeById.get(e.source)?.type as CanvasNodeType
@@ -125,7 +131,13 @@ export function deserializeCanvas(raw: unknown): {
         ...(parentId ? { parentId, extent: 'parent' as const } : {}),
         ...(n.type === 'group'
           ? { style: { width: Number(n.w) || 400, height: Number(n.h) || 300 } }
-          : {}),
+          : {
+              // Restore a user-resized card exactly where the resizer writes
+              // it (top-level width/height), so the grip continues from the
+              // persisted size instead of snapping back to the design width.
+              ...(typeof n.w === 'number' && n.w > 0 ? { width: n.w } : {}),
+              ...(typeof n.h === 'number' && n.h > 0 ? { height: n.h } : {}),
+            }),
       }
     })
 
