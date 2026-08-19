@@ -916,6 +916,42 @@ Header 点 project 从 `/workspace/[id]` redirect `/v2/workspace/[id]`。旧 `/w
 稀释镜头语言。属既有行为（脚本→镜头边一直存在），本轮未改语义；建议后续把
 script 对 `pickUpstreamText` 的贡献改为可选或仅原始剧本。
 
+## Canvas 脚本生成器（LibTV 三步流程对标，2026-08-19，分支 feat/kling-o3-playground）
+
+脚本节点升级为「脚本生成器」：紧凑卡（三步进度 + 打开全屏编辑器）＋全屏三步
+编辑器（① 确认镜头表格 → ② 准备资产 → ③ 合成提示词），三步全过解锁批量生图/
+批量生视频。三步状态全部住在节点 data，随画布序列化。
+
+- ✅ **新 task type `CANVAS_SHOT_PROMPTS`**（text queue / text worker）：
+  shots + 资产清单 + 全局风格 → LLM → 每镜 finalPrompt + 出场资产名。
+  route `POST /api/canvas/shot-prompts`（尺寸校验、模型解析、submitTask）；
+  billing 走 buildTextTaskInfo；route-catalog / task-type-catalog 已登记
+  （guards: routes=241, taskTypes=56 全绿）。严格校验：缺任何一镜的
+  finalPrompt 即显式失败；entities 只接受资产清单里存在的名称。
+- ✅ **CANVAS_STORYBOARD 扩充**：输出 {globalStyle, assets, shots}——每镜新增
+  lighting（光影氛围）/sfx（音效），顶层新增全局风格段落与 角色/场景/道具
+  资产清单（kind/name/description，名称在镜头描述中原样引用）。colorTone
+  字段被 globalStyle 取代（当日引入，无存量数据顾虑）。
+- ✅ **全屏编辑器**（createPortal，DirectorStage 同款模式）：
+  - 步骤一/三共用分镜表格：镜号｜时长｜画面描述（实体蓝字高亮，点击编辑）｜
+    景别｜光影氛围｜对白·旁白｜音效｜运镜｜最终提示词｜操作；机位/焦段/
+    表演/站位收在每行「详情」抽屉。编辑会影响合成输入的字段 → 该镜
+    finalPrompt 作废（fail-closed）。
+  - 步骤二资产板：全局风格可改；三区卡片（上传 / AI 单张生成 / 删除 / 新增）；
+    「一键生成所有资产」对话框（勾选、描述可改、生图模型与比例、顺序提交）。
+    资产设定图走 playground run，成功后经 use-as-reference 换 durable key。
+  - 步骤三「一键合成全部提示词」：提交时记录镜头快照签名，完成时镜头已漂移
+    则丢弃结果要求重新合成——绝不把旧输入的提示词写到新镜头上。
+- ✅ **批量生图/生视频**：prompt=每镜 finalPrompt，参考=该镜出场资产的设定图
+  （entities → durable keys）；铺 脚本→镜头 单线节点后顺序提交。脚本节点的
+  refUrls 转接扩为「上游参考节点 + 全部资产图」，单镜重生保有全卡司参考。
+- ✅ 纯逻辑（步骤门禁/实体切分/资产 prompt/作废判定）拆在 script-gen-lib.ts，
+  13 个行为测试；worker 测试 11+9；shot-prompt.ts（确定性组装）被 LLM 合成
+  取代删除。
+- ⚠️ 已知限制：⚡点数预估未做（无 pre-quote API，计费在提交时冻结）；
+  资产「画质/2K」旋钮未做（playground 提交面只有 aspectRatio）；
+  LibTV 画布底部的全局 AI 输入条不在本轮范围。
+
 # 5:备注
 - 本文档是唯一执行来源，必须与代码库保持同步。
 - 禁止隐式回退、禁止兼容层、禁止静默吞错。

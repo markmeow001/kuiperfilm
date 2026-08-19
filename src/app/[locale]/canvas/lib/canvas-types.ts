@@ -49,8 +49,30 @@ export interface CanvasStoryboardShot {
   performance?: string
   /** 站位与调度（谁在哪、朝向、走位）。 */
   blocking?: string
+  /** 光影氛围：这一镜的光线基调与情绪。 */
+  lighting?: string
+  /** 音效：这一镜的声音设计（环境音/拟音/配乐提示）。 */
+  sfx?: string
   durationSec?: number
   dialogue?: string
+  /** 步骤三合成的最终生成提示词（编辑镜头字段会清空，需重新合成）。 */
+  finalPrompt?: string
+  /** 合成时判定的出场资产名（决定该镜带哪些参考图）。 */
+  entities?: string[]
+}
+
+/** 脚本生成器「准备资产」步骤里的一个资产（角色/场景/道具）。 */
+export interface CanvasScriptAsset {
+  id: string
+  kind: 'character' | 'scene' | 'prop'
+  name: string
+  description: string
+  /** 生成中的 playground run（完成后经 use-as-reference 换成 durable key）。 */
+  runId?: string | null
+  /** durable COS key（worker 生成时重新签名）。 */
+  imageKey?: string | null
+  /** 签名预览 URL。 */
+  imageUrl?: string | null
 }
 
 export interface CanvasMaskPoint {
@@ -115,10 +137,21 @@ export interface CanvasNodeData extends Record<string, unknown> {
   maskPlateUrl?: string | null
   maskPlateKey?: string | null
   /**
-   * Script node: 整体色调/风格(全片统一,LLM 拆分镜时产出、可手改),批量
-   * 生图时拼进每个镜头的 prompt。
+   * Script node: 全局风格(全片统一,LLM 拆分镜时产出、可手改),合成提示词
+   * 与资产生图都以它统一质感。
    */
-  colorTone?: string | null
+  globalStyle?: string | null
+  /** Script node: 准备资产步骤的资产清单（LLM 抽取 + 用户增删改）。 */
+  scriptAssets?: CanvasScriptAsset[] | null
+  /** Script node: 合成提示词任务轮询句柄。 */
+  promptsTaskId?: string | null
+  /**
+   * 合成提交时的镜头快照签名。任务完成时若当前镜头已漂移则丢弃结果并要求
+   * 重新合成——绝不把旧输入的提示词写到新镜头上。
+   */
+  promptsSig?: string | null
+  /** Script node: 批量生视频使用的视频模型。 */
+  videoModelKey?: string
   /**
    * Script node: 绑进本脚本的参考(角色/场景/道具/图片)解析后的 key/URL 快
    * 照,由 ScriptNode 随上游连线同步。铺出的镜头节点经 脚本→镜头 一条线读
@@ -307,7 +340,10 @@ export const DEFAULT_NODE_DATA = {
   referenceVideoUrl: null as string | null,
   shots: null as CanvasStoryboardShot[] | null,
   storyboardTaskId: null as string | null,
-  colorTone: null as string | null,
+  globalStyle: null as string | null,
+  scriptAssets: null as CanvasScriptAsset[] | null,
+  promptsTaskId: null as string | null,
+  promptsSig: null as string | null,
   refUrls: null as string[] | null,
   referenceAudioKey: null as string | null,
   referenceAudioName: null as string | null,

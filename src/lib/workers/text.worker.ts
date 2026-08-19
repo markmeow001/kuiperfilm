@@ -26,6 +26,7 @@ import { handleCanvasStoryboardTask } from './handlers/canvas-storyboard'
 import { handleCanvasDirectorRoutesTask } from '@/lib/workers/handlers/canvas-director-routes'
 import { handleCanvasDirectorBlockingTask } from '@/lib/workers/handlers/canvas-director-blocking'
 import { handleCanvasTextTask } from './handlers/canvas-text'
+import { handleCanvasShotPromptsTask } from './handlers/canvas-shot-prompts'
 import { handlePlaygroundVideoAnalyzeTask } from './handlers/playground-video-analyze'
 import { handleScriptToStoryboardTask } from './handlers/script-to-storyboard'
 import { handleVoiceAnalyzeTask } from './handlers/voice-analyze'
@@ -692,6 +693,8 @@ async function processTextTask(job: Job<TaskJobData>) {
       return await handleCanvasDirectorBlockingTask(job)
     case TASK_TYPE.CANVAS_TEXT:
       return await handleCanvasTextTask(job)
+    case TASK_TYPE.CANVAS_SHOT_PROMPTS:
+      return await handleCanvasShotPromptsTask(job)
     case TASK_TYPE.PLAYGROUND_VIDEO_ANALYZE:
       return await handlePlaygroundVideoAnalyzeTask(job)
     case TASK_TYPE.VISUAL_DEVELOPMENT_SCRIPT_ANALYSIS:

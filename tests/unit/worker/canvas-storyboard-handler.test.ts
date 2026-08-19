@@ -29,24 +29,55 @@ describe('handleCanvasStoryboardTask', () => {
     workerMock.assertTaskActive.mockReset()
   })
 
-  it('parses the canonical {colorTone, shots} object with full camera language fields', async () => {
+  it('parses the canonical {globalStyle, assets, shots} object with all shot fields', async () => {
     aiMock.executeAiTextStep.mockResolvedValueOnce({
-      text: '{"colorTone":"冷蓝夜色，高对比","shots":[{"shotNumber":1,"description":"男主推门而入，冷光","shotSize":"中景","cameraMove":"推近","cameraAngle":"过肩","lens":"35mm","performance":"男主疲惫而克制","blocking":"男主画面左侧朝右走入，女主背景右侧","durationSec":5,"dialogue":"我回来了"},{"shotNumber":2,"description":"女主转身惊讶"}]}',
+      text: JSON.stringify({
+        globalStyle: '国风二次元厚涂插画，冷蓝与暖金高对比',
+        assets: [
+          { kind: 'character', name: '男主', description: '30岁男性，风衣，疲惫气质' },
+          { kind: 'scene', name: '公寓客厅', description: '现代小户型客厅，冷色灯光' },
+          { kind: 'prop', name: '牧场手铐', description: '磨损的金属手铐' },
+        ],
+        shots: [
+          {
+            shotNumber: 1,
+            description: '男主 推门而入，冷光',
+            shotSize: '中景',
+            cameraMove: '推近',
+            cameraAngle: '过肩',
+            lens: '35mm',
+            performance: '男主疲惫而克制',
+            blocking: '男主画面左侧朝右走入',
+            lighting: '深夜室内，冷蓝屏幕光主导',
+            sfx: '钥匙转动声，门轴吱呀',
+            durationSec: 5,
+            dialogue: '我回来了',
+          },
+          { shotNumber: 2, description: '女主转身惊讶' },
+        ],
+      }),
       reasoning: '',
     })
     const res = await handleCanvasStoryboardTask(makeJob({ script: '一场重逢', model: 'gpt-x' }))
     expect(res.success).toBe(true)
     expect(res.count).toBe(2)
-    expect(res.colorTone).toBe('冷蓝夜色，高对比')
+    expect(res.globalStyle).toBe('国风二次元厚涂插画，冷蓝与暖金高对比')
+    expect(res.assets).toEqual([
+      { kind: 'character', name: '男主', description: '30岁男性，风衣，疲惫气质' },
+      { kind: 'scene', name: '公寓客厅', description: '现代小户型客厅，冷色灯光' },
+      { kind: 'prop', name: '牧场手铐', description: '磨损的金属手铐' },
+    ])
     expect(res.shots[0]).toEqual({
       shotNumber: 1,
-      description: '男主推门而入，冷光',
+      description: '男主 推门而入，冷光',
       shotSize: '中景',
       cameraMove: '推近',
       cameraAngle: '过肩',
       lens: '35mm',
       performance: '男主疲惫而克制',
-      blocking: '男主画面左侧朝右走入，女主背景右侧',
+      blocking: '男主画面左侧朝右走入',
+      lighting: '深夜室内，冷蓝屏幕光主导',
+      sfx: '钥匙转动声，门轴吱呀',
       durationSec: 5,
       dialogue: '我回来了',
     })
@@ -54,9 +85,28 @@ describe('handleCanvasStoryboardTask', () => {
     expect(res.shots[1]).toEqual({ shotNumber: 2, description: '女主转身惊讶' })
   })
 
-  it('prompt demands per-shot camera language and a colorTone envelope', async () => {
+  it('drops malformed assets (missing kind/name/description or duplicate name) without failing', async () => {
     aiMock.executeAiTextStep.mockResolvedValueOnce({
-      text: '{"colorTone":"x","shots":[{"description":"ok"}]}',
+      text: JSON.stringify({
+        globalStyle: 'x',
+        assets: [
+          { kind: 'character', name: '男主', description: 'ok' },
+          { kind: 'character', name: '男主', description: '重复名' },
+          { kind: 'vehicle', name: '车', description: '未知类型' },
+          { kind: 'scene', name: '', description: '缺名' },
+          { kind: 'prop', name: '手铐' },
+        ],
+        shots: [{ description: 'ok' }],
+      }),
+      reasoning: '',
+    })
+    const res = await handleCanvasStoryboardTask(makeJob({ script: 's', model: 'm' }))
+    expect(res.assets).toEqual([{ kind: 'character', name: '男主', description: 'ok' }])
+  })
+
+  it('prompt demands per-shot camera language, lighting, sfx, assets, and a globalStyle envelope', async () => {
+    aiMock.executeAiTextStep.mockResolvedValueOnce({
+      text: '{"globalStyle":"x","assets":[],"shots":[{"description":"ok"}]}',
       reasoning: '',
     })
     await handleCanvasStoryboardTask(makeJob({ script: '剧本', model: 'm' }))
@@ -64,39 +114,41 @@ describe('handleCanvasStoryboardTask', () => {
       { messages?: Array<{ content?: string }> },
     ]>
     const prompt = String(calls.at(-1)?.[0]?.messages?.[0]?.content ?? '')
-    expect(prompt).toContain('"colorTone"')
-    for (const field of ['"shotSize"', '"cameraMove"', '"cameraAngle"', '"lens"', '"performance"', '"blocking"']) {
+    expect(prompt).toContain('"globalStyle"')
+    expect(prompt).toContain('"assets"')
+    for (const field of ['"shotSize"', '"cameraMove"', '"cameraAngle"', '"lens"', '"performance"', '"blocking"', '"lighting"', '"sfx"']) {
       expect(prompt).toContain(field)
     }
     expect(prompt).toContain('不得省略')
   })
 
-  it('accepts a bare shot array (envelope quirk) with an empty colorTone', async () => {
+  it('accepts a bare shot array (envelope quirk) with empty globalStyle and assets', async () => {
     aiMock.executeAiTextStep.mockResolvedValueOnce({
       text: '[{"shotNumber":1,"description":"男主推门而入"}]',
       reasoning: '',
     })
     const res = await handleCanvasStoryboardTask(makeJob({ script: 's', model: 'm' }))
     expect(res.count).toBe(1)
-    expect(res.colorTone).toBe('')
+    expect(res.globalStyle).toBe('')
+    expect(res.assets).toEqual([])
     expect(res.shots[0]).toEqual({ shotNumber: 1, description: '男主推门而入' })
   })
 
   it('tolerates markdown code fences / prose around the object', async () => {
     aiMock.executeAiTextStep.mockResolvedValueOnce({
-      text: '好的，这是分镜：\n```json\n{"colorTone":"暖黄","shots":[{"description":"航拍城市夜景"}]}\n```',
+      text: '好的，这是分镜：\n```json\n{"globalStyle":"暖黄","assets":[],"shots":[{"description":"航拍城市夜景"}]}\n```',
       reasoning: '',
     })
     const res = await handleCanvasStoryboardTask(makeJob({ script: 's', model: 'm' }))
     expect(res.count).toBe(1)
-    expect(res.colorTone).toBe('暖黄')
+    expect(res.globalStyle).toBe('暖黄')
     expect(res.shots[0].shotNumber).toBe(1) // defaulted from index
     expect(res.shots[0].description).toBe('航拍城市夜景')
   })
 
   it('drops entries without a description and defaults shotNumber by index', async () => {
     aiMock.executeAiTextStep.mockResolvedValueOnce({
-      text: '{"colorTone":"","shots":[{"description":""},{"foo":1},{"description":"有效镜头"}]}',
+      text: '{"globalStyle":"","assets":[],"shots":[{"description":""},{"foo":1},{"description":"有效镜头"}]}',
       reasoning: '',
     })
     const res = await handleCanvasStoryboardTask(makeJob({ script: 's', model: 'm' }))
@@ -118,12 +170,12 @@ describe('handleCanvasStoryboardTask', () => {
   })
 
   it('throws when the object has no shots array', async () => {
-    aiMock.executeAiTextStep.mockResolvedValueOnce({ text: '{"colorTone":"x"}', reasoning: '' })
+    aiMock.executeAiTextStep.mockResolvedValueOnce({ text: '{"globalStyle":"x"}', reasoning: '' })
     await expect(handleCanvasStoryboardTask(makeJob({ script: 's', model: 'm' }))).rejects.toThrow(/shots is not an array/)
   })
 
   it('throws when the array has no valid shots', async () => {
-    aiMock.executeAiTextStep.mockResolvedValueOnce({ text: '{"colorTone":"x","shots":[{"foo":1}]}', reasoning: '' })
+    aiMock.executeAiTextStep.mockResolvedValueOnce({ text: '{"globalStyle":"x","assets":[],"shots":[{"foo":1}]}', reasoning: '' })
     await expect(handleCanvasStoryboardTask(makeJob({ script: 's', model: 'm' }))).rejects.toThrow(/no valid shots/)
   })
 })

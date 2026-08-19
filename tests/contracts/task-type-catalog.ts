@@ -62,6 +62,7 @@ const TASK_TYPE_OWNER_MAP = {
   [TASK_TYPE.CANVAS_DIRECTOR_ROUTES]: 'tests/unit/worker/canvas-director-routes-handler.test.ts',
   [TASK_TYPE.CANVAS_DIRECTOR_BLOCKING]: 'tests/unit/worker/canvas-director-blocking-handler.test.ts',
   [TASK_TYPE.CANVAS_TEXT]: 'tests/unit/worker/canvas-text-handler.test.ts',
+  [TASK_TYPE.CANVAS_SHOT_PROMPTS]: 'tests/unit/worker/canvas-shot-prompts-handler.test.ts',
   [TASK_TYPE.CANVAS_TTS]: 'tests/unit/worker/canvas-tts-handler.test.ts',
   [TASK_TYPE.CANVAS_COMPOSE_VIDEO]: 'tests/unit/worker/canvas-compose-handler.test.ts',
   [TASK_TYPE.CANVAS_STORYBOARD_EXPORT]: 'tests/unit/worker/canvas-storyboard-export-handler.test.ts',

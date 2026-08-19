@@ -18,7 +18,7 @@ import {
 } from '@/lib/query/mutations/playground-mutations'
 import { useUserModels, type UserModelOption } from '@/lib/query/hooks/useUserModels'
 
-interface CanvasGenerationValue {
+export interface CanvasGenerationValue {
   /** Submit a generation; resolves to the new runId (task id). */
   submitNode: (submission: PlaygroundRunSubmission) => Promise<string>
   /** Look up the live status/result of a run by id. */

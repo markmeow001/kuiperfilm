@@ -34,28 +34,43 @@ export interface CanvasStoryboardShot {
   performance?: string
   /** 站位与调度（谁在哪、朝向、走位）。 */
   blocking?: string
+  /** 光影氛围：这一镜的光线基调与情绪。 */
+  lighting?: string
+  /** 音效：这一镜的声音设计（环境音/拟音/配乐提示）。 */
+  sfx?: string
   durationSec?: number
   dialogue?: string
 }
 
+/** One extracted production asset (角色/场景/道具) for the asset board. */
+export interface CanvasStoryboardAsset {
+  kind: 'character' | 'scene' | 'prop'
+  name: string
+  description: string
+}
+
 export interface CanvasStoryboardResult {
   shots: CanvasStoryboardShot[]
-  /** 全片统一的整体色调/风格（用于每镜生图 prompt）。 */
-  colorTone: string
+  /** 全局风格：全片统一的题材/媒介/色彩基调/光影特征/画质段落。 */
+  globalStyle: string
+  /** 从剧本中抽出的可复用资产清单（准备资产步骤的底稿）。 */
+  assets: CanvasStoryboardAsset[]
 }
 
 const MAX_SHOTS = 40
 
 function buildPrompt(script: string): string {
   return [
-    '你是一位专业短剧分镜师兼摄影指导。把下面的剧本/故事拆解成一组有序的分镜镜头。',
+    '你是一位专业短剧分镜师兼摄影指导。把下面的剧本/故事拆解成一份完整的分镜表与制作资产清单。',
     '要求：',
     '1. 只输出一个 JSON 对象，不要任何解释或 markdown 代码块围栏。',
-    '2. 对象形如：{"colorTone": "全片统一的整体色调与视觉风格（光线基调、色彩倾向、质感，如：冷蓝夜色、高对比霓虹、胶片颗粒…）", "shots": [<镜头数组>]}',
-    '3. 每个镜头形如：{"shotNumber": 1, "description": "画面内容的完整视觉描述（用于文生图）：场景、人物、动作、光线、氛围", "shotSize": "中景/特写/全景/近景…", "cameraMove": "推近/拉远/环绕/固定/跟移…", "cameraAngle": "平视/俯拍/仰拍/过肩/主观视角…", "lens": "24mm 广角/35mm/50mm 标准/85mm 人像…", "performance": "该镜头中人物的表演与情绪（谁、什么情绪、怎么演）", "blocking": "站位与调度：谁在画面哪个位置、朝向、走位", "durationSec": 5, "dialogue": "该镜头的对白或旁白，无则留空字符串"}',
-    '4. 每个镜头的 shotSize、cameraAngle、lens、performance、blocking 都必须给出，不得省略——这是分镜表不是故事梗概。',
-    `5. 镜头数量根据剧情自然切分，最多 ${MAX_SHOTS} 个。`,
-    '6. 与剧本保持同一种语言。',
+    '2. 对象形如：{"globalStyle": "...", "assets": [...], "shots": [...]}',
+    '3. globalStyle：全片统一的全局风格段落——题材与媒介（如：国风二次元厚涂插画/写实电影感）、色彩基调、光影特征、画质质感。',
+    '4. assets：从剧本抽出的可复用资产清单，每项形如 {"kind": "character/scene/prop", "name": "简短唯一名称（镜头描述中提到该资产时必须使用完全相同的名称）", "description": "可直接用于文生图的外观设定：人物含性别/年龄/身高/服装/气质，场景含空间/陈设/时代，道具含材质/形制"}。同一人物的不同时期算不同资产（如「现代沈昭昭」「古代沈昭昭」）。',
+    '5. 每个镜头形如：{"shotNumber": 1, "description": "画面内容的完整视觉描述（用于文生图）：场景、人物、动作——提到资产时必须使用 assets 里完全相同的 name", "shotSize": "中景/特写/全景/近景…", "cameraMove": "推近/拉远/环绕/固定/跟移…", "cameraAngle": "平视/俯拍/仰拍/过肩/主观视角…", "lens": "24mm 广角/35mm/50mm 标准/85mm 人像…", "performance": "该镜头中人物的表演与情绪（谁、什么情绪、怎么演）", "blocking": "站位与调度：谁在画面哪个位置、朝向、走位", "lighting": "光影氛围：这一镜的光线基调与情绪", "sfx": "音效：环境音/拟音/配乐提示", "durationSec": 5, "dialogue": "该镜头的对白或旁白，无则留空字符串"}',
+    '6. 每个镜头的 shotSize、cameraAngle、lens、performance、blocking、lighting、sfx 都必须给出，不得省略——这是分镜表不是故事梗概。',
+    `7. 镜头数量根据剧情自然切分，最多 ${MAX_SHOTS} 个。`,
+    '8. 与剧本保持同一种语言。',
     '',
     '剧本：',
     script,
@@ -66,18 +81,41 @@ function trimmedString(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value.trim() : null
 }
 
+const ASSET_KINDS = new Set(['character', 'scene', 'prop'])
+const MAX_ASSETS = 40
+
+function parseAssets(raw: unknown): CanvasStoryboardAsset[] {
+  if (!Array.isArray(raw)) return []
+  const seen = new Set<string>()
+  const assets: CanvasStoryboardAsset[] = []
+  for (const item of raw.slice(0, MAX_ASSETS)) {
+    if (!item || typeof item !== 'object') continue
+    const o = item as Record<string, unknown>
+    const kind = trimmedString(o.kind)
+    const name = trimmedString(o.name)
+    const description = trimmedString(o.description)
+    // 资产三要素缺一即丢弃该条（不发明占位描述）；名称去重保序。
+    if (!kind || !ASSET_KINDS.has(kind) || !name || !description || seen.has(name)) continue
+    seen.add(name)
+    assets.push({ kind: kind as CanvasStoryboardAsset['kind'], name, description })
+  }
+  return assets
+}
+
 /**
  * Tolerant extraction — strips markdown fences / prose. Canonical output is
- * {"colorTone", "shots"}; a bare shot array (older/misbehaving model) is still
- * accepted with an empty colorTone rather than failing the whole paid task on
- * an envelope quirk. Shot-level validation stays strict: no description → drop.
+ * {"globalStyle", "assets", "shots"}; a bare shot array (misbehaving model) is
+ * still accepted with empty globalStyle/assets rather than failing the whole
+ * paid task on an envelope quirk. Shot-level validation stays strict: no
+ * description → drop; zero valid shots → explicit parse failure.
  */
 function parseStoryboard(text: string): CanvasStoryboardResult {
   const trimmed = text.trim().replace(/^```(?:json)?/i, '').replace(/```$/i, '').trim()
   const objStart = trimmed.indexOf('{')
   const arrStart = trimmed.indexOf('[')
   let rawShots: unknown
-  let colorTone = ''
+  let globalStyle = ''
+  let assets: CanvasStoryboardAsset[] = []
   if (objStart !== -1 && (arrStart === -1 || objStart < arrStart)) {
     const end = trimmed.lastIndexOf('}')
     if (end <= objStart) {
@@ -88,7 +126,8 @@ function parseStoryboard(text: string): CanvasStoryboardResult {
       throw new Error('CANVAS_STORYBOARD_PARSE: result is not an object')
     }
     const record = parsed as Record<string, unknown>
-    colorTone = trimmedString(record.colorTone) ?? ''
+    globalStyle = trimmedString(record.globalStyle) ?? ''
+    assets = parseAssets(record.assets)
     rawShots = record.shots
   } else {
     if (arrStart === -1) {
@@ -115,6 +154,8 @@ function parseStoryboard(text: string): CanvasStoryboardResult {
     const lens = trimmedString(o.lens)
     const performance = trimmedString(o.performance)
     const blocking = trimmedString(o.blocking)
+    const lighting = trimmedString(o.lighting)
+    const sfx = trimmedString(o.sfx)
     const dialogue = trimmedString(o.dialogue)
     shots.push({
       shotNumber: typeof o.shotNumber === 'number' ? o.shotNumber : i + 1,
@@ -125,6 +166,8 @@ function parseStoryboard(text: string): CanvasStoryboardResult {
       ...(lens ? { lens } : {}),
       ...(performance ? { performance } : {}),
       ...(blocking ? { blocking } : {}),
+      ...(lighting ? { lighting } : {}),
+      ...(sfx ? { sfx } : {}),
       ...(typeof o.durationSec === 'number' && Number.isFinite(o.durationSec) ? { durationSec: o.durationSec } : {}),
       ...(dialogue ? { dialogue } : {}),
     })
@@ -132,7 +175,7 @@ function parseStoryboard(text: string): CanvasStoryboardResult {
   if (shots.length === 0) {
     throw new Error('CANVAS_STORYBOARD_PARSE: no valid shots parsed')
   }
-  return { shots, colorTone }
+  return { shots, globalStyle, assets }
 }
 
 export async function handleCanvasStoryboardTask(job: Job<TaskJobData>) {
@@ -162,9 +205,9 @@ export async function handleCanvasStoryboardTask(job: Job<TaskJobData>) {
   })
 
   if (!completion.text) throw new Error('CANVAS_STORYBOARD: empty model output')
-  const { shots, colorTone } = parseStoryboard(completion.text)
+  const { shots, globalStyle, assets } = parseStoryboard(completion.text)
 
   await reportTaskProgress(job, 95, { stage: 'canvas_storyboard_done' })
 
-  return { success: true, shots, colorTone, count: shots.length }
+  return { success: true, shots, globalStyle, assets, count: shots.length }
 }

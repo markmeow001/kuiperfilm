@@ -103,6 +103,10 @@ export const TASK_TYPE = {
   // Canvas 无限画布 text node writing assistant (扩写/改写/润色/续写) — text-only,
   // rides the text worker; plain-text result read back via /api/tasks/[taskId].
   CANVAS_TEXT: 'canvas_text',
+  // Canvas 脚本生成器 step 3 — 合成提示词: shots + assets + 全局风格 → LLM →
+  // per-shot final generation prompt + per-shot entity list. Text-only, rides
+  // the text worker; JSON result read back via /api/tasks/[taskId].
+  CANVAS_SHOT_PROMPTS: 'canvas_shot_prompts',
   // Canvas 无限画布 audio node — text + a reference voice clip → cloned TTS
   // (FAL IndexTTS2). Rides the VOICE worker; result audio url in Task.result.
   CANVAS_TTS: 'canvas_tts',

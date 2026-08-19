@@ -80,6 +80,7 @@ const ROUTE_FILES = [
   'src/app/api/canvas/director-blocking/route.ts',
   'src/app/api/canvas/previz-export/route.ts',
   'src/app/api/canvas/route.ts',
+  'src/app/api/canvas/shot-prompts/route.ts',
   'src/app/api/canvas/storyboard/route.ts',
   'src/app/api/canvas/text/route.ts',
   'src/app/api/canvas/tts/route.ts',

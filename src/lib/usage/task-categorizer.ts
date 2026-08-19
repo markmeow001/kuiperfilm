@@ -85,6 +85,7 @@ const ANALYZE_TYPES = new Set<string>([
   'canvas_director_routes',
   'canvas_director_blocking',
   'canvas_text',
+  'canvas_shot_prompts',
   'playground_video_analyze',
   'visual_development_script_analysis',
   'visual_development_stage_brief',
