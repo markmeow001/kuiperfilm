@@ -53,6 +53,47 @@ describe('pickUpstreamReferenceUrls', () => {
       'https://ok',
     ])
   })
+
+  it('scene and prop nodes are ref-bearing like character (durable key first)', () => {
+    expect(
+      pickUpstreamReferenceUrls([
+        { type: 'scene', data: { referenceKey: 'images/playground-ref/u/room.png', resultUrl: 'https://signed' } },
+        { type: 'prop', data: { resultUrl: 'https://prop-only-url' } },
+      ]),
+    ).toEqual(['images/playground-ref/u/room.png', 'https://prop-only-url'])
+  })
+})
+
+describe('pickUpstreamReferenceUrls — 脚本转接参考 (2026-08-19 参考只绑脚本)', () => {
+  it('script upstream relays its data.refUrls (镜头节点只连 脚本→镜头 一条线)', () => {
+    expect(
+      pickUpstreamReferenceUrls([
+        { type: 'script', data: { refUrls: ['images/playground-ref/u/hero.png', 'images/playground-ref/u/room.png'] } },
+      ]),
+    ).toEqual(['images/playground-ref/u/hero.png', 'images/playground-ref/u/room.png'])
+  })
+
+  it('script with empty/absent refUrls contributes nothing (不发明参考)', () => {
+    expect(pickUpstreamReferenceUrls([{ type: 'script', data: { refUrls: [] } }])).toEqual([])
+    expect(pickUpstreamReferenceUrls([{ type: 'script', data: {} }])).toEqual([])
+  })
+
+  it('script refUrls junk entries are dropped, not stringified', () => {
+    expect(
+      pickUpstreamReferenceUrls([
+        { type: 'script', data: { refUrls: ['images/ok.png', '', 42, null] } },
+      ]),
+    ).toEqual(['images/ok.png'])
+  })
+
+  it('script relay composes with direct refs in connection order', () => {
+    expect(
+      pickUpstreamReferenceUrls([
+        { type: 'script', data: { refUrls: ['images/from-script.png'] } },
+        { type: 'image', data: { resultUrl: 'https://direct.png' } },
+      ]),
+    ).toEqual(['images/from-script.png', 'https://direct.png'])
+  })
 })
 
 describe('pickUpstreamFrameUrls', () => {

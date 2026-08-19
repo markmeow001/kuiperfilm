@@ -13,11 +13,22 @@ import { useNodeConnections, useNodesData, useReactFlow, type Edge, type Node, t
 import { CANVAS_TOKENS, NODE_META } from '../lib/canvas-tokens'
 import { type CanvasNodeData, type CanvasStoryboardShot, DEFAULT_NODE_DATA } from '../lib/canvas-types'
 import { pickUpstreamReferenceUrls, pickUpstreamText } from '../lib/canvas-refs'
+import { composeShotImagePrompt, composeShotVideoPrompt } from '../lib/shot-prompt'
 import { useCanvasGeneration } from '../lib/canvas-generation'
 import { buildStoryboardBlockingBrief } from '../lib/storyboard-director-handoff'
 import { NodeShell } from './node-shell'
 
 type Phase = 'idle' | 'submitting' | 'running' | 'done' | 'failed'
+
+/** Upstream node types that count as bound references, with their user-facing
+ *  kind labels（已绑参考 chips + fan-out filters share this single map）。 */
+const REF_KIND_LABEL: Record<string, string> = {
+  character: '角色',
+  scene: '场景',
+  prop: '道具',
+  director: '导演台',
+  image: '图片',
+}
 
 export function ScriptNode({ id, data, selected }: NodeProps) {
   const d = data as CanvasNodeData
@@ -32,31 +43,42 @@ export function ScriptNode({ id, data, selected }: NodeProps) {
   const incoming = useMemo(() => connections.filter((c) => c.target === id).map((c) => c.source), [connections, id])
   const upstream = useNodesData(incoming)
   const upstreamText = useMemo(() => pickUpstreamText(upstream), [upstream])
-  // 接进脚本节点的角色/图片/导演台上游 — fan-out 时自动转接到每个镜头节点,
-  // 角色一致性随连线传递(LibTV「@资产自动连线」的等价物)。
+  // 接进脚本节点的角色/场景/道具/图片/导演台上游 — 参考只绑在脚本上,
+  // 批量生图与铺出的镜头节点都经由脚本读同一组参考。
   const refSourceIds = useMemo(
     () =>
       upstream
         .filter((n): n is NonNullable<typeof n> =>
-          Boolean(n) && (n!.type === 'character' || n!.type === 'image' || n!.type === 'director'))
+          Boolean(n) && typeof n!.type === 'string' && n!.type! in REF_KIND_LABEL)
         .map((n) => n.id),
     [upstream],
   )
   const upstreamRefs = useMemo(() => pickUpstreamReferenceUrls(upstream, id), [upstream, id])
-  // Human-readable labels for the bound refs (角色/场景/道具 = character/image
-  // nodes wired in) so the user can see WHAT is bound, not just a count.
+  // Human-readable labels for the bound refs so the user can see WHAT is
+  // bound, not just a count. A node's own type label as its title (the old
+  // default) adds nothing — only a user-given name is appended.
   const boundRefLabels = useMemo(
     () =>
       upstream
         .filter((n): n is NonNullable<typeof n> =>
-          Boolean(n) && (n!.type === 'character' || n!.type === 'image' || n!.type === 'director'))
+          Boolean(n) && typeof n!.type === 'string' && n!.type! in REF_KIND_LABEL)
         .map((n) => {
-          const kind = n.type === 'character' ? '角色' : n.type === 'director' ? '导演台' : '图片/场景'
-          const title = (n.data as CanvasNodeData)?.title
-          return title ? `${kind}·${title}` : kind
+          const kind = REF_KIND_LABEL[n.type as string]
+          const title = (n.data as CanvasNodeData)?.title?.trim()
+          return title && title !== kind ? `${kind}·${title}` : kind
         }),
     [upstream],
   )
+
+  // Publish the resolved refs onto this node's data. Spawned shot nodes read
+  // them through their single 脚本→镜头 edge (canvas-refs), so per-shot
+  // regeneration uses exactly the refs batch generation used — without the
+  // old N×M 参考→镜头 wire fan that misread as「参考绕过了脚本」.
+  useEffect(() => {
+    const current = Array.isArray(d.refUrls) ? d.refUrls : []
+    if (current.length === upstreamRefs.length && current.every((v, i) => v === upstreamRefs[i])) return
+    updateNodeData(id, { refUrls: upstreamRefs })
+  }, [upstreamRefs, d.refUrls, id, updateNodeData])
 
   const script = (upstreamText || d.prompt || '').trim()
   const shots = d.shots ?? []
@@ -80,7 +102,14 @@ export function ScriptNode({ id, data, selected }: NodeProps) {
         if (cancelled) return
         if (task?.status === 'completed') {
           const resultShots = (task.result?.shots ?? []) as CanvasStoryboardShot[]
-          updateNodeData(id, { shots: resultShots, storyboardTaskId: null })
+          const resultColorTone = typeof task.result?.colorTone === 'string'
+            ? task.result.colorTone.trim()
+            : ''
+          updateNodeData(id, {
+            shots: resultShots,
+            colorTone: resultColorTone || null,
+            storyboardTaskId: null,
+          })
           setPhase('done')
           return
         }
@@ -173,11 +202,12 @@ export function ScriptNode({ id, data, selected }: NodeProps) {
   }
   const pickedShots = shots.filter((_, i) => isPicked(i))
 
-  // Fan the picked shots out into a row of image OR video nodes below, WIRED:
-  // 脚本→镜头(出处可追溯)+ 每个上游参考(角色/图片/导演台)→镜头(一致
-  // 性参考真实流入生成)。以前只撒节点不连线,镜头节点和角色完全脱钩,是
-  // 「每个区块都独立」观感的元凶(2026-07-08 用户反馈)。Returns spawned ids
-  // so 批量生成 can submit them right after.
+  // Fan the picked shots out into a row of image OR video nodes below, wired
+  // 脚本→镜头 only. 参考(角色/场景/道具/图片/导演台)绑在脚本上,镜头经这条
+  // 边读脚本 data.refUrls(canvas-refs)——批量生成和之后的单镜重生因此拿到同
+  // 一组参考。2026-07-08 曾为「区块都独立」观感补过 参考→镜头 的 N×M 连线,
+  // 2026-08-19 用户反馈那让参考看起来绕过了脚本(蜘蛛网+语义误导),移除。
+  // Returns spawned ids so 批量生成 can submit them right after.
   function spawnShotNodes(target: 'image' | 'video', imageModelKey?: string): string[] {
     if (pickedShots.length === 0) return []
     const self = getNode(id)
@@ -188,7 +218,6 @@ export function ScriptNode({ id, data, selected }: NodeProps) {
     const ids = pickedShots.map((_, i) => `n_${stamp}_${target}_${i}`)
     addNodes(
       pickedShots.map((s, i) => {
-        const framed = s.shotSize ? `${s.description}（${s.shotSize}）` : s.description
         return {
           id: ids[i],
           type: target,
@@ -196,8 +225,10 @@ export function ScriptNode({ id, data, selected }: NodeProps) {
           data: {
             ...DEFAULT_NODE_DATA,
             title: `镜 ${s.shotNumber}`,
-            // Video shots carry the LLM's camera move + duration into the node.
-            prompt: target === 'video' && s.cameraMove ? `${framed}，运镜：${s.cameraMove}` : framed,
+            // 与批量生图同一个组装函数——镜头语言/表演/站位/色调都进 prompt。
+            prompt: target === 'video'
+              ? composeShotVideoPrompt(s, d.colorTone)
+              : composeShotImagePrompt(s, d.colorTone),
             // Spawned image nodes inherit the script node's chosen 生图模型 so
             // 仅铺图 / 后续手动重生都用同一个模型(而非各自的默认)。
             ...(target === 'image' && imageModelKey ? { modelKey: imageModelKey } : {}),
@@ -211,19 +242,21 @@ export function ScriptNode({ id, data, selected }: NodeProps) {
         }
       }),
     )
-    const edges: Edge[] = []
-    ids.forEach((nid, i) => {
-      edges.push({ id: `e_${stamp}_s_${i}`, source: id, target: nid, animated: true })
-      refSourceIds.forEach((rid, j) => {
-        edges.push({ id: `e_${stamp}_r_${j}_${i}`, source: rid, target: nid, animated: true })
-      })
-    })
+    const edges: Edge[] = ids.map((nid, i) => (
+      { id: `e_${stamp}_s_${i}`, source: id, target: nid, animated: true }
+    ))
     if (edges.length > 0) addEdges(edges)
     return ids
   }
 
   function openPickedShotsInDirector() {
     if (pickedShots.length === 0) return
+    // 导演台契约只吃 character/image 当卡司(canvas-connections ACCEPTS)；
+    // 场景/道具是生图参考,不是 3D 排戏的演员,不接过去。
+    const directorCastIds = upstream
+      .filter((n): n is NonNullable<typeof n> =>
+        Boolean(n) && (n!.type === 'character' || n!.type === 'image'))
+      .map((n) => n.id)
     const self = getNode(id)
     const base = self?.position ?? { x: 0, y: 0 }
     const directorId = `n_${Date.now()}_director`
@@ -240,7 +273,7 @@ export function ScriptNode({ id, data, selected }: NodeProps) {
       },
     }
     addNodes(node)
-    const edges: Edge[] = refSourceIds.map((sourceId, index) => ({
+    const edges: Edge[] = directorCastIds.map((sourceId, index) => ({
       id: `e_${Date.now()}_director_${index}`,
       source: sourceId,
       target: directorId,
@@ -274,10 +307,9 @@ export function ScriptNode({ id, data, selected }: NodeProps) {
     setBatch({ done: 0, total: ids.length, running: true, error: null })
     for (let i = 0; i < ids.length; i++) {
       const s = pickedShots[i]
-      const framed = s.shotSize ? `${s.description}（${s.shotSize}）` : s.description
       try {
         const runId = await gen.submitNode({
-          prompt: framed,
+          prompt: composeShotImagePrompt(s, d.colorTone),
           referenceImages: upstreamRefs,
           outputType: 'image',
           modelKey,
@@ -332,6 +364,17 @@ export function ScriptNode({ id, data, selected }: NodeProps) {
 
         {shots.length > 0 ? (
           <>
+            {/* 全片统一色调 — LLM 拆分镜时产出,可手改;批量生图拼进每镜 prompt。 */}
+            <div className="flex items-center gap-1.5">
+              <span className="shrink-0 text-[12px]" style={{ color: CANVAS_TOKENS.text.muted }}>整体色调</span>
+              <input
+                value={d.colorTone ?? ''}
+                onChange={(e) => updateNodeData(id, { colorTone: e.target.value || null })}
+                placeholder="全片统一的色调与视觉风格，如：冷蓝夜色、胶片颗粒…"
+                className="nodrag min-w-0 flex-1 rounded-md px-2 py-1.5 text-[12px] outline-none"
+                style={{ background: CANVAS_TOKENS.bg.input, color: CANVAS_TOKENS.text.primary, border: `1px solid ${CANVAS_TOKENS.hairline}` }}
+              />
+            </div>
             <div className="flex items-center justify-between text-[12px]" style={{ color: CANVAS_TOKENS.text.muted }}>
               <span>勾选要批量生成的镜头（{pickedShots.length}/{shots.length}）</span>
               <button type="button" className="nodrag underline" onClick={() => setPicked(picked === null ? new Set() : null)}>
@@ -344,8 +387,6 @@ export function ScriptNode({ id, data, selected }: NodeProps) {
                   <div className="flex items-center gap-1.5">
                     <input type="checkbox" checked={isPicked(i)} onChange={() => togglePick(i)} className="nodrag h-3.5 w-3.5 accent-current" style={{ color: meta.accent }} />
                     <span className="font-mono text-[12px]" style={{ color: meta.accent }}>#{s.shotNumber}</span>
-                    {s.shotSize ? <span className="rounded px-1 text-[10px]" style={{ background: CANVAS_TOKENS.bg.hover, color: CANVAS_TOKENS.text.muted }}>{s.shotSize}</span> : null}
-                    {s.cameraMove ? <span className="rounded px-1 text-[10px]" style={{ background: CANVAS_TOKENS.bg.hover, color: CANVAS_TOKENS.text.muted }}>{s.cameraMove}</span> : null}
                     {typeof s.durationSec === 'number' ? <span className="text-[10px]" style={{ color: CANVAS_TOKENS.text.muted }}>{s.durationSec}s</span> : null}
                     <span className="ml-auto flex items-center gap-1.5">
                       <button type="button" title="上移" onClick={() => moveShot(i, -1)} disabled={i === 0} className="nodrag disabled:opacity-25" style={{ color: CANVAS_TOKENS.text.muted }}>↑</button>
@@ -360,6 +401,40 @@ export function ScriptNode({ id, data, selected }: NodeProps) {
                     placeholder="画面描述…"
                     className="nodrag nowheel mt-1.5 w-full resize-y rounded px-2 py-1.5 text-[12px] leading-relaxed outline-none"
                     style={{ background: CANVAS_TOKENS.bg.panel, color: CANVAS_TOKENS.text.primary, border: `1px solid ${CANVAS_TOKENS.hairline}`, minHeight: 56 }}
+                  />
+                  {/* 镜头语言四件套 — 全部可编辑,生成 prompt 逐项标注拼入
+                      (shot-prompt.ts,批量与单镜重生同一组装点)。 */}
+                  <div className="mt-1 grid grid-cols-4 gap-1">
+                    {([
+                      ['shotSize', '景别', s.shotSize],
+                      ['cameraMove', '运镜', s.cameraMove],
+                      ['cameraAngle', '机位', s.cameraAngle],
+                      ['lens', '镜头', s.lens],
+                    ] as const).map(([field, label, value]) => (
+                      <input
+                        key={field}
+                        value={value ?? ''}
+                        onChange={(e) => editShot(i, { [field]: e.target.value })}
+                        placeholder={label}
+                        title={label}
+                        className="nodrag min-w-0 rounded px-1.5 py-1 text-[11px] outline-none"
+                        style={{ background: CANVAS_TOKENS.bg.panel, color: CANVAS_TOKENS.text.secondary, border: `1px solid ${CANVAS_TOKENS.hairline}` }}
+                      />
+                    ))}
+                  </div>
+                  <input
+                    value={s.performance ?? ''}
+                    onChange={(e) => editShot(i, { performance: e.target.value })}
+                    placeholder="人物表演与情绪（谁、什么情绪、怎么演）"
+                    className="nodrag mt-1 w-full rounded px-2 py-1 text-[11px] outline-none"
+                    style={{ background: CANVAS_TOKENS.bg.panel, color: CANVAS_TOKENS.text.secondary, border: `1px solid ${CANVAS_TOKENS.hairline}` }}
+                  />
+                  <input
+                    value={s.blocking ?? ''}
+                    onChange={(e) => editShot(i, { blocking: e.target.value })}
+                    placeholder="站位与调度（谁在画面哪个位置、朝向、走位）"
+                    className="nodrag mt-1 w-full rounded px-2 py-1 text-[11px] outline-none"
+                    style={{ background: CANVAS_TOKENS.bg.panel, color: CANVAS_TOKENS.text.secondary, border: `1px solid ${CANVAS_TOKENS.hairline}` }}
                   />
                   <input
                     value={s.dialogue ?? ''}
@@ -388,15 +463,15 @@ export function ScriptNode({ id, data, selected }: NodeProps) {
                 {gen.imageModels.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
               </select>
             </div>
-            {/* 参考绑定 — 始终可见的引导。角色/场景/道具 = 把「角色」或「图片」
-                节点连进本脚本节点,参考会自动带入每个镜头(角色一致性的关键)。 */}
+            {/* 参考绑定 — 始终可见的引导。把「角色/场景/道具」(或图片)节点连
+                进本脚本节点,参考会自动带入每个镜头(一致性的关键)。 */}
             {refSourceIds.length > 0 ? (
               <div className="rounded-md px-2 py-1.5 text-[12px]" style={{ background: `${meta.accent}18`, color: CANVAS_TOKENS.text.secondary, border: `1px solid ${meta.accent}33` }}>
                 ✅ 已绑参考（{refSourceIds.length}）：{boundRefLabels.join('、')} — 批量生图会带入每个镜头
               </div>
             ) : (
               <div className="rounded-md px-2 py-1.5 text-[12px] leading-relaxed" style={{ background: CANVAS_TOKENS.bg.hover, color: CANVAS_TOKENS.text.muted, border: `1px solid ${CANVAS_TOKENS.hairline}` }}>
-                💡 想让人物 / 场景 / 道具一致？把「角色」或「图片」节点连到本脚本节点左侧的 <span style={{ color: meta.accent }}>＋</span> 口，参考会自动带入每个镜头。<span style={{ color: '#FF8A8A' }}>没绑参考时生成的是通用画面（人物会不一致）。</span>
+                💡 想让人物 / 场景 / 道具一致？把「角色」「场景」「道具」节点连到本脚本节点左侧的 <span style={{ color: meta.accent }}>＋</span> 口，参考会自动带入每个镜头。<span style={{ color: '#FF8A8A' }}>没绑参考时生成的是通用画面（人物会不一致）。</span>
               </div>
             )}
             <button

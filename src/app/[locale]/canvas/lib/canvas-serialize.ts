@@ -16,7 +16,7 @@ import {
 } from './canvas-types'
 import { CANVAS_SOURCE_HANDLE, CANVAS_TARGET_HANDLE, inferCanvasEdgeData } from './canvas-connections'
 
-const VALID_TYPES: readonly CanvasNodeType[] = ['character', 'image', 'video', 'text', 'director', 'script', 'audio', 'composition', 'mask', 'group']
+const VALID_TYPES: readonly CanvasNodeType[] = ['character', 'scene', 'prop', 'image', 'video', 'text', 'director', 'script', 'audio', 'composition', 'mask', 'group']
 
 function isValidType(t: unknown): t is CanvasNodeType {
   return typeof t === 'string' && (VALID_TYPES as readonly string[]).includes(t)

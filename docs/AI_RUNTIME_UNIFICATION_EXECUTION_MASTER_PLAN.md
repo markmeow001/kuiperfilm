@@ -882,6 +882,34 @@ Header 点 project 从 `/workspace/[id]` redirect `/v2/workspace/[id]`。旧 `/w
 - ✅ 最终验证（同一份程式码第二次完整链路）：`npm run test` 505 files / 4312 tests
   全绿；`npx tsc --noEmit`、`npm run lint`、`npm run build`、`git diff --check` 皆通过。
 
+## Canvas 分镜质量与参考语义整修（2026-08-19，分支 feat/kling-o3-playground）
+
+用户实测反馈五项，全部落地：
+
+- ✅ **分镜 schema 扩充**：`CANVAS_STORYBOARD` worker 输出从裸数组改为
+  `{colorTone, shots}`；每镜新增 `cameraAngle`（机位）、`lens`（焦段）、
+  `performance`（表演情绪）、`blocking`（站位调度），prompt 明确要求逐镜给出
+  不得省略。容错：裸数组仍接受（colorTone 空），镜级校验维持严格。
+  新增 `shot-prompt.ts` 作为分镜→生成 prompt 的唯一组装点——批量生图、铺图、
+  铺视频、单镜重生全走同一函数，镜头语言逐项标注拼接＋全片色调收尾。
+- ✅ **参考连线语义修正**：铺出的镜头节点只连 `脚本→镜头` 一条边；脚本节点把
+  解析后的参考快照写进自身 `data.refUrls`，`canvas-refs` 让镜头经该边读到与
+  批量生图完全相同的参考。移除 2026-07-08 补的 参考→镜头 N×M 连线（用户反馈
+  该画法误导为「参考绕过脚本」）。导演台 handoff 只接 character/image 卡司。
+- ✅ **场景/道具节点**：新增 `scene`/`prop` 节点型别，与 `character` 共用
+  `ReferenceNode`（原 CharacterNode 一般化后删除）；连线契约、序列化、
+  canvas-refs、脚本已绑参考标签、资产库类型（`CANVAS_ASSET_TYPES` 增 `prop`）
+  全部同步。
+- ✅ **参考节点可命名**：ReferenceNode 头部内联命名输入（存 `data.title`），
+  已绑参考标签显示「角色·男主·Hayes」式命名；新建参考节点 title 留空以显示
+  命名 placeholder（三张卡都叫「角色」正是「谁是谁」问题的根源）。
+- ✅ **添加节点菜单宽度自适应**：`w-48` 固定宽改 `w-max`＋nowrap，不再折行。
+
+已知未动的既有问题：`MediaNode` 的 `basePrompt = [upstreamText, d.prompt]`
+（MediaNode.tsx:209）会把上游脚本节点「全部分镜文字」拼进单镜重生 prompt，
+稀释镜头语言。属既有行为（脚本→镜头边一直存在），本轮未改语义；建议后续把
+script 对 `pickUpstreamText` 的贡献改为可选或仅原始剧本。
+
 # 5:备注
 - 本文档是唯一执行来源，必须与代码库保持同步。
 - 禁止隐式回退、禁止兼容层、禁止静默吞错。

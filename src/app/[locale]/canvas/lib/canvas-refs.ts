@@ -10,7 +10,10 @@
  * URL, fine within a session) for run-result nodes that don't expose a key.
  *
  * Contributions by node type:
- *  - image/character/director → referenceKey / resultUrl (they hold a frame)
+ *  - image/character/scene/prop/director → referenceKey / resultUrl (they hold a frame)
+ *  - script → data.refUrls(脚本节点把「绑进它的参考」以解析后的 key/URL 缓存
+ *    在自己的 data 上;铺出的镜头节点只连 脚本→镜头 一条线,重生时经由这条
+ *    线拿到与批量生图完全相同的参考 — 一致性不靠 N×M 蜘蛛网连线)。
  *  - video → tailFrameUrl(生成结果的尾帧,worker 用 ffmpeg 抽出) — 让
  *    「上一镜视频 → 下一镜」连线成为真正的首尾帧接力(续镜链)。没有
  *    tailFrameUrl 的视频节点(旧结果/抽帧失败)不贡献,静默跳过。
@@ -19,7 +22,7 @@
  * wiring order.
  */
 
-const REF_BEARING_TYPES = new Set(['image', 'character', 'director'])
+const REF_BEARING_TYPES = new Set(['image', 'character', 'scene', 'prop', 'director'])
 
 export interface UpstreamNodeLike {
   id?: string
@@ -110,6 +113,16 @@ export function pickUpstreamReferenceUrls(
     if (n.type === 'video') {
       const tail = (n.data as { tailFrameUrl?: unknown } | null | undefined)?.tailFrameUrl
       if (typeof tail === 'string' && tail.length > 0) out.push(tail)
+      continue
+    }
+    // Script upstream relays the refs bound to IT (角色/场景/道具→脚本→镜头)。
+    if (n.type === 'script') {
+      const refUrls = (n.data as { refUrls?: unknown } | null | undefined)?.refUrls
+      if (Array.isArray(refUrls)) {
+        for (const ref of refUrls) {
+          if (typeof ref === 'string' && ref.length > 0) out.push(ref)
+        }
+      }
       continue
     }
     if (!REF_BEARING_TYPES.has(n.type)) continue

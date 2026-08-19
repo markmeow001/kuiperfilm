@@ -6,7 +6,9 @@ describe('canvas connection contract', () => {
     ['text', 'script'], ['text', 'image'], ['text', 'video'], ['text', 'audio'],
     ['script', 'image'], ['script', 'video'], ['script', 'audio'],
     ['character', 'image'], ['character', 'video'], ['character', 'director'],
-    ['image', 'character'],
+    ['character', 'script'], ['scene', 'script'], ['prop', 'script'],
+    ['scene', 'image'], ['scene', 'video'], ['prop', 'image'], ['prop', 'video'],
+    ['image', 'character'], ['image', 'scene'], ['image', 'prop'],
     ['image', 'image'], ['image', 'video'], ['image', 'director'],
     ['video', 'image'], ['video', 'video'],
     ['video', 'composition'],
@@ -25,6 +27,8 @@ describe('canvas connection contract', () => {
     ['video', 'audio'], ['script', 'director'], ['text', 'character'],
     ['image', 'composition'], ['video', 'mask'], ['mask', 'video'],
     ['mask', 'composition'], ['mask', 'character'],
+    ['text', 'scene'], ['text', 'prop'], ['scene', 'director'], ['prop', 'director'],
+    ['video', 'scene'], ['mask', 'prop'],
   ] as const)('%s -> %s is rejected instead of drawing a fake wire', (source, target) => {
     expect(canConnectCanvasNodes(source, target)).toBe(false)
   })
@@ -42,6 +46,13 @@ describe('inferCanvasEdgeData', () => {
 
   it('image -> character edge -> reference (角色节点吃上游生成图作参考)', () => {
     expect(inferCanvasEdgeData('image', 'character')).toEqual({ portType: 'frame-image', role: 'reference' })
+  })
+
+  it('scene/prop edges -> identity reference, same contract as character', () => {
+    expect(inferCanvasEdgeData('scene', 'script')).toEqual({ portType: 'identity-image', role: 'reference' })
+    expect(inferCanvasEdgeData('prop', 'image')).toEqual({ portType: 'identity-image', role: 'reference' })
+    expect(inferCanvasEdgeData('image', 'scene')).toEqual({ portType: 'frame-image', role: 'reference' })
+    expect(inferCanvasEdgeData('image', 'prop')).toEqual({ portType: 'frame-image', role: 'reference' })
   })
 
   it('unsupported legacy pair -> explicit invalid metadata', () => {

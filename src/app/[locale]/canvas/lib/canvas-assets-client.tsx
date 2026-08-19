@@ -66,6 +66,7 @@ interface SaveButtonProps {
 const TYPE_LABEL: Record<CanvasAssetType, string> = {
   character: '角色',
   scene: '场景',
+  prop: '道具',
   image: '图片',
   video: '视频',
 }

@@ -42,7 +42,7 @@ import { useCanvas, useDeleteCanvas, useSaveCanvas, type CanvasRecordView } from
 import { useUploadPlaygroundReference } from '@/lib/query/mutations/playground-mutations'
 import { makeMediaNode } from './nodes/MediaNode'
 import { TextNode } from './nodes/TextNode'
-import { CharacterNode } from './nodes/CharacterNode'
+import { makeReferenceNode } from './nodes/ReferenceNode'
 import { DirectorNode } from './nodes/DirectorNode'
 import { ScriptNode } from './nodes/ScriptNode'
 import { AudioNode } from './nodes/AudioNode'
@@ -70,7 +70,9 @@ const nodeTypes: NodeTypes = {
   image: makeMediaNode('image'),
   video: makeMediaNode('video'),
   text: TextNode,
-  character: CharacterNode,
+  character: makeReferenceNode('character'),
+  scene: makeReferenceNode('scene'),
+  prop: makeReferenceNode('prop'),
   director: DirectorNode,
   script: ScriptNode,
   audio: AudioNode,
@@ -79,14 +81,18 @@ const nodeTypes: NodeTypes = {
   mask: MaskNode,
 }
 
-const ADD_ORDER: CanvasNodeType[] = ['script', 'image', 'video', 'mask', 'audio', 'composition', 'director', 'character', 'text']
+const ADD_ORDER: CanvasNodeType[] = ['script', 'image', 'video', 'mask', 'audio', 'composition', 'director', 'character', 'scene', 'prop', 'text']
 
 function makeNode(type: CanvasNodeType, x: number, y: number): Node<CanvasNodeData> {
+  // Reference nodes (角色/场景/道具) start unnamed so the header naming input
+  // shows its placeholder — three cards all pre-titled「角色」is exactly the
+  // 「谁是谁」problem the editable title exists to solve.
+  const isReference = type === 'character' || type === 'scene' || type === 'prop'
   return {
     id: uid(),
     type,
     position: { x, y },
-    data: { title: NODE_META[type].label, ...DEFAULT_NODE_DATA },
+    data: { title: isReference ? '' : NODE_META[type].label, ...DEFAULT_NODE_DATA },
   }
 }
 
@@ -1084,9 +1090,10 @@ function CanvasInner({ locale, importIntent }: CanvasClientProps) {
         <>
           <div className="absolute inset-0 z-30" onClick={() => setMenu(null)} />
           <div
-            className="absolute z-40 w-48 overflow-hidden rounded-xl"
+            className="absolute z-40 w-max overflow-hidden rounded-xl"
             style={{
-              left: Math.min(menu.screenX, (wrapperRef.current?.clientWidth ?? 800) - 200),
+              minWidth: 208,
+              left: Math.min(menu.screenX, (wrapperRef.current?.clientWidth ?? 800) - 320),
               top: Math.min(menu.screenY, (wrapperRef.current?.clientHeight ?? 600) - 220),
               background: CANVAS_TOKENS.bg.popover,
               border: `1px solid ${CANVAS_TOKENS.hairline}`,
@@ -1104,11 +1111,11 @@ function CanvasInner({ locale, importIntent }: CanvasClientProps) {
                 className="flex w-full items-center justify-between px-3 py-2.5 text-left text-[13px] transition-colors hover:bg-white/5"
                 style={{ color: CANVAS_TOKENS.text.primary }}
               >
-                <span className="flex items-center gap-2">
+                <span className="flex items-center gap-2 whitespace-nowrap">
                   <span style={{ color: NODE_META[t].accent }}>◆</span>
                   {NODE_META[t].label}
                 </span>
-                <span className="text-[10px]" style={{ color: CANVAS_TOKENS.text.muted }}>{NODE_META[t].hint}</span>
+                <span className="ml-6 whitespace-nowrap text-[10px]" style={{ color: CANVAS_TOKENS.text.muted }}>{NODE_META[t].hint}</span>
               </button>
             ))}
           </div>

@@ -37,8 +37,18 @@ export interface CanvasEdgeData extends Record<string, unknown> {
 export interface CanvasStoryboardShot {
   shotNumber: number
   description: string
+  /** 景别：中景/特写/全景… */
   shotSize?: string
+  /** 运镜：推近/拉远/环绕/固定… */
   cameraMove?: string
+  /** 机位角度：平视/俯拍/仰拍/过肩/主观… */
+  cameraAngle?: string
+  /** 镜头焦段：24mm 广角/50mm 标准/85mm 人像… */
+  lens?: string
+  /** 人物表演与情绪。 */
+  performance?: string
+  /** 站位与调度（谁在哪、朝向、走位）。 */
+  blocking?: string
   durationSec?: number
   dialogue?: string
 }
@@ -104,6 +114,17 @@ export interface CanvasNodeData extends Record<string, unknown> {
    */
   maskPlateUrl?: string | null
   maskPlateKey?: string | null
+  /**
+   * Script node: 整体色调/风格(全片统一,LLM 拆分镜时产出、可手改),批量
+   * 生图时拼进每个镜头的 prompt。
+   */
+  colorTone?: string | null
+  /**
+   * Script node: 绑进本脚本的参考(角色/场景/道具/图片)解析后的 key/URL 快
+   * 照,由 ScriptNode 随上游连线同步。铺出的镜头节点经 脚本→镜头 一条线读
+   * 到它(canvas-refs),重生与批量生图用同一组参考。
+   */
+  refUrls?: string[] | null
   /** Prompt / text content. */
   prompt: string
   /** Selected model key (image or video catalog). Empty until chosen. */
@@ -285,6 +306,8 @@ export const DEFAULT_NODE_DATA = {
   referenceVideoUrl: null as string | null,
   shots: null as CanvasStoryboardShot[] | null,
   storyboardTaskId: null as string | null,
+  colorTone: null as string | null,
+  refUrls: null as string[] | null,
   referenceAudioKey: null as string | null,
   referenceAudioName: null as string | null,
   emotionPrompt: null as string | null,

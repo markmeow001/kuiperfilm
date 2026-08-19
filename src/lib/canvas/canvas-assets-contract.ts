@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-export const CANVAS_ASSET_TYPES = ['character', 'scene', 'image', 'video'] as const
+export const CANVAS_ASSET_TYPES = ['character', 'scene', 'prop', 'image', 'video'] as const
 export type CanvasAssetType = (typeof CANVAS_ASSET_TYPES)[number]
 
 export const canvasAssetSourceSchema = z.discriminatedUnion('kind', [

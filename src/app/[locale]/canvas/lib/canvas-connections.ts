@@ -16,16 +16,19 @@ export const CANVAS_TARGET_HANDLE = 'canvas-input'
  */
 const ACCEPTS: Record<CanvasNodeType, readonly CanvasNodeType[]> = {
   text: [],
-  script: ['text', 'character', 'image'],
-  image: ['text', 'script', 'character', 'image', 'video', 'mask'],
-  video: ['text', 'script', 'character', 'image', 'video'],
+  script: ['text', 'character', 'scene', 'prop', 'image'],
+  image: ['text', 'script', 'character', 'scene', 'prop', 'image', 'video', 'mask'],
+  video: ['text', 'script', 'character', 'scene', 'prop', 'image', 'video'],
   audio: ['text', 'script'],
   composition: ['video', 'composition', 'audio'],
   mask: ['image'],
   director: ['character', 'image'],
-  // 角色节点吃「上游生成图」作参考图——用户把 图片→角色 连线,角色节点把该
-  // 图 copy 进自己的 ref 命名空间(use-as-reference),消费在 CharacterNode。
+  // 参考节点(角色/场景/道具)吃「上游生成图」作参考图——用户把 图片→参考
+  // 节点连线,该图被 copy 进自己的 ref 命名空间(use-as-reference),消费在
+  // ReferenceNode。
   character: ['image'],
+  scene: ['image'],
+  prop: ['image'],
   group: [],
 }
 
@@ -45,6 +48,8 @@ function portTypeForSource(source: CanvasNodeType): CanvasPortType | null {
     case 'text': return 'text'
     case 'script': return 'script'
     case 'character': return 'identity-image'
+    case 'scene': return 'identity-image'
+    case 'prop': return 'identity-image'
     case 'image': return 'frame-image'
     case 'video': return 'video-clip'
     case 'audio': return 'audio-voice'
@@ -78,8 +83,12 @@ export function inferCanvasEdgeData(
   }
   if (source === 'audio' && target === 'composition') return { portType, role: options.targetMode === 'music' ? 'music' : 'voice' }
   if (source === 'mask') return { portType, role: 'mask' }
-  if (source === 'character') return { portType, role: 'reference' }
-  if (source === 'image' && target === 'character') return { portType, role: 'reference' }
+  if (source === 'character' || source === 'scene' || source === 'prop') {
+    return { portType, role: 'reference' }
+  }
+  if (source === 'image' && (target === 'character' || target === 'scene' || target === 'prop')) {
+    return { portType, role: 'reference' }
+  }
   if ((source === 'image' || source === 'video') && (target === 'image' || target === 'video')) {
     return { portType, role: 'reference' }
   }

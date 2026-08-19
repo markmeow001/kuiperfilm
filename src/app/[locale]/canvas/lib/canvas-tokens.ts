@@ -49,13 +49,15 @@ export const CANVAS_TOKENS = {
 } as const
 
 /** Per-node-type accent + label metadata. */
-export type CanvasNodeType = 'character' | 'image' | 'video' | 'text' | 'director' | 'script' | 'audio' | 'composition' | 'mask' | 'group'
+export type CanvasNodeType = 'character' | 'scene' | 'prop' | 'image' | 'video' | 'text' | 'director' | 'script' | 'audio' | 'composition' | 'mask' | 'group'
 
 export const NODE_META: Record<
   CanvasNodeType,
   { label: string; accent: string; hint: string }
 > = {
   character: { label: '角色', accent: '#C8A2FF', hint: '綁定參考圖／角色庫' },
+  scene: { label: '場景', accent: '#7FB5FF', hint: '綁定參考圖／場景一致性' },
+  prop: { label: '道具', accent: '#FFB86B', hint: '綁定參考圖／道具一致性' },
   image: { label: '圖片', accent: CANVAS_TOKENS.accent, hint: '文字生圖／編輯' },
   video: { label: '影片', accent: '#7BE3A4', hint: '首幀圖 → 短片' },
   text: { label: '文字', accent: CANVAS_TOKENS.text.secondary, hint: '腳本／提示詞' },
