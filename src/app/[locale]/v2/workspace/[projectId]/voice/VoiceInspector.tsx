@@ -56,7 +56,7 @@ export function VoiceInspector({
           </div>
           {isSpeakerBound ? (
             <p className="mt-1.5 truncate text-xs text-text-tertiary">
-              {currentBindingName || currentBinding?.voiceId || currentBinding?.voiceType || t('inspector.projectCharacterVoice')}
+              {currentBindingName || currentBinding?.voicePresetId || t('inspector.systemPreset')}
             </p>
           ) : null}
         </div>
@@ -75,12 +75,8 @@ export function VoiceInspector({
               <dd className="text-text-primary">{selectedVoice.gender ?? '—'}</dd>
             </div>
             <div className="flex items-center justify-between py-2.5 text-sm">
-              <dt className="text-text-tertiary">{t('inspector.language')}</dt>
-              <dd className="text-text-primary">{selectedVoice.language.toUpperCase()}</dd>
-            </div>
-            <div className="flex items-center justify-between py-2.5 text-sm">
               <dt className="text-text-tertiary">{t('inspector.type')}</dt>
-              <dd className="max-w-[150px] truncate text-text-primary">{selectedVoice.voiceType}</dd>
+              <dd className="max-w-[150px] truncate text-text-primary">{t('inspector.systemPreset')}</dd>
             </div>
             <div className="flex items-center justify-between py-2.5 text-sm">
               <dt className="text-text-tertiary">{t('inspector.preview')}</dt>

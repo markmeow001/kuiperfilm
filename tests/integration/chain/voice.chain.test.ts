@@ -23,6 +23,7 @@ const voiceMock = vi.hoisted(() => ({
 const workerMock = vi.hoisted(() => ({
   reportTaskProgress: vi.fn(async () => undefined),
   withTaskLifecycle: vi.fn(async (job: Job<TaskJobData>, handler: (j: Job<TaskJobData>) => Promise<unknown>) => await handler(job)),
+  assertTaskActive: vi.fn(async () => undefined),
 }))
 
 const voiceDesignMock = vi.hoisted(() => ({
@@ -59,16 +60,23 @@ vi.mock('@/lib/redis', () => ({ queueRedis: {} }))
 vi.mock('@/lib/voice/generate-voice-line', () => ({
   generateVoiceLine: voiceMock.generateVoiceLine,
 }))
+vi.mock('@/lib/voice/voice-line-publication', () => ({
+  claimVoiceLineCompletion: vi.fn(async () => true),
+  reconcileVoiceLineTerminalState: vi.fn(async () => 'no_output'),
+}))
 vi.mock('@/lib/workers/shared', () => ({
   reportTaskProgress: workerMock.reportTaskProgress,
   withTaskLifecycle: workerMock.withTaskLifecycle,
+}))
+vi.mock('@/lib/workers/utils', () => ({
+  assertTaskActive: workerMock.assertTaskActive,
 }))
 vi.mock('@/lib/workers/handlers/voice-design', () => ({
   handleVoiceDesignTask: voiceDesignMock.handleVoiceDesignTask,
 }))
 
 function toJob(data: TaskJobData): Job<TaskJobData> {
-  return { data } as unknown as Job<TaskJobData>
+  return { id: data.taskId, data } as unknown as Job<TaskJobData>
 }
 
 describe('chain contract - voice queue behavior', () => {
@@ -148,6 +156,15 @@ describe('chain contract - voice queue behavior', () => {
         lineId: 'line-1',
         episodeId: 'episode-1',
         audioModel: 'fal::voice-model',
+        sourceFingerprint: 'f'.repeat(64),
+        generationInput: {
+          line: {
+            id: 'line-1', episodeId: 'episode-1', speaker: 'Ann', content: 'Hello',
+            voicePresetId: null, emotionPrompt: null, emotionStrength: 0.4, speakerVoices: null,
+            audioUrl: null, audioMediaId: null, audioDuration: null,
+          },
+          source: { presetId: 'preset-1', kind: 'storage-key', value: 'voice/system/preset.wav' },
+        },
       },
       userId: 'user-1',
     })
@@ -161,12 +178,17 @@ describe('chain contract - voice queue behavior', () => {
       lineId: 'line-1',
       audioUrl: 'cos/voice-line-1.mp3',
     })
-    expect(voiceMock.generateVoiceLine).toHaveBeenCalledWith({
+    expect(voiceMock.generateVoiceLine).toHaveBeenCalledWith(expect.objectContaining({
+      job: expect.objectContaining({ id: 'task-voice-chain-worker-1' }),
       projectId: 'project-1',
       episodeId: 'episode-1',
       lineId: 'line-1',
+      taskId: 'task-voice-chain-worker-1',
       userId: 'user-1',
       audioModel: 'fal::voice-model',
-    })
+      sourceFingerprint: 'f'.repeat(64),
+      generationInput: expect.any(Object),
+      checkCancelled: expect.any(Function),
+    }))
   })
 })

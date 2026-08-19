@@ -1,6 +1,6 @@
-import type { GlobalVoice } from '@/lib/query/hooks/useGlobalAssets'
+import type { SystemVoicePreset } from '@/lib/query/mutations/useVoiceMutations'
 
-export type VoiceAsset = GlobalVoice
+export type VoiceAsset = SystemVoicePreset
 
 export interface VoiceLine {
   id: string
@@ -17,8 +17,7 @@ export interface VoiceLine {
 }
 
 export interface SpeakerVoiceEntry {
-  voiceType: string
-  voiceId?: string
+  voicePresetId: string
   audioUrl: string
 }
 
@@ -33,4 +32,22 @@ export type VoiceLineSavePayload = {
   lineId: string
   emotionPrompt: string | null
   emotionStrength: number
+}
+
+export type VoicePanelQueryState = 'loading' | 'error' | 'ready'
+
+export interface VoicePanelOption {
+  id: string
+  label: string
+}
+
+export interface VoiceLineDraftPayload {
+  content: string
+  speaker: string
+  matchedPanelId: string | null
+  clientRequestId?: string
+}
+
+export type VoiceLineUpdatePayload = VoiceLineDraftPayload & {
+  lineId: string
 }

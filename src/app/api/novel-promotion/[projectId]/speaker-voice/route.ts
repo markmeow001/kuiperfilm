@@ -3,71 +3,85 @@ import { prisma } from '@/lib/prisma'
 import { getSignedUrl } from '@/lib/cos'
 import { requireProjectAuthLight, isErrorResponse } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
-import { resolveStorageKeyFromMediaValue } from '@/lib/media/service'
+import {
+  findExactSpeakerVoiceBinding,
+  normalizeVoiceSpeaker,
+  parseSpeakerVoiceBindings,
+  replaceWithSystemSpeakerVoiceBinding,
+  resolveSystemVoicePresetSource,
+  VoiceGenerationScopeError,
+} from '@/lib/voice/voice-generation-scope'
 
-interface SpeakerVoiceConfig {
-  voiceType?: string
-  voiceId?: string
-  audioUrl: string
+const MAX_SPEAKER_VOICE_WRITE_ATTEMPTS = 3
+
+function rethrowVoiceBindingError(error: unknown): never {
+  if (error instanceof VoiceGenerationScopeError) {
+    throw new ApiError('INVALID_PARAMS', { reason: error.code })
+  }
+  throw error
 }
 
-/**
- * GET /api/novel-promotion/[projectId]/speaker-voice?episodeId=xxx
- * 获取剧集的发言人音色配置
- */
+function readNonEmptyString(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  return trimmed || null
+}
+
+function hasRawCustomSource(value: Record<string, unknown>): boolean {
+  return [value.audioUrl, value.voiceType, value.voiceId]
+    .some((candidate) => readNonEmptyString(candidate) !== null)
+}
+
+function readEffectiveBindingPresetId(
+  raw: string | null | undefined,
+  speaker: string,
+): string | null {
+  const binding = findExactSpeakerVoiceBinding(parseSpeakerVoiceBindings(raw), speaker)
+  return binding ? readNonEmptyString(binding.value.voicePresetId) : null
+}
+
 export const GET = apiHandler(async (
   request: NextRequest,
-  context: { params: Promise<{ projectId: string }> }
+  context: { params: Promise<{ projectId: string }> },
 ) => {
   const { projectId } = await context.params
-  const { searchParams } = new URL(request.url)
-  const episodeId = searchParams.get('episodeId')
+  const episodeId = new URL(request.url).searchParams.get('episodeId')?.trim() || ''
 
-  // 🔐 统一权限验证
   const authResult = await requireProjectAuthLight(projectId, { action: 'read' })
   if (isErrorResponse(authResult)) return authResult
+  if (!episodeId) throw new ApiError('INVALID_PARAMS')
 
-  if (!episodeId) {
-    throw new ApiError('INVALID_PARAMS')
-  }
-
-  // 获取剧集
-  // ⚠️ Multi-user isolation: chain ownership through novelPromotionProject.projectId.
   const episode = await prisma.novelPromotionEpisode.findFirst({
     where: { id: episodeId, novelPromotionProject: { projectId } },
+    select: { id: true, speakerVoices: true },
   })
+  if (!episode) throw new ApiError('NOT_FOUND')
 
-  if (!episode) {
-    throw new ApiError('NOT_FOUND')
-  }
-
-  // 解析发言人音色
-  let speakerVoices: Record<string, SpeakerVoiceConfig> = {}
-  if (episode.speakerVoices) {
-    try {
-      speakerVoices = JSON.parse(episode.speakerVoices)
-      // 为音频URL生成签名
-      for (const speaker of Object.keys(speakerVoices)) {
-        if (speakerVoices[speaker].audioUrl && !speakerVoices[speaker].audioUrl.startsWith('http')) {
-          speakerVoices[speaker].audioUrl = getSignedUrl(speakerVoices[speaker].audioUrl, 7200)
-        }
+  try {
+    const entries = parseSpeakerVoiceBindings(episode.speakerVoices)
+    const resolvedEntries = await Promise.all(entries.map(async ({ speaker, value }) => {
+      if (hasRawCustomSource(value)) {
+        throw new VoiceGenerationScopeError('VOICE_SOURCE_CONSENT_REQUIRED')
       }
-    } catch {
-      speakerVoices = {}
-    }
+      const voicePresetId = readNonEmptyString(value.voicePresetId)
+      if (!voicePresetId) {
+        throw new VoiceGenerationScopeError('VOICE_BINDING_INVALID')
+      }
+      const source = await resolveSystemVoicePresetSource(voicePresetId)
+      return [speaker, {
+        voicePresetId,
+        audioUrl: source.kind === 'storage-key' ? getSignedUrl(source.value, 7200) : source.value,
+      }] as const
+    }))
+    return NextResponse.json({ speakerVoices: Object.fromEntries(resolvedEntries) })
+  } catch (error) {
+    rethrowVoiceBindingError(error)
   }
-
-  return NextResponse.json({ speakerVoices })
 })
 
-/**
- * PATCH /api/novel-promotion/[projectId]/speaker-voice
- * 为指定发言人直接设置音色（写入 episode.speakerVoices JSON）
- * 用于不在资产库中的角色在配音阶段内联绑定音色
- */
 export const PATCH = apiHandler(async (
   request: NextRequest,
-  context: { params: Promise<{ projectId: string }> }
+  context: { params: Promise<{ projectId: string }> },
 ) => {
   const { projectId } = await context.params
 
@@ -75,63 +89,101 @@ export const PATCH = apiHandler(async (
   if (isErrorResponse(authResult)) return authResult
 
   const body = await request.json().catch(() => null)
-  const episodeId = typeof body?.episodeId === 'string' ? body.episodeId : ''
+  const episodeId = typeof body?.episodeId === 'string' ? body.episodeId.trim() : ''
   const speaker = typeof body?.speaker === 'string' ? body.speaker.trim() : ''
-  const audioUrl = typeof body?.audioUrl === 'string' ? body.audioUrl.trim() : ''
-  const voiceType = typeof body?.voiceType === 'string' ? body.voiceType : 'uploaded'
-  const voiceId = typeof body?.voiceId === 'string' ? body.voiceId : undefined
-
-  if (!episodeId) {
-    throw new ApiError('INVALID_PARAMS')
-  }
-  if (!speaker) {
-    throw new ApiError('INVALID_PARAMS')
-  }
-  if (!audioUrl) {
-    throw new ApiError('INVALID_PARAMS')
-  }
-
-  const projectData = await prisma.novelPromotionProject.findUnique({
-    where: { projectId },
-    select: { id: true }
-  })
-  if (!projectData) {
-    throw new ApiError('NOT_FOUND')
-  }
+  const voicePresetId = typeof body?.voicePresetId === 'string' ? body.voicePresetId.trim() : ''
+  if (!episodeId || !speaker) throw new ApiError('INVALID_PARAMS')
 
   const episode = await prisma.novelPromotionEpisode.findFirst({
-    where: { id: episodeId, novelPromotionProjectId: projectData.id },
-    select: { id: true, speakerVoices: true }
+    where: { id: episodeId, novelPromotionProject: { projectId } },
+    select: { id: true, speakerVoices: true },
   })
-  if (!episode) {
-    throw new ApiError('NOT_FOUND')
+  if (!episode) throw new ApiError('NOT_FOUND')
+
+  if (
+    readNonEmptyString(body?.audioUrl)
+    || readNonEmptyString(body?.voiceType)
+    || readNonEmptyString(body?.voiceId)
+  ) {
+    throw new ApiError('INVALID_PARAMS', { reason: 'VOICE_SOURCE_CONSENT_REQUIRED' })
+  }
+  if (!voicePresetId) {
+    throw new ApiError('INVALID_PARAMS', { reason: 'VOICE_PRESET_REQUIRED' })
   }
 
-  // 解析现有 speakerVoices，合并新条目
-  let speakerVoices: Record<string, SpeakerVoiceConfig> = {}
-  if (episode.speakerVoices) {
+  try {
+    await resolveSystemVoicePresetSource(voicePresetId)
+  } catch (error) {
+    rethrowVoiceBindingError(error)
+  }
+
+  let speakerVoiceSnapshot = episode.speakerVoices
+  for (let attempt = 0; attempt < MAX_SPEAKER_VOICE_WRITE_ATTEMPTS; attempt += 1) {
+    let speakerVoices: string
+    let bindingChanged: boolean
     try {
-      speakerVoices = JSON.parse(episode.speakerVoices)
-    } catch {
-      speakerVoices = {}
+      bindingChanged = readEffectiveBindingPresetId(speakerVoiceSnapshot, speaker) !== voicePresetId
+      speakerVoices = replaceWithSystemSpeakerVoiceBinding({
+        raw: speakerVoiceSnapshot,
+        speaker,
+        voicePresetId,
+      })
+    } catch (error) {
+      rethrowVoiceBindingError(error)
     }
+
+    const result = await prisma.$transaction(async (tx) => {
+      const episodeWrite = await tx.novelPromotionEpisode.updateMany({
+        where: {
+          id: episodeId,
+          speakerVoices: speakerVoiceSnapshot,
+          novelPromotionProject: { projectId },
+        },
+        data: { speakerVoices },
+      })
+      if (episodeWrite.count !== 1) return { committed: false }
+
+      if (bindingChanged) {
+        const scopedLines = await tx.novelPromotionVoiceLine.findMany({
+          where: {
+            episodeId,
+            episode: { novelPromotionProject: { projectId } },
+          },
+          select: { id: true, speaker: true },
+        })
+        const normalizedSpeaker = normalizeVoiceSpeaker(speaker)
+        const affectedLineIds = scopedLines
+          .filter((line) => normalizeVoiceSpeaker(line.speaker) === normalizedSpeaker)
+          .map((line) => line.id)
+        if (affectedLineIds.length > 0) await tx.novelPromotionVoiceLine.updateMany({
+          where: {
+            id: { in: affectedLineIds },
+            episodeId,
+            episode: { novelPromotionProject: { projectId } },
+          },
+          data: {
+            audioUrl: null,
+            audioMediaId: null,
+            audioDuration: null,
+          },
+        })
+      }
+      return { committed: true }
+    }, { isolationLevel: 'Serializable' })
+    if (result.committed) {
+      return NextResponse.json({ success: true })
+    }
+
+    if (attempt + 1 >= MAX_SPEAKER_VOICE_WRITE_ATTEMPTS) {
+      throw new ApiError('CONFLICT', { reason: 'SPEAKER_VOICE_WRITE_CONFLICT' })
+    }
+    const latestEpisode = await prisma.novelPromotionEpisode.findFirst({
+      where: { id: episodeId, novelPromotionProject: { projectId } },
+      select: { id: true, speakerVoices: true },
+    })
+    if (!latestEpisode) throw new ApiError('NOT_FOUND')
+    speakerVoiceSnapshot = latestEpisode.speakerVoices
   }
 
-  // 将前端传来的 audioUrl（可能是 /m/m_xxx 媒体路由）还原为原始 storageKey
-  // 保证与资产库角色的 customVoiceUrl 格式一致，Worker 端能正确处理
-  const resolvedStorageKey = await resolveStorageKeyFromMediaValue(audioUrl)
-  const audioUrlToStore = resolvedStorageKey || audioUrl
-
-  speakerVoices[speaker] = {
-    voiceType,
-    ...(voiceId ? { voiceId } : {}),
-    audioUrl: audioUrlToStore
-  }
-
-  await prisma.novelPromotionEpisode.update({
-    where: { id: episodeId },
-    data: { speakerVoices: JSON.stringify(speakerVoices) }
-  })
-
-  return NextResponse.json({ success: true })
+  throw new ApiError('CONFLICT', { reason: 'SPEAKER_VOICE_WRITE_CONFLICT' })
 })

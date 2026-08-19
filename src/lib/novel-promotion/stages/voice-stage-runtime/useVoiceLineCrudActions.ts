@@ -17,15 +17,16 @@ interface UseVoiceLineCrudActionsParams {
   editingContent: string
   editingSpeaker: string
   editingMatchedPanelId: string
+  createClientRequestId: string | null
   setVoiceLines: React.Dispatch<React.SetStateAction<VoiceLine[]>>
   setSubmittingVoiceLineIds: React.Dispatch<React.SetStateAction<Set<string>>>
   setIsSavingLineEditor: (value: boolean) => void
   getBoundPanelIdForLine: (line: VoiceLine) => string
   handleCancelEdit: () => void
   notifyVoiceLinesChanged: () => void
-  createVoiceLineMutation: MutationLike<{ episodeId: string; content: string; speaker: string; matchedPanelId: string | null }, { voiceLine: VoiceLine }>
-  updateVoiceLineMutation: MutationLike<{ lineId: string; content?: string; speaker?: string; matchedPanelId?: string | null; audioUrl?: string | null; emotionPrompt?: string | null; emotionStrength?: number }, { voiceLine: VoiceLine }>
-  deleteVoiceLineMutation: MutationLike<{ lineId: string }>
+  createVoiceLineMutation: MutationLike<{ episodeId: string; content: string; speaker: string; matchedPanelId: string | null; clientRequestId: string }, { voiceLine: VoiceLine }>
+  updateVoiceLineMutation: MutationLike<{ episodeId: string; lineId: string; content?: string; speaker?: string; matchedPanelId?: string | null; audioUrl?: string | null; emotionPrompt?: string | null; emotionStrength?: number }, { voiceLine: VoiceLine }>
+  deleteVoiceLineMutation: MutationLike<{ episodeId: string; lineId: string }>
 }
 
 export function useVoiceLineCrudActions({
@@ -36,6 +37,7 @@ export function useVoiceLineCrudActions({
   editingContent,
   editingSpeaker,
   editingMatchedPanelId,
+  createClientRequestId,
   setVoiceLines,
   setSubmittingVoiceLineIds,
   setIsSavingLineEditor,
@@ -72,6 +74,7 @@ export function useVoiceLineCrudActions({
         }
 
         const data = await updateVoiceLineMutation.mutateAsync({
+          episodeId,
           lineId: editingLineId,
           content,
           speaker,
@@ -80,11 +83,15 @@ export function useVoiceLineCrudActions({
         const updatedLine = data.voiceLine as VoiceLine
         setVoiceLines((prev) => prev.map((line) => (line.id === editingLineId ? updatedLine : line)))
       } else {
+        if (!createClientRequestId) {
+          throw new Error('VOICE_LINE_DRAFT_KEY_MISSING')
+        }
         const data = await createVoiceLineMutation.mutateAsync({
           episodeId,
           content,
           speaker,
           matchedPanelId: editingMatchedPanelId || null,
+          clientRequestId: createClientRequestId,
         })
         const createdLine = data.voiceLine as VoiceLine
         setVoiceLines((prev) => [...prev, createdLine].sort((left, right) => left.lineIndex - right.lineIndex))
@@ -102,6 +109,7 @@ export function useVoiceLineCrudActions({
     }
   }, [
     createVoiceLineMutation,
+    createClientRequestId,
     editingContent,
     editingLineId,
     editingMatchedPanelId,
@@ -126,7 +134,7 @@ export function useVoiceLineCrudActions({
     if (!confirmed) return
 
     try {
-      await deleteVoiceLineMutation.mutateAsync({ lineId })
+      await deleteVoiceLineMutation.mutateAsync({ episodeId, lineId })
       setVoiceLines((prev) => {
         const filtered = prev.filter((item) => item.id !== lineId)
         return filtered.map((item, index) => ({ ...item, lineIndex: index + 1 }))
@@ -145,6 +153,7 @@ export function useVoiceLineCrudActions({
     }
   }, [
     deleteVoiceLineMutation,
+    episodeId,
     notifyVoiceLinesChanged,
     setSubmittingVoiceLineIds,
     setVoiceLines,
@@ -161,7 +170,7 @@ export function useVoiceLineCrudActions({
     if (!confirmed) return
 
     try {
-      await updateVoiceLineMutation.mutateAsync({ lineId, audioUrl: null })
+      await updateVoiceLineMutation.mutateAsync({ episodeId, lineId, audioUrl: null })
       setVoiceLines((prev) => prev.map((item) => (item.id === lineId ? { ...item, audioUrl: null } : item)))
       notifyVoiceLinesChanged()
     } catch (error: unknown) {
@@ -169,7 +178,7 @@ export function useVoiceLineCrudActions({
         alert(`${t('errors.deleteAudioFailed')}: ${getErrorMessage(error)}`)
       }
     }
-  }, [notifyVoiceLinesChanged, setVoiceLines, t, updateVoiceLineMutation, voiceLines])
+  }, [episodeId, notifyVoiceLinesChanged, setVoiceLines, t, updateVoiceLineMutation, voiceLines])
 
   const handleSaveEmotionSettings = useCallback(async (
     lineId: string,
@@ -177,7 +186,7 @@ export function useVoiceLineCrudActions({
     emotionStrength: number,
   ) => {
     try {
-      await updateVoiceLineMutation.mutateAsync({ lineId, emotionPrompt, emotionStrength })
+      await updateVoiceLineMutation.mutateAsync({ episodeId, lineId, emotionPrompt, emotionStrength })
       setVoiceLines((prev) => prev.map((line) => (
         line.id === lineId ? { ...line, emotionPrompt, emotionStrength } : line
       )))
@@ -186,7 +195,7 @@ export function useVoiceLineCrudActions({
         alert(`${t('errors.emotionSaveFailed')}: ${getErrorMessage(error)}`)
       }
     }
-  }, [setVoiceLines, t, updateVoiceLineMutation])
+  }, [episodeId, setVoiceLines, t, updateVoiceLineMutation])
 
   return {
     handleSaveEdit,

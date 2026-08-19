@@ -77,8 +77,26 @@ describe('worker voice-design behavior', () => {
     await expect(handleVoiceDesignTask(job)).rejects.toThrow('bad prompt')
   })
 
-  it('success path -> submits normalized input and returns typed result', async () => {
-    const job = buildJob(TASK_TYPE.ASSET_HUB_VOICE_DESIGN, {
+  it('[queued ASSET_HUB_VOICE_DESIGN] -> [consent boundary before payload/progress/provider]', async () => {
+    const unreadablePayload = new Proxy({} as Record<string, unknown>, {
+      get() {
+        throw new Error('ASSET_HUB_VOICE_DESIGN payload was read')
+      },
+    })
+    const job = buildJob(TASK_TYPE.ASSET_HUB_VOICE_DESIGN, unreadablePayload)
+
+    await expect(handleVoiceDesignTask(job)).rejects.toThrow('VOICE_SOURCE_CONSENT_REQUIRED')
+
+    expect(qwenMock.validateVoicePrompt).not.toHaveBeenCalled()
+    expect(qwenMock.validatePreviewText).not.toHaveBeenCalled()
+    expect(workerMock.reportTaskProgress).not.toHaveBeenCalled()
+    expect(workerMock.assertTaskActive).not.toHaveBeenCalled()
+    expect(apiConfigMock.getProviderConfig).not.toHaveBeenCalled()
+    expect(qwenMock.createVoiceDesign).not.toHaveBeenCalled()
+  })
+
+  it('project VOICE_DESIGN success -> submits normalized input and returns typed result', async () => {
+    const job = buildJob(TASK_TYPE.VOICE_DESIGN, {
       voicePrompt: '  calm female narrator  ',
       previewText: '  hello world  ',
       preferredName: '  custom_name  ',
@@ -98,7 +116,7 @@ describe('worker voice-design behavior', () => {
     expect(result).toEqual(expect.objectContaining({
       success: true,
       voiceId: 'voice-id-1',
-      taskType: TASK_TYPE.ASSET_HUB_VOICE_DESIGN,
+      taskType: TASK_TYPE.VOICE_DESIGN,
     }))
   })
 })

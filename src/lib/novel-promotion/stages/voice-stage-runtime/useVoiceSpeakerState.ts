@@ -33,12 +33,10 @@ export function useVoiceSpeakerState({
   }, [matchCharacterBySpeaker, voiceLines])
 
   const getSpeakerVoiceUrl = useCallback((speaker: string): string | null => {
-    const character = speakerCharacterMap[speaker]
-    if (character?.customVoiceUrl) return character.customVoiceUrl
     const speakerVoice = speakerVoices[speaker]
-    if (speakerVoice?.audioUrl) return speakerVoice.audioUrl
+    if (speakerVoice?.voicePresetId && speakerVoice.audioUrl) return speakerVoice.audioUrl
     return null
-  }, [speakerCharacterMap, speakerVoices])
+  }, [speakerVoices])
 
   const speakerStats = useMemo(() => {
     const stats: Record<string, number> = {}

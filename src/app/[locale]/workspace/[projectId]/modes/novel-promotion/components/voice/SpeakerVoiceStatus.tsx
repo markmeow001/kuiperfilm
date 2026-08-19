@@ -6,7 +6,7 @@ interface SpeakerVoiceStatusProps {
     speakerStats: Record<string, number>
     getSpeakerVoiceUrl: (speaker: string) => string | null
     onOpenAssetLibrary: (speaker: string) => void
-    /** 内联绑定回调：当发言人不在资产库中时调用 */
+    /** Safe system-preset binding callback. */
     onOpenInlineBinding?: (speaker: string) => void
     /** 判断发言人是否有匹配的项目角色 */
     hasSpeakerCharacter?: (speaker: string) => boolean
@@ -26,18 +26,13 @@ export default function SpeakerVoiceStatus({
 
     if (speakers.length === 0) return null
 
-    /**
-     * 点击"音色设置"按钮的处理逻辑：
-     * - 有匹配的项目角色 → 跳转资产中心（现有行为）
-     * - 无匹配的项目角色 → 打开内联绑定弹窗
-     */
+    /** Always prefer the consent-safe system catalog over project Assets. */
     const handleVoiceSettings = (speaker: string) => {
-        const hasCharacter = hasSpeakerCharacter ? hasSpeakerCharacter(speaker) : true
-        if (hasCharacter || !onOpenInlineBinding) {
-            onOpenAssetLibrary(speaker)
-        } else {
+        if (onOpenInlineBinding) {
             onOpenInlineBinding(speaker)
+            return
         }
+        onOpenAssetLibrary(speaker)
     }
 
     // 嵌入模式：紧凑布局

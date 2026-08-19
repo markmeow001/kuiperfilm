@@ -1,148 +1,150 @@
-import { logInfo as _ulogInfo, logError as _ulogError } from '@/lib/logging/core'
+import { logInfo as _ulogInfo } from '@/lib/logging/core'
 import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import archiver from 'archiver'
-import { getCOSClient, toFetchableUrl } from '@/lib/cos'
-import { resolveStorageKeyFromMediaValue } from '@/lib/media/service'
 import { requireProjectAuthLight, isErrorResponse } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
+import { SsrfSafeFetchError } from '@/lib/http/ssrf-safe-fetch'
+import {
+  fetchOwnedVoiceLineAudio,
+  resolveOwnedVoiceLineAudioSource,
+  VoiceLineAudioSourceError,
+  voiceAudioFileExtension,
+  type VoiceLineAudioSourceInput,
+} from '@/lib/novel-promotion/voice-line-audio-source'
+
+const VOICE_ARCHIVE_MAX_BYTES = 256 * 1024 * 1024
+
+type DownloadVoiceLine = VoiceLineAudioSourceInput & {
+  lineIndex: number
+  speaker: string
+  content: string
+}
+
+function safeVoiceFilename(line: DownloadVoiceLine, contentType: string): string {
+  const safeSpeaker = line.speaker.replace(/[\\/:*?"<>|\r\n]/g, '_')
+  const safeContent = line.content
+    .slice(0, 15)
+    .replace(/[\\/:*?"<>|\r\n]/g, '_')
+    .replace(/\s+/g, '_')
+  const ext = voiceAudioFileExtension(contentType)
+  return `${String(line.lineIndex).padStart(3, '0')}_${safeSpeaker}_${safeContent}.${ext}`
+}
+
+async function buildArchive(files: ReadonlyArray<{ name: string; data: Buffer }>): Promise<Buffer> {
+  const archive = archiver('zip', { zlib: { level: 9 } })
+  const chunks: Buffer[] = []
+
+  return await new Promise<Buffer>((resolve, reject) => {
+    archive.on('data', (chunk: Buffer | Uint8Array) => chunks.push(Buffer.from(chunk)))
+    archive.once('end', () => resolve(Buffer.concat(chunks)))
+    archive.once('error', reject)
+    for (const file of files) {
+      archive.append(file.data, { name: file.name })
+    }
+    void archive.finalize().catch(reject)
+  })
+}
 
 export const GET = apiHandler(async (
   request: NextRequest,
-  context: { params: Promise<{ projectId: string }> }
+  context: { params: Promise<{ projectId: string }> },
 ) => {
   const { projectId } = await context.params
-  const { searchParams } = new URL(request.url)
-  const episodeId = searchParams.get('episodeId')
+  const episodeId = new URL(request.url).searchParams.get('episodeId')?.trim() || ''
 
-  // 🔐 统一权限验证
   const authResult = await requireProjectAuthLight(projectId, { action: 'read' })
   if (isErrorResponse(authResult)) return authResult
   const { project } = authResult
 
-  // 获取配音台词
-  const whereClause: Record<string, unknown> = {
-    audioUrl: { not: null }
-  }
-
   if (episodeId) {
-    whereClause.episodeId = episodeId
-  } else {
-    // 如果没有指定 episodeId，获取该项目所有剧集的配音
-    const npData = await prisma.novelPromotionProject.findFirst({
-      where: { projectId },
-      include: { episodes: { select: { id: true } } }
+    const episode = await prisma.novelPromotionEpisode.findFirst({
+      where: { id: episodeId, novelPromotionProject: { projectId } },
+      select: { id: true },
     })
-    if (npData?.episodes) {
-      whereClause.episodeId = { in: npData.episodes.map(e => e.id) }
-    }
+    if (!episode) throw new ApiError('NOT_FOUND')
   }
 
   const voiceLines = await prisma.novelPromotionVoiceLine.findMany({
-    where: whereClause,
-    orderBy: [
-      { lineIndex: 'asc' }  // 按台词序号排序（绝对顺序）
-    ]
+    where: {
+      audioUrl: { not: null },
+      ...(episodeId ? { episodeId } : {}),
+      episode: { novelPromotionProject: { projectId } },
+    },
+    orderBy: { lineIndex: 'asc' },
+    select: {
+      id: true,
+      episodeId: true,
+      lineIndex: true,
+      speaker: true,
+      content: true,
+      audioUrl: true,
+      audioMediaId: true,
+      audioMedia: {
+        select: {
+          id: true,
+          publicId: true,
+          storageKey: true,
+          mimeType: true,
+          sizeBytes: true,
+        },
+      },
+    },
   })
+  if (voiceLines.length === 0) throw new ApiError('NOT_FOUND')
 
-  if (voiceLines.length === 0) {
-    throw new ApiError('NOT_FOUND')
-  }
-
-  _ulogInfo(`Preparing to download ${voiceLines.length} voice lines for project ${projectId}`)
-
-  const archive = archiver('zip', { zlib: { level: 9 } })
-
-  const stream = new ReadableStream({
-    start(controller) {
-      archive.on('data', (chunk) => controller.enqueue(chunk))
-      archive.on('end', () => controller.close())
-      archive.on('error', (err) => controller.error(err))
-      processVoices()
+  try {
+    // Resolve every persisted source before the first outbound read. A single
+    // forged/raw/stale line invalidates the whole request with zero partial
+    // fetches, matching the archive's all-or-nothing contract.
+    const sources = voiceLines.map((line) => resolveOwnedVoiceLineAudioSource(
+      { projectId, episodeId: line.episodeId },
+      line,
+    ))
+    const declaredBytes = sources.reduce(
+      (total, source) => total + (source.declaredSizeBytes ?? BigInt(0)),
+      BigInt(0),
+    )
+    if (declaredBytes > BigInt(VOICE_ARCHIVE_MAX_BYTES)) {
+      throw new VoiceLineAudioSourceError()
     }
-  })
 
-  async function processVoices() {
-    const isLocal = process.env.STORAGE_TYPE === 'local'
-
-    for (const line of voiceLines) {
-      try {
-        if (!line.audioUrl) continue
-
-        _ulogInfo(`Downloading voice ${line.lineIndex}: ${line.audioUrl}`)
-
-        let audioData: Buffer
-        const storageKey = await resolveStorageKeyFromMediaValue(line.audioUrl)
-
-        if (line.audioUrl.startsWith('http://') || line.audioUrl.startsWith('https://')) {
-          const response = await fetch(toFetchableUrl(line.audioUrl))
-          if (!response.ok) {
-            throw new Error(`Failed to fetch: ${response.statusText}`)
-          }
-          const arrayBuffer = await response.arrayBuffer()
-          audioData = Buffer.from(arrayBuffer)
-        } else if (storageKey) {
-          if (isLocal) {
-            const { getSignedUrl } = await import('@/lib/cos')
-            const localUrl = toFetchableUrl(getSignedUrl(storageKey))
-            const response = await fetch(localUrl)
-            if (!response.ok) {
-              throw new Error(`Failed to fetch local file: ${response.statusText}`)
-            }
-            audioData = Buffer.from(await response.arrayBuffer())
-          } else {
-            const cos = getCOSClient()
-            audioData = await new Promise<Buffer>((resolve, reject) => {
-              cos.getObject(
-                {
-                  Bucket: process.env.COS_BUCKET!,
-                  Region: process.env.COS_REGION!,
-                  Key: storageKey
-                },
-                (err, data) => {
-                  if (err) reject(err)
-                  else resolve(data.Body as Buffer)
-                }
-              )
-            })
-          }
-        } else {
-          const response = await fetch(toFetchableUrl(line.audioUrl))
-          if (!response.ok) {
-            throw new Error(`Failed to fetch: ${response.statusText}`)
-          }
-          const arrayBuffer = await response.arrayBuffer()
-          audioData = Buffer.from(arrayBuffer)
-        }
-
-        // 清理发言人名称中的非法字符
-        const safeSpeaker = line.speaker.replace(/[\\/:*?"<>|]/g, '_')
-
-        // 截取台词内容前15字作为文件名的一部分
-        const safeContent = line.content.slice(0, 15).replace(/[\\/:*?"<>|]/g, '_').replace(/\s+/g, '_')
-
-        // 确定文件扩展名
-        const extSource = storageKey || line.audioUrl
-        const ext = extSource.endsWith('.wav') ? 'wav' : 'mp3'
-
-        // 文件名格式: 序号_名字_语音内容.mp3（按绝对顺序排列，不按发言人分文件夹）
-        const fileName = `${String(line.lineIndex).padStart(3, '0')}_${safeSpeaker}_${safeContent}.${ext}`
-
-        archive.append(audioData, { name: fileName })
-        _ulogInfo(`Added ${fileName} to archive`)
-      } catch (error) {
-        _ulogError(`Failed to download voice line ${line.lineIndex}:`, error)
+    const files: Array<{ name: string; data: Buffer }> = []
+    let totalBytes = 0
+    for (let index = 0; index < voiceLines.length; index += 1) {
+      const line = voiceLines[index]
+      const source = sources[index]
+      const audio = await fetchOwnedVoiceLineAudio(source)
+      totalBytes += audio.data.byteLength
+      if (totalBytes > VOICE_ARCHIVE_MAX_BYTES) {
+        throw new VoiceLineAudioSourceError()
       }
+      files.push({
+        name: safeVoiceFilename(line, audio.contentType),
+        data: audio.data,
+      })
     }
 
-    await archive.finalize()
-    _ulogInfo('Archive finalized')
+    const archiveBuffer = await buildArchive(files)
+    _ulogInfo(`Prepared ${files.length} scoped voice files for project ${projectId}`)
+    return new Response(new Uint8Array(archiveBuffer), {
+      headers: {
+        'Content-Type': 'application/zip',
+        'Content-Length': String(archiveBuffer.byteLength),
+        'Cache-Control': 'no-store',
+        'X-Content-Type-Options': 'nosniff',
+        'Content-Disposition': `attachment; filename="${encodeURIComponent(project.name)}_voices.zip"`,
+      },
+    })
+  } catch (error) {
+    if (error instanceof VoiceLineAudioSourceError) {
+      throw new ApiError('INVALID_PARAMS', { reason: error.message })
+    }
+    if (error instanceof SsrfSafeFetchError) {
+      throw new ApiError('NETWORK_ERROR', { reason: error.code })
+    }
+    throw new ApiError('NETWORK_ERROR', {
+      reason: error instanceof Error ? error.message : 'VOICE_DOWNLOAD_FAILED',
+    })
   }
-
-  return new Response(stream, {
-    headers: {
-      'Content-Type': 'application/zip',
-      'Content-Disposition': `attachment; filename="${encodeURIComponent(project.name)}_voices.zip"`
-    }
-  })
 })

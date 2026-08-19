@@ -106,8 +106,7 @@ export function VoiceLibrary({
               </div>
               <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-text-tertiary">
                 {voice.gender ? <span>{voice.gender}</span> : null}
-                {voice.language ? <span>· {voice.language.toUpperCase()}</span> : null}
-                {voice.voiceType ? <span>· {voice.voiceType}</span> : null}
+                <span>· {t('voice.systemPreset')}</span>
               </div>
               {voice.description ? <p className="mt-1.5 line-clamp-1 text-xs text-text-secondary">{voice.description}</p> : null}
               {errorKey === previewKey ? <p className="mt-1.5 text-xs text-rose-300">{t('voice.playbackFailed')}</p> : null}

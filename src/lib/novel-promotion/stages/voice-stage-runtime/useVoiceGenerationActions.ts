@@ -3,7 +3,7 @@
 import { useCallback, useState } from 'react'
 import { shouldShowError } from '@/lib/error-utils'
 import { getErrorMessage, getErrorStatus } from './utils'
-import type { Character, SpeakerVoiceEntry, VoiceLine } from './types'
+import type { SpeakerVoiceEntry, VoiceLine } from './types'
 
 interface MutationLike<TInput = unknown, TOutput = unknown> {
   mutateAsync: (input: TInput) => Promise<TOutput>
@@ -14,10 +14,14 @@ interface UseVoiceGenerationActionsParams {
   t: (key: string) => string
   voiceLines: VoiceLine[]
   linesWithAudio: number
-  speakerCharacterMap: Record<string, Character>
   speakerVoices: Record<string, SpeakerVoiceEntry>
   analyzeVoiceMutation: MutationLike<{ episodeId: string }>
-  generateVoiceMutation: MutationLike<{ episodeId: string; lineId?: string; all?: boolean }, {
+  generateVoiceMutation: MutationLike<{
+    episodeId: string
+    lineId?: string
+    all?: boolean
+    lineIds?: string[]
+  }, {
     success?: boolean
     error?: string
     async?: boolean
@@ -35,7 +39,6 @@ export function useVoiceGenerationActions({
   t,
   voiceLines,
   linesWithAudio,
-  speakerCharacterMap,
   speakerVoices,
   analyzeVoiceMutation,
   generateVoiceMutation,
@@ -98,8 +101,7 @@ export function useVoiceGenerationActions({
   const handleGenerateAll = useCallback(async () => {
     const linesToGenerate = voiceLines.filter((line) => {
       if (line.audioUrl) return false
-      const character = speakerCharacterMap[line.speaker]
-      return !!character?.customVoiceUrl || !!speakerVoices[line.speaker]?.audioUrl
+      return !!speakerVoices[line.speaker]?.voicePresetId
     })
 
     if (linesToGenerate.length === 0) {
@@ -113,7 +115,7 @@ export function useVoiceGenerationActions({
     let handoffToTaskState = false
 
     try {
-      const data = await generateVoiceMutation.mutateAsync({ episodeId, all: true })
+      const data = await generateVoiceMutation.mutateAsync({ episodeId, all: true, lineIds })
       if (!Array.isArray(data.taskIds) || data.taskIds.length === 0) {
         setSubmittingVoiceLineIds((prev) => {
           const next = new Set(prev)
@@ -148,7 +150,6 @@ export function useVoiceGenerationActions({
     generateVoiceMutation,
     notifyVoiceLinesChanged,
     setSubmittingVoiceLineIds,
-    speakerCharacterMap,
     speakerVoices,
     t,
     voiceLines,

@@ -4,6 +4,7 @@ import { getProviderConfig } from '@/lib/api-config'
 import { reportTaskProgress } from '@/lib/workers/shared'
 import { assertTaskActive } from '@/lib/workers/utils'
 import { TASK_TYPE, type TaskJobData } from '@/lib/task/types'
+import { enforceVoiceDesignConsentBoundary } from '@/lib/voice/voice-source-consent-policy'
 
 function readRequiredString(value: unknown, field: string): string {
   if (typeof value !== 'string' || !value.trim()) {
@@ -17,6 +18,8 @@ function readLanguage(value: unknown): 'zh' | 'en' {
 }
 
 export async function handleVoiceDesignTask(job: Job<TaskJobData>) {
+  enforceVoiceDesignConsentBoundary(job.data.type)
+
   const payload = (job.data.payload || {}) as Record<string, unknown>
   const voicePrompt = readRequiredString(payload.voicePrompt, 'voicePrompt')
   const previewText = readRequiredString(payload.previewText, 'previewText')

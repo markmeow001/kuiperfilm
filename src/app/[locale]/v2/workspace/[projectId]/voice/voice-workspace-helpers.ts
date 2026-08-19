@@ -1,7 +1,7 @@
 import type { VoiceAsset, VoiceLine } from './voice-workspace-types'
 
 export function getVoicePreviewUrl(voice: VoiceAsset): string | null {
-  return voice.customVoiceUrl || voice.media?.url || null
+  return voice.previewUrl || null
 }
 
 export function collectEpisodeSpeakers(voiceLines: VoiceLine[], projectSpeakers: string[]): string[] {
@@ -26,7 +26,7 @@ export function filterVoiceAssets(
   return voices.filter((voice) => {
     if (gender !== '全部' && voice.gender !== gender) return false
     if (!normalizedSearch) return true
-    const searchable = [voice.name, voice.description, voice.voicePrompt, voice.gender, voice.language]
+    const searchable = [voice.name, voice.description, voice.gender]
       .filter((value): value is string => typeof value === 'string' && value.length > 0)
       .join(' ')
       .toLocaleLowerCase()

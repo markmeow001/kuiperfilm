@@ -1,11 +1,34 @@
-import { logInfo as _ulogInfo } from '@/lib/logging/core'
-import { fal, createFalClient } from '@fal-ai/client'
-import { prisma } from '@/lib/prisma'
-import { getAudioApiKey, getProviderKey, resolveModelSelectionOrSingle } from '@/lib/api-config'
-import { extractCOSKey, getSignedUrl, imageUrlToBase64, toFetchableUrl, uploadToCOS } from '@/lib/cos'
-import { resolveStorageKeyFromMediaValue } from '@/lib/media/service'
+import { createHash } from 'node:crypto'
+import type { Job } from 'bullmq'
+import { getProviderConfig, getProviderKey, resolveModelSelectionOrSingle } from '@/lib/api-config'
+import { getSignedUrl, getStorageObjectSize, toFetchableUrl, uploadToCOS } from '@/lib/cos'
+import { parseModelKeyStrict } from '@/lib/model-config-contract'
+import type { TaskJobData } from '@/lib/task/types'
+import { resolveDurableAtlasCloudVoiceAudioUrl } from '@/lib/voice/atlascloud-voice-provider'
+import { resolveDurableFalVoiceAudioUrl } from '@/lib/voice/fal-voice-provider'
+import { fetchVoiceAudioResource } from '@/lib/voice/safe-audio-fetch'
+import { inspectWaveAudio } from '@/lib/voice/wave-audio'
+import {
+  buildAtlasCloudSeedAudioText,
+  countUnicodeCodePoints,
+} from '@/lib/voice/atlascloud-seed-audio-input'
+import {
+  parseVoiceLineGenerationInput,
+  resolveVoiceLineGenerationSnapshot,
+  resolveSystemVoicePresetSource,
+  voiceLineGenerationFingerprint,
+  type VoiceLineGenerationInput,
+} from '@/lib/voice/voice-generation-scope'
+import {
+  persistVoiceLinePreparedOutput,
+  readVoiceLinePreparedOutput,
+  reconcileVoiceLineLateUpload,
+  voiceLineStorageKey,
+  type VoiceLinePreparedOutput,
+  type VoiceLineTaskResult,
+} from '@/lib/voice/voice-line-publication'
 
-type CheckCancelled = () => Promise<void>
+type CheckCancelled = (stage: string) => Promise<void>
 
 function getWavDurationFromBuffer(buffer: Buffer): number {
   try {
@@ -47,197 +70,351 @@ export async function generateVoiceWithIndexTTS2(params: {
   emotionPrompt?: string | null
   strength?: number
   falApiKey?: string
+  checkCancelled?: CheckCancelled
+  fetchOutputAudio?: (url: string) => Promise<Buffer>
+  resolveProviderAudioUrl?: (input: {
+    endpoint: string
+    providerInput: {
+      audio_url: string
+      prompt: string
+      should_use_prompt_for_emotion: boolean
+      strength: number
+      emotion_prompt?: string
+    }
+    apiKey: string
+  }) => Promise<string>
 }) {
-  const strength = typeof params.strength === 'number' ? params.strength : 0.4
-
-  _ulogInfo(`IndexTTS2: Generating with reference audio, strength: ${strength}`)
-  if (params.emotionPrompt) {
-    _ulogInfo(`IndexTTS2: Using emotion prompt: ${params.emotionPrompt}`)
-  }
-
-  // Per-call scoped client so the FAL credential is NOT mutated on the global
-  // singleton. `fal.config()` sets module-level state; under voice-worker
-  // concurrency (up to QUEUE_CONCURRENCY_VOICE=10) two jobs with different keys
-  // could race — job A configures keyA, job B overwrites with keyB, then A's
-  // subscribe() runs under keyB. createFalClient isolates credentials per call.
-  const client = params.falApiKey ? createFalClient({ credentials: params.falApiKey }) : fal
-
-  const audioDataUrl = params.referenceAudioUrl.startsWith('data:')
-    ? params.referenceAudioUrl
-    : await imageUrlToBase64(params.referenceAudioUrl)
-
-  const input: {
-    audio_url: string
-    prompt: string
-    should_use_prompt_for_emotion: boolean
-    strength: number
-    emotion_prompt?: string
-  } = {
-    audio_url: audioDataUrl,
-    prompt: params.text,
-    should_use_prompt_for_emotion: true,
-    strength,
-  }
-
-  if (params.emotionPrompt?.trim()) {
-    input.emotion_prompt = params.emotionPrompt.trim()
-  }
-
-  const result = await client.subscribe(params.endpoint, {
-    input,
-    logs: false,
+  void params
+  throw Object.assign(new Error('FAL_VOICE_NEW_SUBMISSIONS_DISABLED'), {
+    code: 'INVALID_PARAMS',
   })
-
-  const audioUrl = (result as { data?: { audio?: { url?: string } } })?.data?.audio?.url
-  if (!audioUrl) {
-    throw new Error('No audio URL in response')
-  }
-
-  const response = await fetch(toFetchableUrl(audioUrl))
-  if (!response.ok) {
-    throw new Error(`Audio download failed: ${response.status}`)
-  }
-  const arrayBuffer = await response.arrayBuffer()
-  const audioData = Buffer.from(arrayBuffer)
-
-  return {
-    audioData,
-    audioDuration: getWavDurationFromBuffer(audioData),
-  }
-}
-
-function matchCharacterBySpeaker(
-  speaker: string,
-  characters: Array<{ name: string; customVoiceUrl?: string | null }>
-) {
-  const exactMatch = characters.find((character) => character.name === speaker)
-  if (exactMatch) return exactMatch
-  return characters.find((character) => character.name.includes(speaker) || speaker.includes(character.name))
 }
 
 export async function generateVoiceLine(params: {
+  job: Job<TaskJobData>
   projectId: string
-  episodeId?: string | null
+  episodeId: string
   lineId: string
+  taskId: string
   userId: string
   audioModel?: string
+  providerText?: string
+  sourceFingerprint: string
+  generationInput: VoiceLineGenerationInput
   checkCancelled?: CheckCancelled
 }) {
+  const retryableError = (message: string, cause?: unknown) => Object.assign(
+    new Error(message, cause === undefined ? undefined : { cause }),
+    { code: 'EXTERNAL_ERROR' },
+  )
   const checkCancelled = params.checkCancelled
-
-  const line = await prisma.novelPromotionVoiceLine.findUnique({
-    where: { id: params.lineId },
-    select: {
-      id: true,
-      episodeId: true,
-      speaker: true,
-      content: true,
-      emotionPrompt: true,
-      emotionStrength: true,
-    },
-  })
-  if (!line) {
-    throw new Error('Voice line not found')
-  }
-
-  const episodeId = params.episodeId || line.episodeId
-  if (!episodeId) {
-    throw new Error('episodeId is required')
-  }
-
-  const [projectData, episode] = await Promise.all([
-    prisma.novelPromotionProject.findUnique({
-      where: { projectId: params.projectId },
-      include: { characters: true },
-    }),
-    prisma.novelPromotionEpisode.findUnique({
-      where: { id: episodeId },
-      select: { speakerVoices: true },
-    }),
-  ])
-
-  if (!projectData) {
-    throw new Error('Novel promotion project not found')
-  }
-
-  let speakerVoices: Record<string, { audioUrl?: string | null }> = {}
-  if (episode?.speakerVoices) {
+  const fetchProviderOutputAudio = async (url: string): Promise<{ data: Buffer; contentType: string }> => {
     try {
-      speakerVoices = JSON.parse(episode.speakerVoices)
-    } catch {
-      speakerVoices = {}
+      return await fetchVoiceAudioResource(url)
+    } catch (error) {
+      const code = error && typeof error === 'object' && 'code' in error
+        ? String((error as { code?: unknown }).code || '')
+        : ''
+      const message = error instanceof Error ? error.message : String(error)
+      const retryableTransport = code === 'DNS_FAILED'
+        || code === 'NETWORK_FAILED'
+        || code === 'TIMEOUT'
+        || /^VOICE_AUDIO_UPSTREAM_STATUS_(?:408|429|5\d\d)$/.test(message)
+      if (retryableTransport) {
+        throw retryableError('VOICE_LINE_PROVIDER_OUTPUT_FETCH_RETRYABLE', error)
+      }
+      throw error
     }
   }
-
-  const character = matchCharacterBySpeaker(line.speaker, projectData.characters || [])
-  const speakerVoice = speakerVoices[line.speaker]
-  const referenceAudioUrl = character?.customVoiceUrl || speakerVoice?.audioUrl
-  if (!referenceAudioUrl) {
-    throw new Error('请先为该发言人设置参考音频')
+  const pinnedInput = parseVoiceLineGenerationInput(params.generationInput)
+  if (!pinnedInput) {
+    throw Object.assign(new Error('VOICE_LINE_PINNED_INPUT_REQUIRED'), { code: 'INVALID_PARAMS' })
   }
+  const line = await resolveVoiceLineGenerationSnapshot({
+    projectId: params.projectId,
+    episodeId: params.episodeId,
+    lineId: params.lineId,
+  })
+  const source = pinnedInput.source
 
   const text = (line.content || '').trim()
   if (!text) {
     throw new Error('Voice line text is empty')
   }
 
-  // 将各种格式的 referenceAudioUrl 统一转为可访问的 URL
-  // 兼容旧数据中存的 /m/m_xxx 媒体路由格式
-  let fullAudioUrl: string
-  if (referenceAudioUrl.startsWith('http') || referenceAudioUrl.startsWith('data:')) {
-    // http/data: 直接用
-    fullAudioUrl = referenceAudioUrl
-  } else if (referenceAudioUrl.startsWith('/m/')) {
-    // 媒体路由格式：从数据库解析 storageKey → 再 getSignedUrl
-    const storageKey = await resolveStorageKeyFromMediaValue(referenceAudioUrl)
-    if (!storageKey) {
-      throw new Error(`无法解析参考音频路径: ${referenceAudioUrl}`)
+  const audioModel = params.audioModel?.trim() || ''
+  const pinnedAudioModel = parseModelKeyStrict(audioModel)
+  const providerFamily = pinnedAudioModel
+    ? getProviderKey(pinnedAudioModel.provider).toLowerCase()
+    : ''
+  const isAtlasCloudTask = providerFamily === 'atlascloud'
+  const isLegacyFalDrainTask = providerFamily === 'fal'
+  if (
+    !pinnedAudioModel
+    || (!isAtlasCloudTask && !isLegacyFalDrainTask)
+    || !/^[a-f0-9]{64}$/.test(params.sourceFingerprint)
+  ) {
+    throw Object.assign(new Error('VOICE_LINE_PINNED_INPUT_REQUIRED'), { code: 'INVALID_PARAMS' })
+  }
+
+  const inspectProviderOutput = (resource: { data: Buffer; contentType: string }) => ({
+    data: resource.data,
+    durationMs: isAtlasCloudTask
+      ? inspectWaveAudio(resource.data, resource.contentType).durationMs
+      : getWavDurationFromBuffer(resource.data),
+  })
+
+  if (isAtlasCloudTask) {
+    const canonicalProviderText = buildAtlasCloudSeedAudioText({
+      dialogue: pinnedInput.line.content,
+      emotionPrompt: pinnedInput.line.emotionPrompt,
+      emotionStrength: pinnedInput.line.emotionPrompt?.trim()
+        ? pinnedInput.line.emotionStrength ?? 0.4
+        : null,
+    })
+    if (params.providerText !== canonicalProviderText) {
+      throw Object.assign(new Error('VOICE_LINE_PROVIDER_TEXT_MISMATCH'), {
+        code: 'INVALID_PARAMS',
+      })
     }
-    fullAudioUrl = getSignedUrl(storageKey, 3600)
-  } else if (referenceAudioUrl.startsWith('/api/files/')) {
-    // 本地签名路径：extractCOSKey → getSignedUrl
-    const storageKey = extractCOSKey(referenceAudioUrl)
-    fullAudioUrl = storageKey ? getSignedUrl(storageKey, 3600) : referenceAudioUrl
-  } else {
-    // 原始 storageKey（如 voice/xxx.wav）
-    fullAudioUrl = getSignedUrl(referenceAudioUrl, 3600)
   }
-  const audioSelection = await resolveModelSelectionOrSingle(params.userId, params.audioModel, 'audio')
-  const providerKey = getProviderKey(audioSelection.provider).toLowerCase()
-  if (providerKey !== 'fal') {
-    throw new Error(`AUDIO_PROVIDER_UNSUPPORTED: ${audioSelection.provider}`)
+
+  const pinnedFingerprint = voiceLineGenerationFingerprint({
+    line: pinnedInput.line,
+    source,
+    audioModel,
+  })
+  if (pinnedFingerprint !== params.sourceFingerprint) {
+    throw Object.assign(new Error('VOICE_LINE_PINNED_INPUT_INVALID'), { code: 'INVALID_PARAMS' })
   }
-  const falApiKey = await getAudioApiKey(params.userId, audioSelection.modelKey)
 
-  const generated = await generateVoiceWithIndexTTS2({
-    endpoint: audioSelection.modelId,
-    referenceAudioUrl: fullAudioUrl,
-    text,
-    emotionPrompt: line.emotionPrompt,
-    strength: line.emotionStrength ?? 0.4,
-    falApiKey,
+  const currentFingerprint = voiceLineGenerationFingerprint({
+    line,
+    source,
+    audioModel,
   })
+  if (currentFingerprint !== params.sourceFingerprint) {
+    throw Object.assign(new Error('VOICE_LINE_INPUT_CHANGED'), { code: 'INVALID_PARAMS' })
+  }
 
-  const audioKey = `voice/${params.projectId}/${episodeId}/${line.id}.wav`
-  const cosKey = await uploadToCOS(generated.audioData, audioKey)
+  const assertAtlasCloudModelEnabledForNewSubmit = async () => {
+    if (!isAtlasCloudTask) {
+      throw Object.assign(new Error('VOICE_LINE_LEGACY_FAL_NEW_SUBMIT_DISABLED'), {
+        code: 'INVALID_PARAMS',
+      })
+    }
+    const audioSelection = await resolveModelSelectionOrSingle(params.userId, audioModel, 'audio')
+    const providerKey = getProviderKey(audioSelection.provider).toLowerCase()
+    if (
+      providerKey !== 'atlascloud'
+      || audioSelection.provider !== pinnedAudioModel.provider
+      || audioSelection.modelId !== pinnedAudioModel.modelId
+      || audioSelection.modelKey !== audioModel
+    ) {
+      throw Object.assign(new Error('VOICE_LINE_AUDIO_MODEL_CHANGED'), { code: 'INVALID_PARAMS' })
+    }
+  }
+  // A durable paid handoff must survive the model later being disabled. The
+  // pinned model key is already authenticated by sourceFingerprint, so resume
+  // reads only that exact provider credential and never re-selects a model.
+  const resolvePinnedProviderApiKey = async () => (
+    await getProviderConfig(params.userId, pinnedAudioModel.provider)
+  ).apiKey
 
-  await checkCancelled?.()
+  const reconcileStoredOutput = async (marker: VoiceLinePreparedOutput): Promise<VoiceLineTaskResult | null> => {
+    if (marker.state === 'cleanup_failed') throw retryableError('VOICE_LINE_OUTPUT_CLEANUP_FAILED')
+    if (marker.state !== 'prepared') {
+      throw Object.assign(new Error('VOICE_LINE_COMPLETION_RECONCILIATION_REQUIRED'), {
+        code: 'INVALID_PARAMS',
+      })
+    }
+    let storedBytes: number | null
+    try {
+      storedBytes = await getStorageObjectSize(marker.outputUrl)
+    } catch (error) {
+      throw retryableError('VOICE_LINE_UPLOAD_RECONCILIATION_REQUIRED', error)
+    }
+    if (storedBytes === marker.audioBytes) return marker.result
+    if (storedBytes !== null) throw retryableError('VOICE_LINE_OUTPUT_SIZE_MISMATCH')
+    return null
+  }
 
-  await prisma.novelPromotionVoiceLine.update({
-    where: { id: line.id },
-    data: {
-      audioUrl: cosKey,
-      audioDuration: generated.audioDuration || null,
-    },
-  })
+  const uploadPreparedAudio = async (
+    marker: VoiceLinePreparedOutput,
+    audioData: Buffer,
+    audioDuration: number,
+  ): Promise<VoiceLineTaskResult> => {
+    if (
+      audioData.byteLength !== marker.audioBytes
+      || createHash('sha256').update(audioData).digest('hex') !== marker.audioSha256
+      || (audioDuration || null) !== marker.audioDuration
+    ) {
+      throw Object.assign(new Error('VOICE_LINE_PROVIDER_OUTPUT_CHANGED'), { code: 'INVALID_PARAMS' })
+    }
+    await checkCancelled?.('voice_line_pre_upload')
+    try {
+      await uploadToCOS(audioData, marker.outputUrl, 1)
+    } catch (uploadError) {
+      let storedBytes: number | null
+      try {
+        storedBytes = await getStorageObjectSize(marker.outputUrl)
+      } catch (readError) {
+        throw retryableError('VOICE_LINE_UPLOAD_RECONCILIATION_REQUIRED', {
+          uploadError,
+          readError,
+        })
+      }
+      if (storedBytes === null) throw retryableError('VOICE_LINE_UPLOAD_FAILED', uploadError)
+      if (storedBytes !== marker.audioBytes) {
+        throw retryableError('VOICE_LINE_OUTPUT_SIZE_MISMATCH', uploadError)
+      }
+    }
+    // Cancellation can win after the pre-upload check while the storage put
+    // is in flight. Fence again before handing the result to completion so a
+    // cancelled task can never publish that late output as successful.
+    try {
+      await checkCancelled?.('voice_line_post_upload')
+    } catch (terminationError) {
+      // The PUT is confirmed at this point. Cancellation may have reconciled
+      // the marker while the upload was still in flight, so compensate the
+      // late object using the exact durable marker before propagating the
+      // terminal signal. Cleanup failures remain observable/retryable.
+      await reconcileVoiceLineLateUpload(params.job, marker)
+      throw terminationError
+    }
+    return marker.result
+  }
 
-  const signedUrl = getSignedUrl(cosKey, 7200)
-  return {
+  const preparedOutput = await readVoiceLinePreparedOutput(params.job)
+  if (preparedOutput) {
+    const existingResult = await reconcileStoredOutput(preparedOutput)
+    if (existingResult) return existingResult
+
+    // Marker exists but the exact object is absent. Resume only a previously
+    // checkpointed provider request; never submit another paid request here.
+    const providerAudioUrl = isAtlasCloudTask
+      ? await resolveDurableAtlasCloudVoiceAudioUrl({
+          job: params.job,
+          modelId: pinnedAudioModel.modelId,
+          resolveApiKey: resolvePinnedProviderApiKey,
+          checkCancelled,
+        })
+      : await resolveDurableFalVoiceAudioUrl({
+          job: params.job,
+          endpoint: pinnedAudioModel.modelId,
+          resolveApiKey: resolvePinnedProviderApiKey,
+          checkCancelled,
+        })
+    await checkCancelled?.('voice_line_pre_output_fetch')
+    const providerOutput = inspectProviderOutput(await fetchProviderOutputAudio(providerAudioUrl))
+    return await uploadPreparedAudio(
+      preparedOutput,
+      providerOutput.data,
+      providerOutput.durationMs,
+    )
+  }
+
+  const resolveAtlasCloudInput = async () => {
+    const providerText = params.providerText
+    if (!providerText) {
+      throw Object.assign(new Error('VOICE_LINE_PROVIDER_TEXT_REQUIRED'), {
+        code: 'INVALID_PARAMS',
+      })
+    }
+    await assertAtlasCloudModelEnabledForNewSubmit()
+    const currentSource = await resolveSystemVoicePresetSource(source.presetId)
+    if (currentSource.kind !== source.kind || currentSource.value !== source.value) {
+      throw Object.assign(new Error('VOICE_LINE_PINNED_SOURCE_CHANGED'), {
+        code: 'INVALID_PARAMS',
+      })
+    }
+    let referenceFetchUrl = source.value
+    let trustedInternalOrigins: readonly string[] | undefined
+    if (source.kind === 'storage-key') {
+      referenceFetchUrl = toFetchableUrl(getSignedUrl(source.value, 3600))
+      let generatedOrigin: string
+      try {
+        generatedOrigin = new URL(referenceFetchUrl).origin
+      } catch {
+        throw new Error('VOICE_PRESET_MEDIA_INVALID')
+      }
+      trustedInternalOrigins = [generatedOrigin]
+    }
+    const referenceAudio = await fetchVoiceAudioResource(
+      referenceFetchUrl,
+      trustedInternalOrigins ? { trustedInternalOrigins } : undefined,
+    )
+    return {
+      text: providerText,
+      references: [{ audio_data: referenceAudio.data.toString('base64') }],
+      format: 'wav' as const,
+      sample_rate: 24_000 as const,
+      pitch_rate: 0,
+      speech_rate: 0,
+      loudness_rate: 0,
+    }
+  }
+  const providerAudioUrl = isAtlasCloudTask
+    ? await resolveDurableAtlasCloudVoiceAudioUrl({
+        job: params.job,
+        modelId: pinnedAudioModel.modelId,
+        resolveInput: resolveAtlasCloudInput,
+        resolveApiKey: resolvePinnedProviderApiKey,
+        checkCancelled,
+      })
+    : await resolveDurableFalVoiceAudioUrl({
+        job: params.job,
+        endpoint: pinnedAudioModel.modelId,
+        resolveApiKey: resolvePinnedProviderApiKey,
+        checkCancelled,
+      })
+  await checkCancelled?.('voice_line_pre_output_fetch')
+  const providerOutput = inspectProviderOutput(await fetchProviderOutputAudio(providerAudioUrl))
+  const generated = {
+    audioData: providerOutput.data,
+    audioDuration: providerOutput.durationMs,
+  }
+
+  const audioSha256 = createHash('sha256').update(generated.audioData).digest('hex')
+  const storageKey = voiceLineStorageKey(params.job, audioSha256)
+  const result: VoiceLineTaskResult = {
     lineId: line.id,
-    audioUrl: signedUrl,
-    storageKey: cosKey,
+    // Keep the durable Task/marker result deterministic across overlapping
+    // processors. Consumers sign the storage key at the read boundary.
+    audioUrl: storageKey,
+    storageKey,
     audioDuration: generated.audioDuration || null,
+    ...(isAtlasCloudTask
+      ? { actualCharacters: countUnicodeCodePoints(params.providerText || '') }
+      : {}),
   }
+  const marker: VoiceLinePreparedOutput = {
+    kind: 'voice_line_publication_v1',
+    state: 'prepared',
+    taskId: params.taskId,
+    projectId: params.projectId,
+    episodeId: line.episodeId,
+    lineId: line.id,
+    sourceFingerprint: params.sourceFingerprint,
+    outputUrl: storageKey,
+    audioSha256,
+    audioBytes: generated.audioData.byteLength,
+    audioDuration: result.audioDuration,
+    input: {
+      speaker: line.speaker,
+      content: line.content,
+      voicePresetId: line.voicePresetId,
+      emotionPrompt: line.emotionPrompt,
+      emotionStrength: line.emotionStrength,
+      speakerVoices: line.speakerVoices,
+      audioUrl: line.audioUrl,
+      audioMediaId: line.audioMediaId,
+      audioDuration: line.audioDuration,
+    },
+    result,
+  }
+  await persistVoiceLinePreparedOutput(params.job, marker)
+  return await uploadPreparedAudio(marker, generated.audioData, generated.audioDuration)
 }
 
 export function estimateVoiceLineMaxSeconds(content: string | null | undefined) {

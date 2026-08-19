@@ -2,8 +2,16 @@
   "page": {
     "eyebrow": "VOICE CASTING",
     "title": "Voice Studio",
-    "subtitle": "Browse and audition voices from the asset hub to shape a consistent vocal direction for every character.",
+    "subtitle": "Browse and audition verified system voices to shape a consistent vocal direction for every character.",
     "functionalSubtitle": "Assign voices to this episode's cast, tune emotion per line, and track voice generation status."
+  },
+  "workspace": {
+    "episodeScope": "Current episode",
+    "mobileNavigation": "Voice workspace navigation",
+    "speakers": "Cast",
+    "voices": "Voices",
+    "lines": "Lines",
+    "settings": "Settings"
   },
   "summary": {
     "total": "Total voices",
@@ -66,7 +74,7 @@
     }
   },
   "empty": {
-    "noVoices": "No voices in asset hub — add some there first",
+    "noVoices": "No system voices are currently available",
     "noMatches": "No voices match the filter",
     "loadFailed": "Voices could not be loaded. Please try again.",
     "retry": "Reload"
@@ -74,11 +82,12 @@
   "voice": {
     "untitled": "Untitled voice",
     "bindHint": "Will bind to {target}",
-    "controlsHint": "This pass completes voice browsing and preview. Character binding, intensity, speed, and pitch arrive in the functional wiring pass.",
+    "controlsHint": "System voice assignment and per-line emotion controls are available. Speed and pitch controls are not currently provided.",
     "selected": "Selected",
     "playPreview": "Preview {name}",
     "pausePreview": "Pause preview",
-    "playbackFailed": "Preview failed. Check the audio source."
+    "playbackFailed": "Preview failed. Check the audio source.",
+    "systemPreset": "System preset"
   },
   "inspector": {
     "title": "Voice details",
@@ -97,7 +106,8 @@
     "bindTo": "Assign to {speaker}",
     "selectSpeakerFirst": "Select a speaker first",
     "binding": "Assigning…",
-    "projectCharacterVoice": "Existing voice from character profile"
+    "projectCharacterVoice": "Existing voice from character profile",
+    "systemPreset": "System preset"
   },
   "lines": {
     "title": "Dialogue & emotion",
@@ -119,6 +129,39 @@
     "generate": "Generate voice",
     "regenerate": "Regenerate"
   },
+  "lineEditor": {
+    "addDialogue": "Add dialogue line",
+    "editLine": "Edit line {number}",
+    "deleteLine": "Delete line {number}",
+    "retryDeleteLine": "Retry delete line {number}",
+    "deleteConfirm": "Delete line {number}?",
+    "content": "Dialogue text",
+    "speaker": "Speaker",
+    "shotBinding": "Shot binding",
+    "noShot": "No shot binding",
+    "shotOption": "Shot {number} — {excerpt}",
+    "shotOptionWithoutExcerpt": "Shot {number}",
+    "currentShotUnavailable": "Current shot (details unavailable)",
+    "required": "Dialogue text and speaker are required.",
+    "cancel": "Cancel",
+    "add": "Add line",
+    "retryAdd": "Retry add",
+    "adding": "Adding…",
+    "save": "Save line",
+    "retrySave": "Retry save",
+    "saving": "Saving…",
+    "shotsUnavailable": "Shot choices could not be loaded",
+    "reloadShots": "Reload shot choices",
+    "notSet": "Not set"
+  },
+  "mobileDialogue": {
+    "title": "Dialogue",
+    "readOnly": "Read only",
+    "contentLabel": "Dialogue for {speaker}",
+    "cancel": "Cancel",
+    "save": "Save",
+    "saving": "Saving…"
+  },
   "errors": {
     "voiceHasNoPreview": "This voice has no usable preview audio and cannot be assigned.",
     "bindFailed": "Voice assignment failed",
@@ -127,6 +170,12 @@
     "batchFailed": "Batch voice submission failed",
     "saveEmotionFailed": "Emotion settings could not be saved",
     "downloadFailed": "Voice download failed",
-    "loadStageFailed": "Voice workspace data could not be loaded"
+    "loadStageFailed": "Voice workspace data could not be loaded",
+    "addLineFailed": "Dialogue line could not be added",
+    "updateLineFailed": "Dialogue line could not be updated",
+    "deleteLineFailed": "Dialogue line could not be deleted",
+    "readOnly": "This project is read-only.",
+    "noEpisode": "Choose an episode before editing dialogue.",
+    "refreshAfterMutationFailed": "The change was saved, but the latest dialogue list could not be loaded. Reload to verify it."
   }
 }

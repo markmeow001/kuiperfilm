@@ -17,6 +17,7 @@ export function useVoiceLineEditorState({
   const [editingContent, setEditingContent] = useState('')
   const [editingSpeaker, setEditingSpeaker] = useState('')
   const [editingMatchedPanelId, setEditingMatchedPanelId] = useState('')
+  const [createClientRequestId, setCreateClientRequestId] = useState<string | null>(null)
 
   const savingLineEditorState = isSavingLineEditor
     ? resolveTaskPresentationState({
@@ -40,6 +41,7 @@ export function useVoiceLineEditorState({
     setEditingContent('')
     setEditingSpeaker(speakerOptions[0] || '')
     setEditingMatchedPanelId('')
+    setCreateClientRequestId(crypto.randomUUID())
     setIsLineEditorOpen(true)
   }, [speakerOptions])
 
@@ -48,6 +50,7 @@ export function useVoiceLineEditorState({
     setEditingContent(line.content)
     setEditingSpeaker(line.speaker)
     setEditingMatchedPanelId(boundPanelId)
+    setCreateClientRequestId(null)
     setIsLineEditorOpen(true)
   }, [])
 
@@ -56,6 +59,7 @@ export function useVoiceLineEditorState({
     setEditingContent('')
     setEditingSpeaker('')
     setEditingMatchedPanelId('')
+    setCreateClientRequestId(null)
     setIsLineEditorOpen(false)
     setIsSavingLineEditor(false)
   }, [])
@@ -67,6 +71,7 @@ export function useVoiceLineEditorState({
     editingContent,
     editingSpeaker,
     editingMatchedPanelId,
+    createClientRequestId,
     savingLineEditorState,
     setIsSavingLineEditor,
     setEditingContent,

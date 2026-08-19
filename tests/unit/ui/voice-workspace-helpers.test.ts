@@ -13,13 +13,8 @@ function voice(overrides: Partial<VoiceAsset> = {}): VoiceAsset {
     id: 'voice-1',
     name: '沉稳旁白',
     description: '低沉、克制',
-    voiceId: 'provider-voice-1',
-    voiceType: 'qwen-designed',
-    customVoiceUrl: 'https://media.example/voice.mp3',
-    voicePrompt: '成年男性，沉稳',
+    previewUrl: 'https://media.example/voice.mp3',
     gender: '男',
-    language: 'zh',
-    folderId: null,
     ...overrides,
   }
 }
@@ -39,7 +34,7 @@ function line(overrides: Partial<VoiceLine> = {}): VoiceLine {
 }
 
 describe('voice workspace helpers', () => {
-  it('资产音色只有 customVoiceUrl -> 返回真实可绑定试听地址', () => {
+  it('系统音色带安全 previewUrl -> 返回可绑定试听地址', () => {
     const result = getVoicePreviewUrl(voice())
 
     expect(result).toBe('https://media.example/voice.mp3')

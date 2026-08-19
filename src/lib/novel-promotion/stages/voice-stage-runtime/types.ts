@@ -43,8 +43,7 @@ export interface EpisodeClip {
 }
 
 export interface SpeakerVoiceEntry {
-  voiceType: string
-  voiceId?: string
+  voicePresetId: string
   audioUrl: string
 }
 

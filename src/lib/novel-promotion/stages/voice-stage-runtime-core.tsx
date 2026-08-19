@@ -76,7 +76,6 @@ export function useVoiceStageRuntime({
     onVoiceLinesChanged?.()
   }, [onVoiceLinesChanged])
   const {
-    speakerCharacterMap,
     speakerStats,
     speakers,
     speakerOptions,
@@ -102,6 +101,7 @@ export function useVoiceStageRuntime({
     editingContent,
     editingSpeaker,
     editingMatchedPanelId,
+    createClientRequestId,
     savingLineEditorState,
     setIsSavingLineEditor,
     setEditingContent,
@@ -148,7 +148,6 @@ export function useVoiceStageRuntime({
     t: (key) => t(key as never),
     voiceLines,
     linesWithAudio,
-    speakerCharacterMap,
     speakerVoices,
     analyzeVoiceMutation,
     generateVoiceMutation,
@@ -180,6 +179,7 @@ export function useVoiceStageRuntime({
     editingContent,
     editingSpeaker,
     editingMatchedPanelId,
+    createClientRequestId,
     setVoiceLines,
     setSubmittingVoiceLineIds,
     setIsSavingLineEditor,
@@ -215,17 +215,13 @@ export function useVoiceStageRuntime({
    */
   const handleInlineVoiceBound = useCallback(async (
     speaker: string,
-    audioUrl: string,
-    voiceType: string,
-    voiceId?: string,
+    voicePresetId: string,
   ) => {
     try {
       await updateSpeakerVoiceMutation.mutateAsync({
         episodeId,
         speaker,
-        audioUrl,
-        voiceType,
-        voiceId,
+        voicePresetId,
       })
       // 重新加载数据以刷新 speakerVoices
       await loadData()

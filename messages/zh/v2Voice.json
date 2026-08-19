@@ -2,8 +2,16 @@
   "page": {
     "eyebrow": "VOICE CASTING",
     "title": "配音工作室",
-    "subtitle": "浏览与试听资产中心音色，为角色建立一致的声音方向。",
+    "subtitle": "浏览与试听已验证的系统音色，为角色建立一致的声音方向。",
     "functionalSubtitle": "为本集角色绑定音色、调整每句台词的情绪，并追踪配音生成状态。"
+  },
+  "workspace": {
+    "episodeScope": "目前剧集",
+    "mobileNavigation": "配音工作区导航",
+    "speakers": "角色",
+    "voices": "音色",
+    "lines": "台词",
+    "settings": "设定"
   },
   "summary": {
     "total": "全部音色",
@@ -66,7 +74,7 @@
     }
   },
   "empty": {
-    "noVoices": "资产中心还没有音色 — 请先到资产中心新增",
+    "noVoices": "目前没有可用的系统音色",
     "noMatches": "没有符合筛选的音色",
     "loadFailed": "音色载入失败，请重新尝试",
     "retry": "重新载入"
@@ -74,11 +82,12 @@
   "voice": {
     "untitled": "未命名音色",
     "bindHint": "将绑到 {target}",
-    "controlsHint": "这一版先完成音色浏览与试听；角色绑定、情绪强度、语速与语调会在功能接线阶段加入。",
+    "controlsHint": "目前已可綁定系統音色並逐句調整情緒；暫不提供語速與語調控制。",
     "selected": "已选择",
     "playPreview": "试听 {name}",
     "pausePreview": "暂停试听",
-    "playbackFailed": "试听失败，请检查音频来源"
+    "playbackFailed": "试听失败，请检查音频来源",
+    "systemPreset": "系统音色"
   },
   "inspector": {
     "title": "音色详情",
@@ -97,7 +106,8 @@
     "bindTo": "绑定给 {speaker}",
     "selectSpeakerFirst": "请先选择角色",
     "binding": "绑定中…",
-    "projectCharacterVoice": "角色资料中的既有音色"
+    "projectCharacterVoice": "角色资料中的既有音色",
+    "systemPreset": "系统音色"
   },
   "lines": {
     "title": "台词与情绪",
@@ -119,6 +129,39 @@
     "generate": "生成配音",
     "regenerate": "重新生成"
   },
+  "lineEditor": {
+    "addDialogue": "新增台詞",
+    "editLine": "編輯第 {number} 句",
+    "deleteLine": "刪除第 {number} 句",
+    "retryDeleteLine": "重試刪除第 {number} 句",
+    "deleteConfirm": "確定刪除第 {number} 句？",
+    "content": "台詞內容",
+    "speaker": "說話人",
+    "shotBinding": "鏡頭綁定",
+    "noShot": "不綁定鏡頭",
+    "shotOption": "鏡頭 {number} — {excerpt}",
+    "shotOptionWithoutExcerpt": "鏡頭 {number}",
+    "currentShotUnavailable": "目前鏡頭（詳細資料無法取得）",
+    "required": "台詞內容與說話人皆為必填。",
+    "cancel": "取消",
+    "add": "新增台詞",
+    "retryAdd": "重試新增",
+    "adding": "新增中…",
+    "save": "儲存台詞",
+    "retrySave": "重試儲存",
+    "saving": "儲存中…",
+    "shotsUnavailable": "無法載入鏡頭選項",
+    "reloadShots": "重新載入鏡頭選項",
+    "notSet": "未設定"
+  },
+  "mobileDialogue": {
+    "title": "對白",
+    "readOnly": "唯讀",
+    "contentLabel": "{speaker} 的對白",
+    "cancel": "取消",
+    "save": "儲存",
+    "saving": "儲存中…"
+  },
   "errors": {
     "voiceHasNoPreview": "这个音色没有可用的试听音频，无法绑定。",
     "bindFailed": "音色绑定失败",
@@ -127,6 +170,12 @@
     "batchFailed": "批次配音提交失败",
     "saveEmotionFailed": "情绪设定保存失败",
     "downloadFailed": "配音下载失败",
-    "loadStageFailed": "配音工作区资料载入失败"
+    "loadStageFailed": "配音工作区资料载入失败",
+    "addLineFailed": "新增台詞失敗",
+    "updateLineFailed": "更新台詞失敗",
+    "deleteLineFailed": "刪除台詞失敗",
+    "readOnly": "這個專案目前只能查看。",
+    "noEpisode": "請先選擇劇集再編輯台詞。",
+    "refreshAfterMutationFailed": "變更已儲存，但無法載入最新台詞清單。請重新載入以確認。"
   }
 }

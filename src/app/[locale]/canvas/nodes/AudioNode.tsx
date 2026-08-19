@@ -1,8 +1,8 @@
 'use client'
 
 /**
- * Audio node — text + an uploaded reference voice clip → cloned speech via FAL
- * IndexTTS2 (CANVAS_TTS task on the voice worker). Submit → poll
+ * Audio node — text + an uploaded reference voice clip → cloned speech via
+ * AtlasCloud Seed Audio (CANVAS_TTS task on the voice worker). Submit → poll
  * /api/tasks/[taskId] → play the result. No preset voice list: the reference
  * clip IS the voice (voice cloning).
  */
@@ -11,17 +11,36 @@ import { useNodeConnections, useNodesData, useReactFlow, type NodeProps } from '
 import { useUploadPlaygroundReference } from '@/lib/query/mutations/playground-mutations'
 import { CANVAS_TOKENS, NODE_META } from '../lib/canvas-tokens'
 import type { CanvasNodeData } from '../lib/canvas-types'
+import { useActiveCanvasId } from '../lib/canvas-assets-client'
 import { pickUpstreamText } from '../lib/canvas-refs'
 import { NodeShell } from './node-shell'
+import { canvasAudioPlaybackUrl } from './audio-playback'
+import {
+  canvasTtsActivePinFromCheckpoint,
+  canvasTtsNodeDataFromCheckpoint,
+  canvasTtsRequestPinFromNodeData,
+  canvasTtsRequestPinNodeData,
+  pinCanvasTtsClientRequest,
+  readCanvasTtsRequestCheckpointFromStorage,
+  readValidCanvasTtsTaskId,
+  shouldRetainCanvasTtsRequestId,
+  type CanvasTtsRequestPin,
+  type CanvasTtsRequestCheckpoint,
+  writeCanvasTtsRequestCheckpointToStorage,
+} from './canvas-tts-client-request'
 
 type Phase = 'idle' | 'submitting' | 'running' | 'done' | 'failed'
 
 export function AudioNode({ id, data, selected }: NodeProps) {
   const d = data as CanvasNodeData
   const { updateNodeData } = useReactFlow()
+  const canvasId = useActiveCanvasId()
   const upload = useUploadPlaygroundReference()
   const audioInputRef = useRef<HTMLInputElement | null>(null)
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const requestPinRef = useRef<CanvasTtsRequestPin | null>(canvasTtsRequestPinFromNodeData(d))
+  const requestCheckpointRef = useRef<CanvasTtsRequestCheckpoint | null>(null)
+  const [checkpointHydrated, setCheckpointHydrated] = useState(false)
   const [phase, setPhase] = useState<Phase>(d.audioUrl ? 'done' : 'idle')
   const [error, setError] = useState<string | null>(null)
 
@@ -32,31 +51,106 @@ export function AudioNode({ id, data, selected }: NodeProps) {
   const upstreamText = useMemo(() => pickUpstreamText(upstream), [upstream])
 
   const text = (upstreamText || d.prompt || '').trim()
+  const playbackUrl = canvasAudioPlaybackUrl(d)
 
   const stopPoll = useCallback(() => {
     if (pollRef.current) { clearTimeout(pollRef.current); pollRef.current = null }
   }, [])
 
+  const persistRequestCheckpoint = useCallback((checkpoint: CanvasTtsRequestCheckpoint) => {
+    if (typeof window === 'undefined') throw new Error('瀏覽器儲存空間不可用')
+    if (!canvasId) throw new Error('畫布尚未取得持久識別')
+    writeCanvasTtsRequestCheckpointToStorage(window.localStorage, { canvasId, nodeId: id }, checkpoint)
+    requestCheckpointRef.current = checkpoint
+    requestPinRef.current = canvasTtsActivePinFromCheckpoint(checkpoint)
+  }, [canvasId, id])
+
   useEffect(() => {
+    if (!canvasId || typeof window === 'undefined') {
+      setCheckpointHydrated(true)
+      return
+    }
+    try {
+      const checkpoint = readCanvasTtsRequestCheckpointFromStorage(
+        window.localStorage,
+        { canvasId, nodeId: id },
+      )
+      requestCheckpointRef.current = checkpoint
+      requestPinRef.current = checkpoint
+        ? canvasTtsActivePinFromCheckpoint(checkpoint)
+        : canvasTtsRequestPinFromNodeData(d)
+      if (checkpoint) {
+        updateNodeData(id, canvasTtsNodeDataFromCheckpoint(checkpoint))
+        if (checkpoint.state === 'running') setPhase('running')
+        if (checkpoint.state === 'completed') setPhase('done')
+        if (checkpoint.state === 'failed' || checkpoint.state === 'dismissed' || checkpoint.state === 'rejected') {
+          setError(checkpoint.errorMessage)
+          setPhase('failed')
+        }
+      }
+    } catch (checkpointError) {
+      setError((checkpointError as Error).message)
+      setPhase('failed')
+    } finally {
+      setCheckpointHydrated(true)
+    }
+  // Node data is deliberately read only for the initial hydration fallback.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canvasId, id, updateNodeData])
+
+  useEffect(() => {
+    if (!checkpointHydrated) return
     const taskId = d.ttsTaskId
     if (!taskId) return
+    const durableCheckpoint = requestCheckpointRef.current
+    if (
+      durableCheckpoint
+      && durableCheckpoint.state !== 'pending'
+      && durableCheckpoint.state !== 'running'
+      && 'taskId' in durableCheckpoint
+      && durableCheckpoint.taskId === taskId
+    ) return
     let cancelled = false
     setPhase('running')
     const tick = async () => {
       try {
         const res = await fetch(`/api/tasks/${taskId}`)
         if (!res.ok) throw new Error(`任务查询失败 (${res.status})`)
-        const json = await res.json()
+        const json = await res.json() as {
+          task?: {
+            status?: string
+            result?: { audioUrl?: unknown; audioKey?: unknown }
+            error?: { message?: unknown }
+          }
+        }
         const task = json?.task
         if (cancelled) return
         if (task?.status === 'completed') {
-          updateNodeData(id, { audioUrl: task.result?.audioUrl ?? null, audioKey: task.result?.audioKey ?? null, audioTaskId: d.ttsTaskId, ttsTaskId: null })
+          const checkpoint: CanvasTtsRequestCheckpoint = {
+            state: 'completed',
+            pin: requestPinRef.current,
+            taskId,
+            audioUrl: typeof task.result?.audioUrl === 'string' ? task.result.audioUrl : null,
+            audioKey: typeof task.result?.audioKey === 'string' ? task.result.audioKey : null,
+          }
+          persistRequestCheckpoint(checkpoint)
+          updateNodeData(id, canvasTtsNodeDataFromCheckpoint(checkpoint))
           setPhase('done')
           return
         }
-        if (task?.status === 'failed') {
-          setError(task?.error?.message ?? '配音生成失败')
-          updateNodeData(id, { ttsTaskId: null })
+        if (task?.status === 'failed' || task?.status === 'dismissed') {
+          const errorMessage = typeof task.error?.message === 'string'
+            ? task.error.message
+            : '配音生成失败'
+          const checkpoint: CanvasTtsRequestCheckpoint = {
+            state: task.status,
+            pin: requestPinRef.current,
+            taskId,
+            errorMessage,
+          }
+          persistRequestCheckpoint(checkpoint)
+          setError(errorMessage)
+          updateNodeData(id, canvasTtsNodeDataFromCheckpoint(checkpoint))
           setPhase('failed')
           return
         }
@@ -69,7 +163,7 @@ export function AudioNode({ id, data, selected }: NodeProps) {
     }
     tick()
     return () => { cancelled = true; stopPoll() }
-  }, [d.ttsTaskId, id, updateNodeData, stopPoll])
+  }, [checkpointHydrated, d.ttsTaskId, id, updateNodeData, stopPoll, persistRequestCheckpoint])
 
   async function handleRefUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -86,26 +180,72 @@ export function AudioNode({ id, data, selected }: NodeProps) {
   async function handleGenerate() {
     if (!text) { setError('请输入或连入要配音的文字'); return }
     if (!d.referenceAudioKey) { setError('请先上传参考人声（决定音色）'); return }
+    if (!canvasId) { setError('請等待畫布儲存完成後再生成配音'); return }
     setError(null)
     setPhase('submitting')
+    let responseStatus: number | null = null
     try {
+      if (typeof window === 'undefined') throw new Error('瀏覽器儲存空間不可用，未送出配音請求')
+      const requestStorage = window.localStorage
+      const storageScope = { canvasId, nodeId: id }
+      const persistedCheckpoint = readCanvasTtsRequestCheckpointFromStorage(requestStorage, storageScope)
+      requestCheckpointRef.current = persistedCheckpoint
+      if (persistedCheckpoint?.state === 'running') {
+        requestPinRef.current = persistedCheckpoint.pin
+        updateNodeData(id, canvasTtsNodeDataFromCheckpoint(persistedCheckpoint))
+        setPhase('running')
+        return
+      }
+      const persistedPin = persistedCheckpoint
+        ? canvasTtsActivePinFromCheckpoint(persistedCheckpoint)
+        : requestPinRef.current
+      const pinned = pinCanvasTtsClientRequest({
+        text,
+        referenceAudioKey: d.referenceAudioKey,
+        ...(d.emotionPrompt ? { emotionPrompt: d.emotionPrompt } : {}),
+        strength: d.emotionStrength ?? 0.4,
+      }, persistedPin)
+      persistRequestCheckpoint({ state: 'pending', pin: pinned.pin })
+      updateNodeData(id, canvasTtsRequestPinNodeData(pinned.pin))
       const res = await fetch('/api/canvas/tts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          text,
-          referenceAudioKey: d.referenceAudioKey,
-          ...(d.emotionPrompt ? { emotionPrompt: d.emotionPrompt } : {}),
-          strength: d.emotionStrength ?? 0.4,
-        }),
+        body: JSON.stringify(pinned.body),
       })
+      responseStatus = res.status
       const json = await res.json()
-      if (!res.ok || !json?.taskId) {
+      const taskId = readValidCanvasTtsTaskId(json?.taskId)
+      if (!res.ok || !taskId) {
         throw new Error(json?.error?.message ?? json?.error ?? '提交失败')
       }
-      updateNodeData(id, { ttsTaskId: json.taskId, audioTaskId: null, audioKey: null, audioUrl: null })
+      const runningCheckpoint: CanvasTtsRequestCheckpoint = {
+        state: 'running',
+        pin: pinned.pin,
+        taskId,
+      }
+      persistRequestCheckpoint(runningCheckpoint)
+      updateNodeData(id, {
+        ...canvasTtsNodeDataFromCheckpoint(runningCheckpoint),
+        audioTaskId: null,
+        audioKey: null,
+        audioUrl: null,
+      })
+      setPhase('running')
     } catch (err) {
-      setError((err as Error)?.message ?? '提交失败')
+      const errorMessage = (err as Error)?.message ?? '提交失败'
+      if (!shouldRetainCanvasTtsRequestId(responseStatus)) {
+        try {
+          const rejectedPin = requestPinRef.current
+          if (!rejectedPin) throw new Error('缺少被拒絕請求的持久識別')
+          persistRequestCheckpoint({ state: 'rejected', pin: rejectedPin, errorMessage })
+          updateNodeData(id, canvasTtsRequestPinNodeData(null))
+        } catch (storageError) {
+          setError(`提交被拒絕，但無法清除重試識別：${(storageError as Error).message}`)
+          setPhase('failed')
+          return
+        }
+      }
+      setError(errorMessage)
       setPhase('failed')
     }
   }
@@ -175,8 +315,8 @@ export function AudioNode({ id, data, selected }: NodeProps) {
           {phase === 'submitting' ? '提交中…' : phase === 'running' ? '配音生成中…' : d.audioUrl ? '重新配音' : '生成配音'}
         </button>
 
-        {d.audioUrl && !busy ? (
-          <audio src={d.audioUrl} controls className="w-full" style={{ height: 36 }} />
+        {playbackUrl && !busy ? (
+          <audio src={playbackUrl} controls className="w-full" style={{ height: 36 }} />
         ) : null}
       </div>
     </NodeShell>
