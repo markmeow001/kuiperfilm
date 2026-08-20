@@ -156,6 +156,40 @@ describe('handleCanvasStoryboardTask', () => {
     expect(res.shots[0].description).toBe('有效镜头')
   })
 
+  it('[LLM 给出 2 秒碎镜头] -> [时长正规化到 5–15（表格秒数=实际生成秒数）]', async () => {
+    aiMock.executeAiTextStep.mockResolvedValueOnce({
+      text: JSON.stringify({
+        globalStyle: '',
+        assets: [],
+        shots: [
+          { shotNumber: 1, description: '睁眼反应', durationSec: 2 },
+          { shotNumber: 2, description: '正常镜头', durationSec: 8.6 },
+          { shotNumber: 3, description: '超长镜头', durationSec: 30 },
+          { shotNumber: 4, description: '未给时长' },
+        ],
+      }),
+      reasoning: '',
+    })
+    const res = await handleCanvasStoryboardTask(makeJob({ script: 's', model: 'm' }))
+    expect(res.shots.map((shot) => shot.durationSec)).toEqual([5, 9, 15, undefined])
+  })
+
+  it('[prompt] -> [写死 5–15 秒契约与微节拍合并、总时长反推规则]', async () => {
+    aiMock.executeAiTextStep.mockResolvedValueOnce({
+      text: '{"globalStyle":"","assets":[],"shots":[{"description":"ok"}]}',
+      reasoning: '',
+    })
+    await handleCanvasStoryboardTask(makeJob({ script: '剧本', model: 'm' }))
+    const calls = aiMock.executeAiTextStep.mock.calls as unknown as Array<[
+      { messages?: Array<{ content?: string }> },
+    ]>
+    const prompt = String(calls.at(-1)?.[0]?.messages?.[0]?.content ?? '')
+    expect(prompt).toContain('5–15 的整数')
+    expect(prompt).toContain('不要切出 2–3 秒的快速反应插镜')
+    expect(prompt).toContain('合并进同一个镜头')
+    expect(prompt).toContain('目标总时长')
+  })
+
   it('[characters 入口] -> [prompt 由卡司+故事方向原创，且沿用同一输出契约]', async () => {
     aiMock.executeAiTextStep.mockResolvedValueOnce({
       text: '{"globalStyle":"x","assets":[],"shots":[{"description":"ok"}]}',

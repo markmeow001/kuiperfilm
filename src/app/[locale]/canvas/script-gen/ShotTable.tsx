@@ -201,7 +201,7 @@ function ShotRow({
           <div className="flex items-center gap-0.5" style={{ color: CANVAS_TOKENS.text.primary }}>
             <input
               type="number"
-              min={1}
+              min={5}
               max={15}
               value={shot.durationSec ?? 5}
               onChange={(e) => onEditShot(index, { durationSec: Number(e.target.value) || 5 })}

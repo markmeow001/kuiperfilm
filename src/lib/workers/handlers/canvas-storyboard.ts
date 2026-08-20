@@ -58,6 +58,10 @@ export interface CanvasStoryboardResult {
 }
 
 const MAX_SHOTS = 40
+// AI 视频逐镜生成的时长契约：Seedance 级模型单镜最短 5 秒、批量生视频管线
+// clamp 到 5–15。分镜表显示的秒数必须等于实际会生成/计费的秒数。
+const MIN_SHOT_SECONDS = 5
+const MAX_SHOT_SECONDS = 15
 
 export interface CanvasStoryboardCastMember {
   name: string
@@ -84,8 +88,9 @@ function buildPrompt(script: string): string {
     '4. assets：从剧本抽出的可复用资产清单，每项形如 {"kind": "character/scene/prop", "name": "简短唯一名称（镜头描述中提到该资产时必须使用完全相同的名称）", "description": "可直接用于文生图的外观设定：人物含性别/年龄/身高/服装/气质，场景含空间/陈设/时代，道具含材质/形制"}。同一人物的不同时期算不同资产（如「现代沈昭昭」「古代沈昭昭」）。',
     '5. 每个镜头形如：{"shotNumber": 1, "description": "画面内容的完整视觉描述（用于文生图）：场景、人物、动作——提到资产时必须使用 assets 里完全相同的 name", "shotSize": "中景/特写/全景/近景…", "cameraMove": "推近/拉远/环绕/固定/跟移…", "cameraAngle": "平视/俯拍/仰拍/过肩/主观视角…", "lens": "24mm 广角/35mm/50mm 标准/85mm 人像…", "performance": "该镜头中人物的表演与情绪（谁、什么情绪、怎么演）", "blocking": "站位与调度：谁在画面哪个位置、朝向、走位", "lighting": "光影氛围：这一镜的光线基调与情绪", "sfx": "音效：环境音/拟音/配乐提示", "durationSec": 5, "dialogue": "该镜头的对白或旁白，无则留空字符串"}',
     '6. 每个镜头的 shotSize、cameraAngle、lens、performance、blocking、lighting、sfx 都必须给出，不得省略——这是分镜表不是故事梗概。',
-    `7. 镜头数量根据剧情自然切分，最多 ${MAX_SHOTS} 个。`,
-    '8. 与剧本保持同一种语言。',
+    `7. durationSec 必须是 ${MIN_SHOT_SECONDS}–${MAX_SHOT_SECONDS} 的整数。这是给 AI 视频模型（如 Seedance）逐镜生成用的分镜，单镜最短 ${MIN_SHOT_SECONDS} 秒——不要切出 2–3 秒的快速反应插镜；把相邻的微小节拍（睁眼、伸手、对视等）合并进同一个镜头，用 description/performance/blocking 描述镜头内的连续动作与节奏变化。`,
+    `8. 镜头数量 = 目标总时长 ÷ 单镜时长。剧本若标注了时长建议（如「60-90秒」）必须遵守；未标注时按 60–90 秒短剧节奏切分。宁少勿碎，最多 ${MAX_SHOTS} 个。`,
+    '9. 与剧本保持同一种语言。',
     '',
     '剧本：',
     script,
@@ -183,7 +188,11 @@ function parseStoryboard(text: string): CanvasStoryboardResult {
       ...(blocking ? { blocking } : {}),
       ...(lighting ? { lighting } : {}),
       ...(sfx ? { sfx } : {}),
-      ...(typeof o.durationSec === 'number' && Number.isFinite(o.durationSec) ? { durationSec: o.durationSec } : {}),
+      // 时长正规化到生成管线实际接受的 5–15 整数：表格显示 2s 而实际生成
+      // 5s 是对用户说谎，这里把契约钉死（prompt 同步要求 5–15）。
+      ...(typeof o.durationSec === 'number' && Number.isFinite(o.durationSec)
+        ? { durationSec: Math.min(MAX_SHOT_SECONDS, Math.max(MIN_SHOT_SECONDS, Math.round(o.durationSec))) }
+        : {}),
       ...(dialogue ? { dialogue } : {}),
     })
   })
