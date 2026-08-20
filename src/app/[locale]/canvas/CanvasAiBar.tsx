@@ -147,7 +147,9 @@ export function CanvasAiBar({ locale, selectedCount, focusSignal, buildContext, 
   }
 
   return (
-    <div className="pointer-events-none absolute inset-x-0 bottom-16 z-40 flex justify-center px-4">
+    // z-30：低于新增节点菜单/右键菜单/快捷键面板（z-40）——暂态弹层永远
+    // 盖在常驻输入条之上（2026-08-20 反馈：菜单尾部被输入条挡住）。
+    <div className="pointer-events-none absolute inset-x-0 bottom-16 z-30 flex justify-center px-4">
       <div className="pointer-events-auto w-full max-w-[760px]">
         {/* 计画预览 — 确认后才改画布 */}
         {plan ? (

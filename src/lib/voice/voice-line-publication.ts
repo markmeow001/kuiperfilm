@@ -1,4 +1,7 @@
-import 'server-only'
+// NOTE: 不要加 `import 'server-only'`。这个模块同时被 Next server 与
+// BullMQ worker（tsx 进程）共用；server-only 只有 Next bundler 会特殊处理，
+// worker 运行时 require 会直接 Cannot find module → 整个 worker crash-loop
+// （2026-08-20 prod 事故：所有队列任务停摆）。
 import { createHash, randomUUID } from 'node:crypto'
 import type { Job } from 'bullmq'
 import { Prisma } from '@prisma/client'

@@ -54,6 +54,10 @@ const FATAL_PATTERNS = [
   /SyntaxError:/,
   /Error \[ERR_REQUIRE_ESM\]/,
   /Error \[ERR_MODULE_NOT_FOUND\]/,
+  // CJS 版的模块缺失（tsx require 链走这个形态，不是 ERR_MODULE_NOT_FOUND）。
+  // 2026-08-20 prod 事故：worker 共用模块里一句 `import 'server-only'` 让
+  // 整个 worker crash-loop，本 guard 却因缺这个 pattern 判成通过。
+  /Error: Cannot find module/,
 ]
 
 const child = spawn('npx', ['tsx', WORKER_ENTRY], {
