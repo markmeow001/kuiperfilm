@@ -9,6 +9,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { canvasSaveSchema } from '@/lib/canvas/canvas-validation'
+import { NODE_META } from '@/app/[locale]/canvas/lib/canvas-tokens'
 
 const BASE = {
   title: 't',
@@ -20,8 +21,11 @@ function nodeOf(type: string) {
   return { id: `n-${type}`, type, x: 0, y: 0, data: {} }
 }
 
-// Mirror of client canvas-tokens CanvasNodeType — update BOTH when adding a type.
-const CLIENT_NODE_TYPES = ['character', 'image', 'video', 'text', 'director', 'script', 'audio', 'composition', 'mask', 'group']
+// THE live client node-type source (NODE_META keys) — not a hand copy. The
+// 2026-08-20 scene/prop incident got past this test precisely because the old
+// hardcoded mirror here drifted together with the server schema; deriving from
+// the client registry makes the drift class undetectable-by-copy impossible.
+const CLIENT_NODE_TYPES = Object.keys(NODE_META)
 // Mirror of client canvas-types CanvasPortType.
 const CLIENT_PORT_TYPES = ['text', 'script', 'identity-image', 'frame-image', 'video-clip', 'audio-voice', 'audio-music', 'storyboard-group', 'mask-image']
 // Mirror of client canvas-types CanvasEdgeData.role.

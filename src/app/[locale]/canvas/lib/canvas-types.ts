@@ -157,9 +157,10 @@ export interface CanvasNodeData extends Record<string, unknown> {
   /** Script node: 批量生视频使用的视频模型。 */
   videoModelKey?: string
   /**
-   * Script node: 绑进本脚本的参考(角色/场景/道具/图片)解析后的 key/URL 快
-   * 照,由 ScriptNode 随上游连线同步。铺出的镜头节点经 脚本→镜头 一条线读
-   * 到它(canvas-refs),重生与批量生图用同一组参考。
+   * Script node: 上游参考节点 + 全部资产设定图 的 key/URL 快照,由 ScriptNode
+   * 随上游/资产变化同步。铺出的镜头节点经 脚本→镜头 一条线读到它
+   * (canvas-refs)。语义:批量提交带「该镜出场资产」的精准参考,单镜重生经
+   * relay 拿全卡司(刻意折衷,见 canvas-refs 注释)。
    */
   refUrls?: string[] | null
   /** Prompt / text content. */

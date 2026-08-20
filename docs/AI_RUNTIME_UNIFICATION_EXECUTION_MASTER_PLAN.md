@@ -916,6 +916,33 @@ Header 点 project 从 `/workspace/[id]` redirect `/v2/workspace/[id]`。旧 `/w
 稀释镜头语言。属既有行为（脚本→镜头边一直存在），本轮未改语义；建议后续把
 script 对 `pickUpstreamText` 的贡献改为可选或仅原始剧本。
 
+## Canvas code review 整改（2026-08-20，独立 code-reviewer 12 项 + 主 agent 2 项）
+
+- ✅ **CRITICAL**：server 存档 schema（canvas-validation NODE_TYPES）漏 scene/prop
+  ——放一个场景/道具节点会让整张画布保存 400、refresh 全丢（2026-07-18 mask
+  事故重演）。已补；同步测试改为直接吃 NODE_META keys（旧测试的手抄副本跟着
+  漂移才没抓到），此类三副本漂移从此必被抓。
+- ✅ 金钱路径 double-submit ×2：合成提示词（synthSubmitLockRef 在首个 await 前
+  同步上锁）、AssetCard AI 生成（本地 submitting state）。
+- ✅ 轮询韧性：拆分镜/合成两个 poller 的暂时性 fetch 错误改为退避重试（TextNode
+  同款，5 次后提示仍在重试），不再一次 502 就永久卡死并丢弃已付费任务结果。
+- ✅ 资产 ingest：failed/成功/超限清理全部改经 getNode(id) fresh data 写回
+  （闭包 snapshot 会让同批两个失败 run 互相复活对方的 runId → 资产永卡
+  「生成中」）；use-as-reference 失败改有界重试（3 次后显式清 runId 回到可上
+  传状态），不再无退避重放。
+- ✅ 资产改名同步每镜 entities（renameAssetInShots），否则 shotReferenceKeys
+  静默丢参考图。
+- ✅ 时长契约收尾：表格手动输入 onBlur 正规化 5–15（HTML min/max 不拦打字）。
+- ✅ ShotTable ⋯ 菜单改 fixed 视口定位（原 absolute 被 overflow-auto 容器裁切，
+  底部行看不到「删除镜头」）；删除/移动镜头时清空 index 键控的展开/编辑状态。
+- ✅ MediaNode 不再把上游脚本的整份分镜文字倾倒进 basePrompt
+  （pickUpstreamText({includeScriptShots:false})；音频节点保留对白来源行为）。
+- ✅ refUrls relay 注释改为诚实描述（批量=该镜出场资产精准参考；单镜重生=全卡
+  司，刻意折衷）。
+- ⚠️ 未处理（登记）：canvas 新 UI 全部简体 vs CanvasClient 部分繁体字串混杂
+  （疑似与 i18n workstream 冲突，待拍板统一方向）；usePlaygroundRuns 200 笔上
+  限对重度用户 reload 后旧 in-flight run 不可见（已被有界重试+显式清理缓解）。
+
 ## Canvas 分镜时长契约（2026-08-20，用户反馈「切太碎」）
 
 拆分镜 LLM 曾产出大量 2–3 秒反应插镜；批量生视频管线 clamp 5–15s，等于

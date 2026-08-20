@@ -11,7 +11,7 @@ import { z } from 'zod'
 
 // ⚠️ 三处副本要同步：client canvas-tokens CanvasNodeType / canvas-serialize
 // VALID_TYPES / 这里。漏这里 = 含该节点的画布保存整包被拒（2026-07-18 mask 事故）。
-const NODE_TYPES = ['character', 'image', 'video', 'text', 'director', 'script', 'audio', 'composition', 'mask', 'group'] as const
+const NODE_TYPES = ['character', 'scene', 'prop', 'image', 'video', 'text', 'director', 'script', 'audio', 'composition', 'mask', 'group'] as const
 
 export const MAX_NODES = 500
 export const MAX_EDGES = 1000

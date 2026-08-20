@@ -11,9 +11,11 @@
  *
  * Contributions by node type:
  *  - image/character/scene/prop/director → referenceKey / resultUrl (they hold a frame)
- *  - script → data.refUrls(脚本节点把「绑进它的参考」以解析后的 key/URL 缓存
- *    在自己的 data 上;铺出的镜头节点只连 脚本→镜头 一条线,重生时经由这条
- *    线拿到与批量生图完全相同的参考 — 一致性不靠 N×M 蜘蛛网连线)。
+ *  - script → data.refUrls(脚本节点把 上游参考节点 + 全部资产设定图 缓存在
+ *    自己的 data 上;铺出的镜头节点只连 脚本→镜头 一条线。注意语义差异:
+ *    批量提交用的是「该镜出场资产」的精准参考(shotReferenceKeys),relay 给
+ *    单镜重生的则是全卡司 — 重生输入比初次生成宽,是已知且刻意的折衷,
+ *    换掉 N×M 蜘蛛网连线)。
  *  - video → tailFrameUrl(生成结果的尾帧,worker 用 ffmpeg 抽出) — 让
  *    「上一镜视频 → 下一镜」连线成为真正的首尾帧接力(续镜链)。没有
  *    tailFrameUrl 的视频节点(旧结果/抽帧失败)不贡献,静默跳过。
@@ -38,10 +40,21 @@ export interface UpstreamNodeLike {
  */
 export function pickUpstreamText(
   upstream: ReadonlyArray<UpstreamNodeLike | null | undefined>,
+  options?: {
+    /**
+     * false = script 上游不贡献分镜文字。生成节点（MediaNode）必须传 false：
+     * 铺出的镜头节点自带完整 finalPrompt，若再把整份分镜表倾倒进 basePrompt，
+     * 每次单镜重生都会被全剧文本稀释（2026-08-20 review #12）。音频节点保留
+     * 默认 true——script→audio 的对白文字是设计行为。
+     */
+    includeScriptShots?: boolean
+  },
 ): string {
+  const includeScriptShots = options?.includeScriptShots ?? true
   const out: string[] = []
   for (const n of upstream) {
     if (!n || (n.type !== 'text' && n.type !== 'script')) continue
+    if (n.type === 'script' && !includeScriptShots) continue
     const data = n.data as { prompt?: unknown; shots?: unknown } | null | undefined
     if (n.type === 'script' && Array.isArray(data?.shots) && data.shots.length > 0) {
       const shotText = data.shots

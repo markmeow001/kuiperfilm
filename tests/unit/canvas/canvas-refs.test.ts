@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { pickUpstreamFrameUrls, pickUpstreamReferenceUrls, resolveFirstLastFrames } from '@/app/[locale]/canvas/lib/canvas-refs'
+import { pickUpstreamFrameUrls, pickUpstreamReferenceUrls, pickUpstreamText, resolveFirstLastFrames } from '@/app/[locale]/canvas/lib/canvas-refs'
 
 describe('pickUpstreamReferenceUrls', () => {
   it('picks resultUrls from image and character nodes in order', () => {
@@ -175,3 +175,22 @@ describe('resolveFirstLastFrames — 首尾帧来源选择链（连线顺序语�
   })
 })
 
+
+describe('pickUpstreamText — script 分镜倾倒开关 (2026-08-20 review #12)', () => {
+  const upstream = [
+    { type: 'text', data: { prompt: '补充画面细节' } },
+    { type: 'script', data: { shots: [{ description: '镜1描述', dialogue: '对白1' }, { description: '镜2描述' }] } },
+  ]
+
+  it('[默认] -> [script 分镜文字照旧贡献（音频节点的对白来源）]', () => {
+    const text = pickUpstreamText(upstream)
+    expect(text).toContain('补充画面细节')
+    expect(text).toContain('镜1描述')
+  })
+
+  it('[includeScriptShots:false] -> [text 节点保留，script 全剧倾倒被排除（MediaNode 用）]', () => {
+    const text = pickUpstreamText(upstream, { includeScriptShots: false })
+    expect(text).toBe('补充画面细节')
+    expect(text).not.toContain('镜1描述')
+  })
+})

@@ -137,7 +137,8 @@ export function makeMediaNode(outputType: 'image' | 'video') {
     )
     const upstreamFrames = useMemo(() => pickUpstreamFrameUrls(upstream), [upstream])
     // Upstream 文本/脚本 nodes drive this shot's prompt (script → 分镜 chain).
-    const upstreamText = useMemo(() => pickUpstreamText(upstream), [upstream])
+    // script 上游不贡献文字（铺出的镜头节点自带 finalPrompt，倾倒全剧文本会稀释重生输入）。
+    const upstreamText = useMemo(() => pickUpstreamText(upstream, { includeScriptShots: false }), [upstream])
     // Own input anchor (e.g. a 导演台 blocking screenshot) leads the reference
     // list — for video it's the i2v first frame; combined with upstream cast
     // refs (appearance), both blocking AND identity carry into this frame.

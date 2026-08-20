@@ -149,6 +149,25 @@ export function upstreamCharacterCast(
   return cast
 }
 
+/**
+ * 资产改名时同步每个镜头的 entities：旧名换新名（去重）。不同步的话，
+ * shotReferenceKeys 会静默查不到旧名 → 该镜批量生成时无声丢参考图。
+ */
+export function renameAssetInShots(
+  shots: readonly CanvasStoryboardShot[],
+  oldName: string,
+  newName: string,
+): CanvasStoryboardShot[] {
+  const from = oldName.trim()
+  const to = newName.trim()
+  if (!from || from === to) return [...shots]
+  return shots.map((shot) => {
+    if (!shot.entities?.includes(from)) return shot
+    const next = shot.entities.map((name) => (name === from ? to : name))
+    return { ...shot, entities: [...new Set(next.filter(Boolean))] }
+  })
+}
+
 export function newScriptAssetId(): string {
   return `asset_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
 }

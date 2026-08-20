@@ -142,8 +142,11 @@ function AssetCard({
   const upload = useUploadPlaygroundReference()
   const inputRef = useRef<HTMLInputElement | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // runId 要等 submitNode 往返完成才落地——本地 pending 在第一个 await 前
+  // 同步置位，双击不会提交两个计费 run（review #3）。
+  const [submitting, setSubmitting] = useState(false)
   const run = gen.runById(asset.runId)
-  const generating = Boolean(asset.runId) && run?.status !== 'failed'
+  const generating = submitting || (Boolean(asset.runId) && run?.status !== 'failed')
 
   async function handlePick(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -169,6 +172,7 @@ function AssetCard({
       return
     }
     setError(null)
+    setSubmitting(true)
     try {
       const runId = await gen.submitNode({
         prompt: assetImagePrompt(asset, globalStyle),
@@ -179,6 +183,8 @@ function AssetCard({
       onEdit({ runId })
     } catch (err) {
       setError((err as Error)?.message ?? '提交失败')
+    } finally {
+      setSubmitting(false)
     }
   }
 

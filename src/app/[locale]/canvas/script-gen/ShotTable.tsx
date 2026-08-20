@@ -69,6 +69,19 @@ export function ShotTable({
     })
   }
 
+  // expanded/editing 以行 index 记录；删除/移动会让 index 指到别的镜头，
+  // 展开抽屉与编辑框跟错行（review #11）——结构性变更时直接清空。
+  const handleDeleteShot = (i: number) => {
+    setExpanded(new Set())
+    setEditing(null)
+    onDeleteShot(i)
+  }
+  const handleMoveShot = (i: number, dir: -1 | 1) => {
+    setExpanded(new Set())
+    setEditing(null)
+    onMoveShot(i, dir)
+  }
+
   const th = 'px-3 py-2.5 text-left text-[12px] font-normal whitespace-nowrap'
   const td = 'px-3 py-2 align-top text-[12px] leading-relaxed'
 
@@ -108,8 +121,8 @@ export function ShotTable({
                 onStopEdit={() => setEditing(null)}
                 onToggleExpanded={() => toggleExpanded(i)}
                 onEditShot={onEditShot}
-                onDeleteShot={onDeleteShot}
-                onMoveShot={onMoveShot}
+                onDeleteShot={handleDeleteShot}
+                onMoveShot={handleMoveShot}
                 td={td}
               />
             ))}
@@ -161,7 +174,9 @@ function ShotRow({
   onMoveShot: ShotTableProps['onMoveShot']
   td: string
 }) {
-  const [menuOpen, setMenuOpen] = useState(false)
+  // fixed 定位（视口坐标）：菜单锚在 overflow-auto 表格容器内的 td 里，
+  // absolute 会被容器裁切——底部行的「删除镜头」看不到（review #10）。
+  const [menuAt, setMenuAt] = useState<{ x: number; y: number } | null>(null)
   const rowBorder = { borderTop: `1px solid ${CANVAS_TOKENS.hairline}` }
 
   // 高亮只读视图 ⇄ 点击编辑（画面描述与对白共用；对白里的说话人名字因为
@@ -205,6 +220,12 @@ function ShotRow({
               max={15}
               value={shot.durationSec ?? 5}
               onChange={(e) => onEditShot(index, { durationSec: Number(e.target.value) || 5 })}
+              onBlur={(e) => {
+                // 表格秒数 = 实际生成/计费秒数：手动输入也钉死 5–15 整数
+                // （HTML min/max 不拦打字输入，review #6）。
+                const clamped = Math.min(15, Math.max(5, Math.round(Number(e.target.value) || 5)))
+                if (clamped !== shot.durationSec) onEditShot(index, { durationSec: clamped })
+              }}
               className="w-9 text-center outline-none"
               style={cellInputStyle}
             />
@@ -255,22 +276,28 @@ function ShotRow({
             </span>
           )}
         </td>
-        <td className={`${td} relative`}>
+        <td className={td}>
           <button
             type="button"
             aria-label="镜头操作"
-            onClick={() => setMenuOpen((v) => !v)}
+            onClick={(e) => {
+              if (menuAt) { setMenuAt(null); return }
+              const rect = e.currentTarget.getBoundingClientRect()
+              // 底部行向上展开，避免超出视口
+              const openUp = rect.bottom > window.innerHeight - 220
+              setMenuAt({ x: Math.max(8, rect.right - 144), y: openUp ? rect.top - 178 : rect.bottom + 4 })
+            }}
             className="rounded px-2 py-0.5 tracking-widest"
             style={{ color: CANVAS_TOKENS.text.muted }}
           >
             …
           </button>
-          {menuOpen ? (
+          {menuAt ? (
             <>
-              <button type="button" aria-label="关闭菜单" className="fixed inset-0 z-10 cursor-default" onClick={() => setMenuOpen(false)} />
+              <button type="button" aria-label="关闭菜单" className="fixed inset-0 z-10 cursor-default" onClick={() => setMenuAt(null)} />
               <div
-                className="absolute right-2 top-8 z-20 w-36 overflow-hidden rounded-lg py-1"
-                style={{ background: CANVAS_TOKENS.bg.popover, border: `1px solid ${CANVAS_TOKENS.hairline}`, boxShadow: CANVAS_TOKENS.shadowPopover }}
+                className="fixed z-20 w-36 overflow-hidden rounded-lg py-1"
+                style={{ left: menuAt.x, top: menuAt.y, background: CANVAS_TOKENS.bg.popover, border: `1px solid ${CANVAS_TOKENS.hairline}`, boxShadow: CANVAS_TOKENS.shadowPopover }}
               >
                 {[
                   { label: expanded ? '收起详情' : '镜头详情', disabled: false, danger: false, run: onToggleExpanded },
@@ -282,7 +309,7 @@ function ShotRow({
                     key={item.label}
                     type="button"
                     disabled={item.disabled}
-                    onClick={() => { setMenuOpen(false); item.run() }}
+                    onClick={() => { setMenuAt(null); item.run() }}
                     className="block w-full px-3 py-1.5 text-left text-[12px] hover:bg-white/5 disabled:opacity-30"
                     style={{ color: item.danger ? '#FF8A8A' : CANVAS_TOKENS.text.primary }}
                   >

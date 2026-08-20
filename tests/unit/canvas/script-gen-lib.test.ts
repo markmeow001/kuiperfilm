@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   assetImagePrompt,
+  renameAssetInShots,
   upstreamCharacterCast,
   scriptGenProgress,
   shotEditInvalidatesPrompt,
@@ -126,5 +127,31 @@ describe('upstreamCharacterCast — 入口二卡司', () => {
       { type: 'scene', data: { title: '牧场客厅' } },
       null,
     ])).toEqual([{ name: 'Hayes' }, { name: 'Maeve' }])
+  })
+})
+
+describe('renameAssetInShots — 资产改名同步出场实体', () => {
+  const shots = [
+    shot({ entities: ['皇帝', '金銮殿'], finalPrompt: 'p1' }),
+    shot({ shotNumber: 2, entities: ['大臣'] }),
+    shot({ shotNumber: 3 }),
+  ]
+
+  it('[改名] -> [命中的镜头换新名，其余镜头对象不变]', () => {
+    const next = renameAssetInShots(shots, '皇帝', '盛唐皇帝')
+    expect(next[0].entities).toEqual(['盛唐皇帝', '金銮殿'])
+    expect(next[0].finalPrompt).toBe('p1')
+    expect(next[1]).toBe(shots[1])
+    expect(next[2]).toBe(shots[2])
+  })
+
+  it('[新名与既有实体重名] -> [去重不产生两个同名]', () => {
+    const next = renameAssetInShots(shots, '皇帝', '金銮殿')
+    expect(next[0].entities).toEqual(['金銮殿'])
+  })
+
+  it('[空名/同名] -> [原样返回]', () => {
+    expect(renameAssetInShots(shots, '', 'x')[0].entities).toEqual(['皇帝', '金銮殿'])
+    expect(renameAssetInShots(shots, '皇帝', '皇帝')[0].entities).toEqual(['皇帝', '金銮殿'])
   })
 })

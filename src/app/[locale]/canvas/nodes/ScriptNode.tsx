@@ -26,6 +26,7 @@ import { buildStoryboardBlockingBrief } from '../lib/storyboard-director-handoff
 import { ScriptGeneratorStage, type ScriptGenStep } from '../script-gen/ScriptGeneratorStage'
 import {
   newScriptAssetId,
+  renameAssetInShots,
   scriptGenProgress,
   shotEditInvalidatesPrompt,
   shotReferenceKeys,
@@ -148,10 +149,16 @@ export function ScriptNode({ id, data, selected }: NodeProps) {
         pollRef.current = setTimeout(tick, 1500)
       } catch (err) {
         if (cancelled) return
-        setError((err as Error)?.message ?? '分镜生成失败')
-        setPhase('failed')
+        // 暂时性轮询错误（502 抖动/网络切换）不得终结分钟级付费任务：taskId
+        // 留在 data 里带退避重试；只有 status:'failed' 才清（TextNode 同款，
+        // 2026-08-20 review #4）。
+        transientFails += 1
+        if (transientFails >= 5) setError('任务查询多次失败，仍在重试…')
+        pollRef.current = setTimeout(tick, Math.min(1500 * transientFails, 10_000))
+        void err
       }
     }
+    let transientFails = 0
     tick()
     return () => { cancelled = true; stopPoll() }
   }, [d.storyboardTaskId, d.scriptAssets, id, updateNodeData, stopPoll])
@@ -196,15 +203,29 @@ export function ScriptNode({ id, data, selected }: NodeProps) {
         setTimeout(tick, 1500)
       } catch (err) {
         if (cancelled) return
-        setSynthError((err as Error)?.message ?? '提示词合成失败')
+        // 同拆分镜轮询：暂时性错误退避重试，绝不让付费合成结果无人认领。
+        transientFails += 1
+        if (transientFails >= 5) setSynthError('任务查询多次失败，仍在重试…')
+        setTimeout(tick, Math.min(1500 * transientFails, 10_000))
+        void err
       }
     }
+    let transientFails = 0
     tick()
     return () => { cancelled = true }
   }, [d.promptsTaskId, d.promptsSig, d.shots, id, updateNodeData])
 
   // ── 资产设定图 run → durable key（use-as-reference，与 ReferenceNode 同路） ──
   const ingestingRef = useRef<Set<string>>(new Set())
+  const ingestAttemptsRef = useRef<Map<string, number>>(new Map())
+  // 所有写回一律经 getNode(id) 取 fresh data：同一个 effect pass 里两个 run
+  // 同时终结时，闭包 snapshot 会互相复活对方刚清掉的 runId（review #5）。
+  const patchAssetByRunId = useCallback((runId: string, patch: Partial<CanvasScriptAsset>) => {
+    const latest = ((getNode(id)?.data as CanvasNodeData | undefined)?.scriptAssets ?? [])
+    updateNodeData(id, {
+      scriptAssets: latest.map((a) => (a.runId === runId ? { ...a, ...patch } : a)),
+    })
+  }, [getNode, id, updateNodeData])
   useEffect(() => {
     for (const asset of assets) {
       if (!asset.runId || ingestingRef.current.has(asset.runId)) continue
@@ -212,16 +233,14 @@ export function ScriptNode({ id, data, selected }: NodeProps) {
       if (!run) continue
       if (run.status === 'failed') {
         ingestingRef.current.add(asset.runId)
-        const failedRunId = asset.runId
-        updateNodeData(id, {
-          scriptAssets: (d.scriptAssets ?? []).map((a) => (a.runId === failedRunId ? { ...a, runId: null } : a)),
-        })
+        patchAssetByRunId(asset.runId, { runId: null })
         setError(`资产「${asset.name}」生成失败${run.errorMessage ? `：${run.errorMessage}` : ''}`)
         continue
       }
       if (run.status !== 'succeeded') continue
       ingestingRef.current.add(asset.runId)
       const runId = asset.runId
+      const assetName = asset.name
       void (async () => {
         try {
           const res = await fetch('/api/canvas/use-as-reference', {
@@ -231,18 +250,24 @@ export function ScriptNode({ id, data, selected }: NodeProps) {
           })
           if (!res.ok) throw new Error('设定图导入失败')
           const { key, url } = (await res.json()) as { key: string; url: string }
-          const node = getNode(id)
-          const latest = ((node?.data as CanvasNodeData | undefined)?.scriptAssets ?? [])
-          updateNodeData(id, {
-            scriptAssets: latest.map((a) => (a.runId === runId ? { ...a, imageKey: key, imageUrl: url, runId: null } : a)),
-          })
+          patchAssetByRunId(runId, { imageKey: key, imageUrl: url, runId: null })
         } catch (err) {
-          ingestingRef.current.delete(runId)
-          setError((err as Error)?.message ?? '设定图导入失败')
+          // 有界重试：gen 轮询每 1–2s 触发本 effect，无界重放会打爆
+          // use-as-reference。3 次仍失败 → 显式清 runId 让卡片回到可上传/
+          // 可重生状态（fail-closed，可见），而不是永远卡「生成中…」。
+          const attempts = (ingestAttemptsRef.current.get(runId) ?? 0) + 1
+          ingestAttemptsRef.current.set(runId, attempts)
+          if (attempts >= 3) {
+            patchAssetByRunId(runId, { runId: null })
+            setError(`资产「${assetName}」设定图导入失败（已重试 ${attempts} 次）——图已生成完，请点「AI 生成」重试或改用上传`)
+          } else {
+            ingestingRef.current.delete(runId)
+            setError((err as Error)?.message ?? '设定图导入失败')
+          }
         }
       })()
     }
-  }, [assets, gen, d.scriptAssets, id, updateNodeData, getNode])
+  }, [assets, gen, patchAssetByRunId])
 
   // ── mutators（一律新数组；改会影响合成输入的字段 → 该镜合成结果作废） ──
   const setShots = useCallback((next: CanvasStoryboardShot[]) => updateNodeData(id, { shots: next }), [id, updateNodeData])
@@ -268,8 +293,13 @@ export function ScriptNode({ id, data, selected }: NodeProps) {
 
   const setAssets = useCallback((next: CanvasScriptAsset[]) => updateNodeData(id, { scriptAssets: next }), [id, updateNodeData])
   const editAsset = useCallback((assetId: string, patch: Partial<CanvasScriptAsset>) => {
+    const prev = assets.find((a) => a.id === assetId)
     setAssets(assets.map((a) => (a.id === assetId ? { ...a, ...patch } : a)))
-  }, [assets, setAssets])
+    // 改名同步每镜 entities：不同步会让 shotReferenceKeys 静默丢参考图。
+    if (prev && typeof patch.name === 'string' && patch.name.trim() && patch.name.trim() !== prev.name) {
+      setShots(renameAssetInShots(shots, prev.name, patch.name))
+    }
+  }, [assets, setAssets, shots, setShots])
   const addAsset = useCallback((asset: CanvasScriptAsset) => setAssets([...assets, asset]), [assets, setAssets])
   const deleteAsset = useCallback((assetId: string) => setAssets(assets.filter((a) => a.id !== assetId)), [assets, setAssets])
   const setGlobalStyle = useCallback((value: string) => updateNodeData(id, { globalStyle: value || null }), [id, updateNodeData])
@@ -313,9 +343,13 @@ export function ScriptNode({ id, data, selected }: NodeProps) {
   }
 
   // ── 一键合成全部提示词 ──
+  // promptsTaskId 要等 POST 往返完成才落地；submitLockRef 在第一个 await 前
+  // 同步上锁，双击不会提交两个计费任务（review #2）。
+  const synthSubmitLockRef = useRef(false)
   const synthesizing = Boolean(d.promptsTaskId)
   async function handleSynthesizeAll() {
-    if (synthesizing || shots.length === 0) return
+    if (synthesizing || shots.length === 0 || synthSubmitLockRef.current) return
+    synthSubmitLockRef.current = true
     setSynthError(null)
     try {
       const payloadShots = shots.map(({ finalPrompt: _fp, entities: _e, ...rest }) => rest)
@@ -332,6 +366,8 @@ export function ScriptNode({ id, data, selected }: NodeProps) {
       updateNodeData(id, { promptsTaskId: json.taskId, promptsSig: promptsSignature(shots) })
     } catch (err) {
       setSynthError((err as Error)?.message ?? '提交失败')
+    } finally {
+      synthSubmitLockRef.current = false
     }
   }
 
