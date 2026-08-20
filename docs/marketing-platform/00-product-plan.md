@@ -1,187 +1,141 @@
-# KuiperAI 行銷平台 — 產品與技術規劃書(提案)
+# AI 行銷員工(暫名 LocalPulse)— 產品與技術規劃書 v2
 
-> **文件狀態:提案(Proposal),尚未拍板。**
-> 依 `AUTONOMY_PROTOCOL.md`,本文所有 schema 變更與新 Phase 皆屬架構決策,需人類確認後才動工。
-> 本文不屬於 `docs/ai-runtime/` 重構文件集;商業層開發必須架在 ai-runtime 統一重構完成的路徑之上,不得旁路。
+> **文件狀態:提案(v2),待人類拍板。**
+> v2 為完全重寫:v1 的「AI 行銷影片平台」方向已於 2026-08-20 由產品負責人裁定作廢——**新產品不含任何影片生成功能**。本文件為新方向的 single source of truth 草案;不修改、不影響 `docs/AI_RUNTIME_UNIFICATION_EXECUTION_MASTER_PLAN.md` 的任何內容與排程。
 
-日期:2026-08-20
-撰寫:Claude(基於 codebase 盤點 + 市場痛點網路研究)
+---
+
+## 0. 版本沿革
+
+| 版本 | 日期 | 內容 |
+|---|---|---|
+| v1 | 2026-08-20 | AI 行銷影片平台(短劇帶貨),北美市場 — **作廢** |
+| v2 | 2026-08-20 | AI 行銷員工:趨勢雷達 + 聲譽管理 + 週報執行閉環,加拿大中小企業(華人商家優先) |
+
+作廢理由:產品負責人決定完全脫離影片生成賽道,改做直接解決「商業行銷痛點」的營運型工具。
 
 ---
 
 ## 1. 一句話定位
 
-**「品牌一致的行銷內容工廠」** — 從劇本/商品資訊一路到可投放的短影音成品,一個訂閱取代四個工具,計費透明、失敗退點、成效可歸因。
+**"Your $99/month marketing employee — it reads, thinks, and does."**
 
-**目標市場:北美(US / Canada)。** 產品介面、模板、定價、合規全部以北美為第一優先。
+給沒有行銷人員的加拿大中小企業一個 AI 行銷員工:每週替老闆看數據、讀趨勢、給三個建議,老闆按一下核准,它就把事做完。
 
-- **B2B**(主力營收):DTC 品牌、Shopify / Amazon 賣家、行銷代理商 — 團隊方案 + API。
-- **B2C**(漏斗上層):北美自媒體創作者、小微電商 — 點數制 + 場景模板。
+- **目標市場**:加拿大(第一優先:多倫多/溫哥華的**華人商家**——餐廳、美容、診所、留學移民服務、零售;第二階段擴及全體加拿大 local SMB)。
+- **不做的事**:不做影片生成、不做通用內容工具、不做廣告投放代操。
 
-## 2. 市場痛點 → 產品支柱對照
+## 2. 痛點依據(研究總結)
 
-(痛點來源:2026 年 Atlantic Re:think/Contentful 425 位行銷決策者調查、HubSpot State of GenAI、Adobe 社群抱怨、台灣行銷人雜誌短影音系列報導、訂閱疲勞統計。詳見研究紀錄。)
-
-| # | 市場痛點 | 數據佐證 | 我們的產品支柱 | 現有基礎 |
-|---|---|---|---|---|
-| P1 | 內容同質化、沒有品牌記憶點,被平台演算法判為無效內容 | 53% 行銷人難以突圍;「內容太薄太通用」是抱怨第一名 | **品牌資產庫**:角色/風格/聲音/色彩鎖定,跨素材一致 | `GlobalCharacter`、`VisualStyle`、`VoicePreset`、style-library |
-| P2 | 生成失敗照扣點、計費黑箱、退款難 | Adobe Firefly 等社群大量抱怨 | **透明計費**:生成前成本預估、失敗自動退點、修改折扣 | `BalanceFreeze`(預扣/釋放)、`model-pricing` catalog |
-| P3 | 工具太碎(人均 4–7 個 AI 訂閱、月花 $100–200)、整合疲勞 | 50% 團隊同時用 6–10 個工具;40% SaaS 買了閒置 | **一條龍工作流**:劇本→分鏡→影片→配音→多平台輸出,單一訂閱 | run-runtime pipeline、BullMQ workers、Remotion |
-| P4 | ROI 證明不了(僅 41% 能證明,且逐年下滑) | 數據碎片化、管理層要看業務成果 | **成效歸因報表**(B2B):素材→投放→轉換追蹤 | `UsageCost`、billing/reporting(需大幅擴充) |
-| P5 | 學習曲線高、導入爛尾 | 89% 團隊自認有 AI 技能缺口 | **場景模板庫**:產業別 × 平台別開箱即用,不給空白 prompt 框 | prompt 模板系統、`Skill`/`SkillInstallation` |
-
-**反面訊號(定位紅線)**:單純「AI 生圖生影片」是紅海且口碑下滑。「更好的模型」不可防禦;差異化只能建立在 P1–P5 的平台能力上。
-
-## 3. 產品範圍(三階段)
-
-### 階段 A — 垂直深化:「AI 行銷影片工作室」(建議起點)
-把現有短劇/影片能力包裝成行銷產品:
-- 短影音廣告、商品宣傳片、社群短劇(帶貨劇情)。
-- 新增:行銷場景 prompt 模板(電商/餐飲/美妝/教育 × TikTok/Reels/Shorts)、多尺寸輸出(9:16 / 1:1 / 16:9)、品牌 kit(logo、色碼、字體、slogan 掛到 Workspace)。
-- **不需要**新基礎設施,主要是模板 + 前台包裝 + 商業層。
-
-### 階段 B — 橫向擴充:「行銷內容套件」
-同一 runtime 上加輕量能力,每個 = 一個 worker handler + prompt 模板:
-- 廣告文案/社群貼文/EDM 生成(純文字,便宜、高頻,拉 DAU)。
-- 商品圖/banner 生成與改圖。
-- 素材多版本 A/B 變體(同腳本 × 不同 hook/開場)。
-
-### 階段 C — 開放市集(遠期,先不動工)
-以 `Skill`/`SkillInstallation` 機制讓第三方上架行銷 AI 工具,平台抽成。前提:階段 A/B 已有付費用戶基數。
-
-## 4. 定價模型草案
-
-**混合制:訂閱(含月配點數)+ 加購點數包。** 這是 AI 影音類的市場慣例,但我們用三個差異化承諾打 P2 痛點:
-
-1. **失敗不扣點**:任務終態為 failed → `BalanceFreeze` 全額釋放(機制已存在,寫進產品承諾)。
-2. **生成前報價**:提交任務前顯示預估點數(pricing catalog 已可支撐)。
-3. **修改折扣**:同一 run 的重生成(regenerate)按折扣計費,而非全額重扣。
-
-### 方案表(草案,金額待市場驗證)
-
-| 方案 | 對象 | 月費(USD) | 含點數 | 關鍵功能 |
-|---|---|---|---|---|
-| Free | 試用 | 0 | 少量一次性 | 浮水印輸出、公開模板 |
-| Creator | 個人創作者 | ~19 | 中 | 去浮水印、全模板、1 個品牌 kit |
-| Pro | 小微電商/自由行銷人 | ~49 | 高 | 多品牌 kit、A/B 變體、優先佇列 |
-| Team | 品牌團隊/代理商 | ~199 起/席次計 | 團隊池 | Workspace 協作、審批流、成效報表 |
-| Enterprise / API | 中大型企業 | 議價 | 用量計費 | API key、SLA、專屬模型配置、SSO |
-
-- 點數消耗沿用 `model-pricing` catalog 的成本 + 目標毛利率(建議 60–70%,影片類毛利低於文字類,需分開定價)。
-- Team/Enterprise 是營收主力;Free/Creator 是獲客漏斗。
-- **收單:Stripe-only,定案**(目標市場為北美,無華語收單需求)。用 Stripe Checkout + Billing(訂閱續扣)+ Stripe Tax(美國各州銷售稅),計價一律 USD。
-
-### 4.1 北美市場的特定調整
-
-| 面向 | 調整 |
-|---|---|
-| **語言** | 產品 UI 與模板 **English-first**。prompt 雙語 guard 保留(`.en.txt` 為主版本,`.zh.txt` 同步),前台以 en 為預設 locale |
-| **場景模板** | 以北美平台與情境為準:TikTok / Reels / Shorts 廣告、Amazon 商品影片、UGC 風格帶貨(spokesperson/testimonial)、DTC 品牌故事 |
-| **合規** | FTC 背書與廣告揭露規則(含 AI 生成內容揭露)、州隱私法(CCPA/CPRA 等)、肖像權;Enterprise 銷售遲早需要 SOC 2,列入遠期 |
-| **基礎設施** | 北美用戶的儲存/CDN 應走 **R2 + 美區**(`STORAGE_TYPE=r2` 已支援),不應依賴 Tencent COS/VOD 服務北美流量——延遲與企業客戶的資料落地觀感都是問題,需盤點 VOD 依賴的替代方案 |
-| **競品** | 北美同賽道已有 Arcads、Creatify、AdCreative.ai、HeyGen、Captions 等(以 UGC 廣告/虛擬人像為主)。我們的差異化:**劇情式短劇帶貨 + 品牌資產一致性 + 透明計費**,不打「更好的 avatar」。競品定價與功能需另做一輪驗證 |
-
-## 5. 技術盤點
-
-### 5.1 直接重用(已存在,不動)
-
-| 能力 | 位置 |
-|---|---|
-| 點數帳本:餘額/預扣/流水/冪等 | `UserBalance`、`BalanceFreeze`、`BalanceTransaction` + `src/lib/billing/`(ledger/cost/money/reporting) |
-| 多租戶 | `Organization`、`Workspace`、`WorkspaceMember`、`ProjectCollaborator`、`AuditLog`、`InviteCode` |
-| API 產品化 | `ApiKey`、`ApiKeyUsage` + `src/lib/api-keys/` |
-| AI 執行引擎 | run-runtime(GraphRun/GraphStep/GraphEvent)+ BullMQ workers + `src/lib/ai-runtime/` |
-| 模型定價/能力目錄 | `src/lib/model-pricing/`、`model-capabilities` |
-| 品牌資產雛形 | `GlobalCharacter`、`GlobalVoice`、`VisualStyle`、`LightingPreset`、style-library |
-| 市集雛形 | `Skill`、`SkillInstallation` |
-
-### 5.2 需新增(全部待拍板)
-
-| 模組 | 說明 | 工程量 |
+| # | 痛點(有數據支撐) | 我們的解法 |
 |---|---|---|
-| **金流收單** | Stripe Checkout + Billing + Tax + webhook → 入點/開訂閱。目前 codebase **完全沒有**收單整合 | 中 |
-| **訂閱/方案 schema** | `Plan`、`Subscription`、`PaymentOrder`、`QuotaGrant`(月配點數的發放/過期/重置) | 中 |
-| **品牌 kit** | Workspace 層級的 logo/色碼/字體/語調設定,注入所有生成任務 | 小–中 |
-| **行銷模板庫** | 產業 × 平台 prompt 模板(遵守 `.zh.txt`/`.en.txt` 雙語同步 guard) | 小(內容工作為主) |
-| **多尺寸輸出** | Remotion 輸出 9:16/1:1/16:9 變體 | 小–中 |
-| **成效歸因報表** | 素材 UTM/匯出 → 投放平台數據回流(先手動 CSV,後 API) | 大(Phase M3 才做) |
-| **對外配額/限流** | API 與 Free 方案的 rate limiting | 小 |
+| 1 | 50% 的 SMB 沒有任何行銷人員;老闆自己當行銷部 | 產品定位就是「員工」而非「工具」:主動做事,不是等人來用 |
+| 2 | 只有 41% 團隊能證明行銷 ROI;數據碎在各平台 | 每週人話週報(敘事,不是 dashboard) |
+| 3 | 平均訂 4–7 個工具、40% 買了沒用(訂閱疲勞) | 一個訂閱取代趨勢監測 + 評論管理 + 內容草稿多個工具 |
+| 4 | 在地生意命脈是 Google 評論與本地搜尋;Podium 實付 $450–600/月、Birdeye $299–449/月/店,小店買不起;便宜替代品($39–75/月)全是單功能 | **$79–149/月**、會思考也會執行的完整閉環 → 定價真空帶 |
+| 5 | 華人商家客源在小紅書,主流工具零覆蓋;中國數據工具(千瓜/新紅)不懂加拿大 | 小紅書 × IG × Threads 三平台趨勢雷達,中英法三語 → 核心護城河 |
 
-### 5.3 Schema 草案(示意,待拍板後細化)
+## 3. 產品核心:四步閉環
 
-```prisma
-model Plan {           // 方案定義(Free/Creator/Pro/Team/Enterprise)
-  id            String  @id
-  key           String  @unique   // "creator" | "pro" | ...
-  monthlyCredits Decimal
-  priceUsd      Decimal
-  features      String  @db.Text  // JSON feature flags
-  active        Boolean @default(true)
-}
-
-model Subscription {   // 使用者/組織 × 方案
-  id                String   @id @default(uuid())
-  ownerType         String   // "user" | "organization"
-  ownerId           String
-  planKey           String
-  status            String   // active | past_due | canceled
-  currentPeriodEnd  DateTime
-  externalRef       String?  // Stripe subscription id
-}
-
-model PaymentOrder {   // 收單訂單(訂閱首購/續扣/點數包)
-  id             String   @id @default(uuid())
-  userId         String
-  kind           String   // "subscription" | "credit_pack"
-  amountUsd      Decimal
-  creditsGranted Decimal?
-  status         String   // pending | paid | failed | refunded
-  provider       String   // "stripe"
-  externalRef    String?  @unique
-  idempotencyKey String?  @unique
-}
-
-model QuotaGrant {     // 月配點數批次(支援過期與重置,與加購點數分離)
-  id        String   @id @default(uuid())
-  userId    String
-  source    String   // "subscription" | "purchase" | "promo"
-  amount    Decimal
-  remaining Decimal
-  expiresAt DateTime?
-}
+```
+連接帳號 → ① 看(採集) → ② 說(週報) → ③ 建議(3 Actions) → ④ 執行(一鍵核准) → 回到 ①
 ```
 
-> 設計原則:**收單(PaymentOrder)與帳本(BalanceTransaction)分離**,以 `externalOrderId` 對帳;月配點數走 `QuotaGrant` 先進先出扣抵,不污染現有 `UserBalance` 語義。細節待拍板後寫入正式設計文件。
+1. **看(Connect & Watch)**:商家一次性連接 Google Business Profile、Meta(IG)、Threads;系統持續採集自家評論/曝光/貼文成效,以及「行業 × 城市」的平台趨勢。
+2. **說(Weekly Brief)**:每週一早上一封 30 秒讀完的敘事週報:「上週 340 人在 Google 搜到你,23 人打電話;評分 4.3 → 4.5;小紅書『多倫多探店』熱度 +40%⋯」
+3. **建議(3 Actions)**:每週最多三件事,每件附理由與擬好的草稿(回評論草稿、貼文草稿、評論邀請名單)。
+4. **執行(One-click Do)**:核准即發送;永遠 human-in-the-loop,不核准不動作。可走 API 的平台直接發布;小紅書(無發布 API)提供一鍵複製完稿 + 排程提醒。
+
+### 3.1 趨勢雷達(Trend Radar)
+
+按「行業 × 城市」矩陣每日採集三平台熱搜/熱門話題,存為共享快照(同一份「溫哥華 × 餐飲」快照服務所有同類客戶,邊際成本趨近零)。LLM 負責兩件事:與商家的**相關性過濾**、**跨語言轉譯**(小紅書中文趨勢 → 英文摘要給老闆 + 中文成稿供發布)。
+
+| 平台 | 數據管道 | 可行性 |
+|---|---|---|
+| Threads | 官方 Keyword Search API(公開貼文/topic tag,2,200 查詢/24h),按互動量自建趨勢排行 | ✅ 低難度,官方支援 |
+| Instagram | Graph API Hashtag Search(每用戶 7 天 30 個 hashtag;無官方趨勢端點),配額用於每客戶利基標籤組;全局趨勢由第三方數據源補充 | ⚠️ 中難度,配額緊 |
+| 小紅書 | 無官方 API。接第三方數據平台(千瓜/新紅/灰豚:熱搜詞排行、話題榜、垂類榜單),以商業授權接入,**不自行爬取** | ⚠️ 中高難度 = 護城河;授權成本待詢價 |
+
+### 3.2 聲譽管理(Reputation)
+
+- GBP 評論同步、AI 回覆草稿(EN/FR/ZH,依評論語言)、回覆率追蹤(影響本地排名)。
+- **CASL 合規的評論邀請**(email/SMS):同意紀錄、退訂管理、發送時窗——把合規做成賣點("CASL-compliant by default")。
+
+### 3.3 執行項(Action Engine 首發清單)
+
+回覆 Google 評論/發布 GBP 貼文/發布 IG、Threads 貼文/發送評論邀請/小紅書筆記成稿(複製 + 提醒)。
+
+## 4. 定價草案(CAD 計價,Stripe-only)
+
+| 方案 | 價格(CAD/月) | 內容 |
+|---|---|---|
+| Starter | $79 | 1 店、週報 + 3 Actions、GBP 評論管理、趨勢雷達(IG + Threads) |
+| Pro | $129 | + 小紅書趨勢與成稿、CASL 評論邀請、三語內容 |
+| Multi / Agency | $249 起 | 多店/代理商多客戶工作區、白標週報 |
+
+- 目標客群月行銷總預算 < $1,000 → 定價落在 8–15% 佔比,遠低於 Podium 實付價的 1/4。
+- Stripe Checkout + Billing + Tax(GST/HST/QST);**CAD 為主幣別**(v1 的 USD 假設隨影片版作廢)。
+- AI 用量走內部點數帳本護欄(防濫用),但對用戶呈現為「方案內含」,不賣點數——SMB 討厭點數制(研究痛點之一)。
+
+## 5. 技術架構
+
+### 5.1 可直接重用(內容中立的平台骨架)
+
+| 模組 | 用途 |
+|---|---|
+| `src/lib/billing/`(UserBalance/Freeze/Transaction) | 訂閱 + 內部用量護欄 |
+| Organization / Workspace / WorkspaceMember / AuditLog | 多店家、代理商多客戶 |
+| BullMQ workers + run-runtime | 每日趨勢採集 cron、週報批次生成、發送任務 |
+| `src/lib/ai-runtime/` + model-pricing catalog | 所有 LLM 調用(週報/草稿/建議/翻譯),遵守「不直連 llm-client」鐵則 |
+| prompt i18n guard 機制 | 擴充 `.fr.txt`(法語)與中文簡繁 |
+| ApiKey 體系 | 遠期代理商 API |
+
+影片管線(Remotion / Tencent VOD / 分鏡模組)**不使用也不刪除**,與新產品無關。
+
+### 5.2 需新建
+
+| 模組 | 內容 | 工程量 |
+|---|---|---|
+| 整合層 | GBP API、Meta Graph API(IG)、Threads API、小紅書第三方數據適配器、Twilio SMS、email 發送 | 大(MVP 主體) |
+| `TrendSource` 適配器 | threads / instagram / xhs-thirdparty,同 ai-runtime provider 模式(明確指定、不猜測) | 中 |
+| 建議引擎 | 規則 + LLM 混合:從快照與商家數據產出每週 3 Actions | 中 |
+| 金流 | Stripe Checkout + Billing + Tax + webhook | 中 |
+| 週報渲染與寄送 | email 模板 + 站內 | 小 |
+
+### 5.3 Schema 草案(新增,需拍板)
+
+`Plan` / `Subscription` / `PaymentOrder`(Stripe 對帳)、`BusinessProfile`(商家檔案:行業/城市/語言)、`ChannelConnection`(OAuth 憑證,加密)、`TrendSnapshot`(平台 × 行業 × 城市 × 日期,共享)、`ReviewItem`、`ActionItem`(建議 → 核准 → 執行狀態機)、`WeeklyBrief`、`ConsentRecord`(CASL 同意/退訂)。
 
 ## 6. 分階段路線圖
 
-**前置依賴:ai-runtime 統一重構(現行 master plan)完成到商業層可依賴的程度。商業層一律走 `createRun` → worker → run-runtime,不得旁路(鐵則)。**
-
-| Phase | 內容 | 出場條件(exit criteria) |
+| 階段 | 內容 | Exit criteria |
 |---|---|---|
-| **M0 定價與方案設計** | 確定方案表、點數匯率、毛利模型;人類拍板 schema | 拍板文件簽核 |
-| **M1 商業層地基** | Plan/Subscription/PaymentOrder/QuotaGrant schema + Stripe Checkout/webhook + 配額扣抵邏輯 | `npm run test:regression` 全綠;BILLING_MODE ON/OFF 皆測 |
-| **M2 行銷產品層** | 品牌 kit、行銷模板庫(雙語)、多尺寸輸出、定價頁/onboarding、失敗退點與生成前報價的產品化呈現 | 首批內測用戶可完整走完「註冊→訂閱→生成→輸出」 |
-| **M3 B2B 深化** | Team 方案審批流、成效歸因報表 v1(UTM + CSV 回流)、API 方案(重用 ApiKey) | 首個付費 Team 客戶 |
-| **M4 擴充/市集** | 文案/圖片輕量能力、Skill 市集商業化評估 | 依 M2/M3 數據決定 |
+| **M0 驗證**(2–4 週) | 英文 landing + waitlist 測價;訪談 5–10 家 GTA/大溫華人商家;向千瓜/新紅索取 API 報價與海外授權條款;申請 GBP / Meta / Threads API 權限 | ≥1 個定價方案有付費意願證據;小紅書數據成本確認 |
+| **M1 商業基座** | Stripe 金流 + Subscription schema + 方案配額 | 能真實收錢、開通、續扣、退款 |
+| **M2 MVP** | GBP 連接 + 評論管理 + 週報 + 趨勢雷達 v1(Threads + IG 利基標籤)+ 中英雙語 + 3 Actions 閉環 | 10 家 design partner 商家每週實際核准 ≥1 個 Action |
+| **M3 護城河** | 小紅書趨勢(第三方數據)+ 小紅書成稿 + CASL 評論邀請(SMS/email)+ 法語 | 華人商家留存 ≥ 80%(月);CASL 流程過法務檢視 |
+| **M4 放大** | 代理商多客戶工作區、白標、API | 首個代理商客戶上線 |
 
-## 7. 風險與開放問題(需人類拍板)
+每階段完成標準沿用專案慣例:`npm run test:regression` 全綠 + 本文件狀態更新。
 
-1. **schema 變更**(第 5.3 節全部)— 依 AUTONOMY_PROTOCOL 必須拍板。
-2. ~~收單商選擇~~ — **已定案:Stripe-only**(北美市場)。
-3. **定價數字**:方案表金額與點數匯率需市場驗證(建議先做英文 landing page + waitlist 測價)。
-4. **品牌名**:北美市場需要英文品牌名——沿用 KuiperAI 或另立?
-5. **既有短劇用戶**:現有點數/用戶如何映射到新方案(grandfather 條款)?
-6. **合規**:FTC 廣告揭露(含 AI 生成內容)、CCPA/CPRA、肖像權、退款政策,M2 前必須有明確方案。
-7. **與 master plan 的排程關係**:M1 是否等 ai-runtime Phase 6 完成後才開工,或並行?(建議:等,避免蓋在會拆掉的路徑上。)
-8. **北美基礎設施遷移範圍**:Tencent COS/VOD 在北美流量的替代(R2 + 美區 CDN 已可切,VOD 依賴需盤點)——影響 M2 範圍。
+## 7. 風險登記
 
-## 8. 研究來源(痛點依據)
+1. **小紅書第三方數據**:授權成本未知、穩定性風險、海外 SaaS 轉售的合約條款需逐字確認 — M0 必驗。
+2. **IG 數據合規**:官方配額緊;第三方 IG 數據多踩 ToS 灰區,只選有合規背書的供應商。
+3. **平台 API 審核**:GBP / Meta / Threads 的 app review 週期可能拖 M2 時程,M0 就要送件。
+4. **「員工」的信任門檻**:自動發布錯內容會直接毀掉商家信任 → 永遠 human-in-the-loop,執行前預覽,首發清單保守。
+5. **隱私法**:PIPEDA + Quebec Loi 25(法語市場啟動前)、憑證加密存儲、資料落地(北美區,延續 R2 決策)。
 
-- Umgum — AI Marketing in 2026(Atlantic Re:think/Contentful 425 人調查)
-- HubSpot — State of Generative AI in Marketing
-- Brafton — 4 Biggest Challenges in AI Content Creation 2026
-- Adobe Community — Firefly 影片生成扣點爭議多篇
-- 行銷人雜誌(marketersgo.com)— 2026 短影音行銷系列報導
-- SQ Magazine / GoNextMarketer — AI Marketing ROI 統計
-- TechRT / Soloa — Subscription Fatigue 統計 2026
+## 8. 待拍板問題(依 AUTONOMY_PROTOCOL,以下不自行決定)
+
+1. **Schema 新增**(§5.3 全部)。
+2. **Repo 策略**:新產品放本 repo(重用 billing/org/workers)或拆新 repo?(建議:本 repo 起步,共用骨架,`src/lib/marketing/` 命名空間隔離;拆分留待 M3 後評估。)
+3. **品牌名**:暫名 LocalPulse,需定案英文品牌名。
+4. **小紅書數據供應商**與授權預算(M0 詢價後決)。
+5. **既有 KuiperAI 用戶/點數**與新產品的關係(建議:兩條產品線,互不映射)。
+6. **與 ai-runtime master plan 的排程**:M1 是否等 Phase 6 完成(建議:M0 驗證期與 Phase 6 並行,寫 code 的 M1 起等 Phase 6)。
+7. **定價數字**:$79/129/249 為草案,以 M0 waitlist 測價修正。
+
+---
+
+*研究來源(痛點數據、競品定價、平台 API 現況)彙整於 2026-08-20 會話紀錄;關鍵數字:LocaliQ 2026 SMB 報告(50% 無行銷人員、52% 預算 <$1,000)、Replifast Podium 定價分析($450–600/月實付)、Meta Threads Keyword Search API 文件(2,200 查詢/24h)、知乎千瓜/新紅/灰豚對比。*
