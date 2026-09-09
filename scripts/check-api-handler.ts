@@ -1,5 +1,8 @@
 import { logInfo as _ulogInfo, logError as _ulogError } from '@/lib/logging/core'
-import { execSync } from 'node:child_process'
+import { readdirSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
+
+const API_ROOT = 'src/app/api'
 
 const ALLOWLIST = new Set([
   'src/app/api/auth/[...nextauth]/route.ts',
@@ -7,12 +10,24 @@ const ALLOWLIST = new Set([
   'src/app/api/system/boot-id/route.ts',
 ])
 
+// Walk with fs rather than shelling out: the guard is the first step of
+// test:regression, so a missing ripgrep used to take the whole gate down
+// with a `command not found` that looked like a real violation.
+function collectRouteFiles(dir: string, found: string[] = []): string[] {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (entry.name.startsWith('.') || entry.name === 'node_modules') continue
+    const path = join(dir, entry.name)
+    if (entry.isDirectory()) {
+      collectRouteFiles(path, found)
+    } else if (entry.name === 'route.ts') {
+      found.push(path)
+    }
+  }
+  return found
+}
+
 function main() {
-  const output = execSync("rg --files src/app/api | rg 'route\\.ts$'", { encoding: 'utf8' })
-  const files = output
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean)
+  const files = collectRouteFiles(API_ROOT).sort()
 
   const missing: string[] = []
 
@@ -20,7 +35,7 @@ function main() {
     if (ALLOWLIST.has(file)) continue
     // Match the sanctioned handler family: apiHandler (session auth) and
     // publicApiHandler (API-key auth, src/lib/api-keys/public-api-handler.ts).
-    const hasApiHandler = execSync(`rg -n \"(apiHandler|publicApiHandler)\" ${JSON.stringify(file)} || true`, { encoding: 'utf8' }).trim().length > 0
+    const hasApiHandler = /apiHandler|publicApiHandler/.test(readFileSync(file, 'utf8'))
     if (!hasApiHandler) {
       missing.push(file)
     }
