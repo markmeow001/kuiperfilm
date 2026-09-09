@@ -30,11 +30,35 @@ const defaultSession: SessionPayload = {
   },
 }
 
-let state: MockAuthState = {
-  session: defaultSession,
-  projectAuthMode: 'allow',
-  role: 'member',
-  isActive: true,
+function defaultState(): MockAuthState {
+  return {
+    session: defaultSession,
+    projectAuthMode: 'allow',
+    role: 'member',
+    isActive: true,
+  }
+}
+
+// The state lives on globalThis rather than in a module-level binding because
+// callers pair this helper with `vi.resetModules()`. Resetting the registry
+// re-instantiates this module, so a module-level `let` would give the mock
+// factory and the test body two separate states: the test would call
+// `mockAuthenticated()` on one instance while the factory read the other,
+// which surfaced as intermittent 401/500s across the api suite (G-5).
+const STATE_KEY = Symbol.for('kuiper.tests.auth-mock-state')
+
+type GlobalWithAuthState = typeof globalThis & {
+  [STATE_KEY]?: MockAuthState
+}
+
+function state(): MockAuthState {
+  const globalScope = globalThis as GlobalWithAuthState
+  let current = globalScope[STATE_KEY]
+  if (!current) {
+    current = defaultState()
+    globalScope[STATE_KEY] = current
+  }
+  return current
 }
 
 function unauthorizedResponse() {
@@ -76,109 +100,116 @@ function notFoundResponse() {
   )
 }
 
-export function installAuthMocks() {
-  vi.doMock('@/lib/api-auth', () => ({
+// The single definition of the api-auth test double. Exported so a file can
+// install it from a hoisted `vi.mock('@/lib/api-auth', ...)` factory instead of
+// the runtime `vi.doMock` below — the hoisted form has no window in which the
+// module resolves to the real implementation, which is what made routes
+// intermittently reach the real `requireUserAuth` and throw
+// "`headers` was called outside a request scope" (G-5).
+export function createAuthMockModule() {
+  return {
     isErrorResponse: (value: unknown) => value instanceof NextResponse,
     requireUserAuth: async () => {
-      if (!state.session) return unauthorizedResponse()
-      return { session: state.session }
+      const current = state()
+      if (!current.session) return unauthorizedResponse()
+      return { session: current.session }
     },
     requireProjectAuth: async (projectId: string) => {
-      if (!state.session) return unauthorizedResponse()
-      if (state.projectAuthMode === 'forbidden') return forbiddenResponse()
-      if (state.projectAuthMode === 'not_found') return notFoundResponse()
+      const current = state()
+      if (!current.session) return unauthorizedResponse()
+      if (current.projectAuthMode === 'forbidden') return forbiddenResponse()
+      if (current.projectAuthMode === 'not_found') return notFoundResponse()
       return {
-        session: state.session,
-        project: { id: projectId, userId: state.session.user.id, name: 'project' },
+        session: current.session,
+        project: { id: projectId, userId: current.session.user.id, name: 'project' },
         novelData: { id: 'novel-data-id' },
       }
     },
     requireProjectAuthLight: async (projectId: string) => {
-      if (!state.session) return unauthorizedResponse()
-      if (state.projectAuthMode === 'forbidden') return forbiddenResponse()
-      if (state.projectAuthMode === 'not_found') return notFoundResponse()
+      const current = state()
+      if (!current.session) return unauthorizedResponse()
+      if (current.projectAuthMode === 'forbidden') return forbiddenResponse()
+      if (current.projectAuthMode === 'not_found') return notFoundResponse()
       return {
-        session: state.session,
-        project: { id: projectId, userId: state.session.user.id, name: 'project' },
+        session: current.session,
+        project: { id: projectId, userId: current.session.user.id, name: 'project' },
       }
     },
     requireProjectAccess: async () => {
-      if (!state.session) {
+      const current = state()
+      if (!current.session) {
         return { allowed: false, reason: 'NOT_AUTHENTICATED' as const }
       }
-      if (state.projectAuthMode === 'not_found') {
+      if (current.projectAuthMode === 'not_found') {
         return { allowed: false, reason: 'NOT_FOUND' as const }
       }
-      if (state.projectAuthMode === 'forbidden') {
+      if (current.projectAuthMode === 'forbidden') {
         return { allowed: false, reason: 'NO_ACCESS' as const }
       }
       return { allowed: true, effectiveRole: 'owner' as const }
     },
     requireAdminAuth: async () => {
-      if (!state.session) return unauthorizedResponse()
-      if (!state.isActive) return forbiddenResponse()
-      if (state.role !== 'admin') return forbiddenResponse()
-      return { session: state.session }
+      const current = state()
+      if (!current.session) return unauthorizedResponse()
+      if (!current.isActive) return forbiddenResponse()
+      if (current.role !== 'admin') return forbiddenResponse()
+      return { session: current.session }
     },
     requireEditorAuth: async () => {
-      if (!state.session) return unauthorizedResponse()
-      if (!state.isActive) return forbiddenResponse()
-      if (state.role !== 'admin' && state.role !== 'editor') {
+      const current = state()
+      if (!current.session) return unauthorizedResponse()
+      if (!current.isActive) return forbiddenResponse()
+      if (current.role !== 'admin' && current.role !== 'editor') {
         return forbiddenResponse()
       }
-      return { session: state.session, role: state.role }
+      return { session: current.session, role: current.role }
     },
     requireRoleAuth: async (allowed: Role[]) => {
-      if (!state.session) return unauthorizedResponse()
-      if (!state.isActive) return forbiddenResponse()
-      if (state.role !== 'admin' && !allowed.includes(state.role)) {
+      const current = state()
+      if (!current.session) return unauthorizedResponse()
+      if (!current.isActive) return forbiddenResponse()
+      if (current.role !== 'admin' && !allowed.includes(current.role)) {
         return forbiddenResponse()
       }
-      return { session: state.session, role: state.role }
+      return { session: current.session, role: current.role }
     },
-  }))
+  }
+}
+
+export function installAuthMocks() {
+  vi.doMock('@/lib/api-auth', () => createAuthMockModule())
 }
 
 export function mockAuthenticated(userId: string) {
-  state = {
-    ...state,
-    session: {
-      user: {
-        ...defaultSession.user,
-        id: userId,
-      },
+  state().session = {
+    user: {
+      ...defaultSession.user,
+      id: userId,
     },
   }
 }
 
 export function mockUnauthenticated() {
-  state = {
-    ...state,
-    session: null,
-  }
+  state().session = null
 }
 
 export function mockProjectAuth(mode: 'allow' | 'forbidden' | 'not_found') {
-  state = {
-    ...state,
-    projectAuthMode: mode,
-  }
+  state().projectAuthMode = mode
 }
 
 export function mockRole(role: Role) {
-  state = { ...state, role }
+  state().role = role
 }
 
 export function mockActive(isActive: boolean) {
-  state = { ...state, isActive }
+  state().isActive = isActive
 }
 
 export function resetAuthMockState() {
-  state = {
-    session: defaultSession,
-    projectAuthMode: 'allow',
-    role: 'member',
-    isActive: true,
-  }
-  vi.doUnmock('@/lib/api-auth')
+  // State only: deliberately does not unregister the module mock. Unmocking
+  // here left every caller with a window between this reset and the next
+  // `installAuthMocks()` in which `@/lib/api-auth` resolved to the real
+  // implementation, and it would tear down a hoisted `vi.mock` outright.
+  // Callers that re-install per test are unaffected; the mock is idempotent.
+  Object.assign(state(), defaultState())
 }

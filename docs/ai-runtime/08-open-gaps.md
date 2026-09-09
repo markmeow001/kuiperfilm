@@ -249,6 +249,31 @@ factory 内 `await import(helper)` 拿到全新的 helper 实例（`state` 重�
 未留下任何改动。正确修法需要一并处理 helper 的 state 生命周期，属测试基础设施重构，
 超出本轮授权范围。
 
+**🔧 已修（2026-09-10）**：按上述「正确修法」执行,分三步:
+
+1. `tests/helpers/auth.ts` 的 `state` 从模块级 `let` 迁到 `globalThis`
+   （`Symbol.for('kuiper.tests.auth-mock-state')`）。`vi.resetModules()` 之后无论
+   helper 被重新实例化几次,所有实例读写同一份 state —— 这正是上次 hoisted 尝试
+   失败的原因,拆掉这个阻碍后该修法才可行。mutator 改为原地修改共享对象。
+2. `resetAuthMockState()` 不再呼叫 `vi.doUnmock('@/lib/api-auth')`。该 unmock 让每个
+   caller 在「reset 后 / 下次 `installAuthMocks()` 前」都存在一段 `@/lib/api-auth`
+   解析到真实实作的窗口,也会直接拆掉 hoisted `vi.mock`。mock 本身幂等,重装无副作用。
+3. mock 主体抽为 `createAuthMockModule()` 单一定义,`installAuthMocks()`（runtime
+   `vi.doMock`,71 个档案沿用）与 hoisted `vi.mock` 两种风格共用它,不再有第二份定义。
+   `reference-to-character-api.test.ts` 已转为 hoisted 风格。
+
+验证:`npx tsc --noEmit` 干净;api integration 86 files / 859 tests、unit 411 files /
+3480 tests、dom 120 files / 635 tests 全绿（合计 617 files / 4974 tests）。
+
+**⚠️ 仍未最终确认**：原始 flake 只在完整 `npm run test`（`BILLING_TEST_BOOTSTRAP=1`,
+Docker 起 MySQL/Redis）中间歇出现,本轮环境无 Docker daemon,只能以 `BOOTSTRAP=0`
+跑上述套件,**无法重现原始 flake 条件**。修的是文档已定位的根因（state 生命周期 +
+unmock 窗口）,但「flake 已消失」需要在有 Docker 的环境连跑两次完整 regression 才能
+宣告。在那之前本项保持开启。
+
+**连带待办**：flake 修掉后应重新评估 voice-design route 在 `route-catalog.ts` 的分组
+（当初「移进 crud 群组会破坏套件」的推论是在带噪声证据下做的,见上文）。
+
 **对本轮的影响**：voice-design route 原本要从 `direct-submit-routes` 重新归类到 crud
 群组。观察到该变更似乎会提高失败频率，因此退回原分组（已在 `route-catalog.ts` 加注），
 关闭契约改由专用档 `tests/integration/api/voice-design-consent-boundary.test.ts`

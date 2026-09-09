@@ -1,11 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { buildMockRequest } from '../../../helpers/request'
 import {
-  installAuthMocks,
   mockAuthenticated,
   mockUnauthenticated,
   resetAuthMockState,
 } from '../../../helpers/auth'
+
+// Hoisted rather than a per-test `installAuthMocks()`: this file pairs
+// `vi.resetModules()` with importing the route inside each test, and the
+// runtime doMock/doUnmock cycle left a window where the route bound the real
+// `@/lib/api-auth` and threw "`headers` was called outside a request scope",
+// which is the G-5 flake. Shared mock state lives on globalThis, so the
+// instance this factory imports is the one the test body mutates.
+vi.mock('@/lib/api-auth', async () => {
+  const { createAuthMockModule } = await import('../../../helpers/auth')
+  return createAuthMockModule()
+})
 
 const IMMUTABLE_VOICE_LINE_KEY =
   `voice/project-a/episode-a/line-a/${'a'.repeat(32)}-${'b'.repeat(64)}.wav`
@@ -61,7 +71,6 @@ describe('api specific - reference to character route', () => {
   })
 
   it('returns unauthorized when user is not authenticated', async () => {
-    installAuthMocks()
     mockUnauthenticated()
     const mod = await import('@/app/api/asset-hub/reference-to-character/route')
     const req = buildMockRequest({
@@ -77,7 +86,6 @@ describe('api specific - reference to character route', () => {
   })
 
   it('returns invalid params when references are missing', async () => {
-    installAuthMocks()
     mockAuthenticated('user-a')
     const mod = await import('@/app/api/asset-hub/reference-to-character/route')
     const req = buildMockRequest({
@@ -100,7 +108,6 @@ describe('api specific - reference to character route', () => {
     _label,
     referenceImageUrl,
   ) => {
-    installAuthMocks()
     mockAuthenticated('user-a')
     const mod = await import('@/app/api/asset-hub/reference-to-character/route')
     const req = buildMockRequest({
@@ -117,7 +124,6 @@ describe('api specific - reference to character route', () => {
   })
 
   it('[project reference-to-character + signed task output] -> rejects before task submission', async () => {
-    installAuthMocks()
     mockAuthenticated('user-a')
     const mod = await import('@/app/api/novel-promotion/[projectId]/reference-to-character/route')
     const req = buildMockRequest({
@@ -134,7 +140,6 @@ describe('api specific - reference to character route', () => {
   })
 
   it('[safe wrapped reference] -> submits only the normalized reference fields', async () => {
-    installAuthMocks()
     mockAuthenticated('user-a')
     routeTaskMock.maybeSubmitLLMTask.mockResolvedValueOnce(new Response(
       JSON.stringify({ success: true, taskId: 'task-reference-1' }),
