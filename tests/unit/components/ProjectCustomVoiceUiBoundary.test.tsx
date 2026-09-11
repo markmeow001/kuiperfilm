@@ -1,11 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const uploadVoiceHookMock = vi.hoisted(() => vi.fn(() => ({
-  mutate: vi.fn(),
-  isPending: false,
-})))
-
 vi.mock('next-intl', () => ({
   useTranslations: () => (key: string, values?: Record<string, string>) => (
     values?.speaker ? `${key}:${values.speaker}` : key
@@ -18,14 +13,6 @@ vi.mock('@/components/ui/icons', () => ({
 
 vi.mock('@/app/[locale]/v2/workspace/[projectId]/subjects/V2CharacterAppearancesPanel', () => ({
   V2CharacterAppearancesPanel: () => <div data-testid="appearances-panel" />,
-}))
-
-vi.mock('@/lib/query/mutations/character-voice-mutations', () => ({
-  useUploadProjectCharacterVoice: uploadVoiceHookMock,
-}))
-
-vi.mock('@/lib/query/mutations', () => ({
-  useUploadProjectCharacterVoice: uploadVoiceHookMock,
 }))
 
 import { V2CharacterEditModal } from '@/app/[locale]/v2/workspace/[projectId]/subjects/V2CharacterEditModal'
@@ -74,7 +61,10 @@ describe('project custom voice consent boundary', () => {
       />,
     )
 
-    expect(uploadVoiceHookMock).not.toHaveBeenCalled()
+    // The former `expect(uploadVoiceHookMock).not.toHaveBeenCalled()` is now
+    // structural: useUploadProjectCharacterVoice no longer exists in the query
+    // layer, so no caller can reach the closed endpoint. That absence is
+    // asserted by tests/unit/voice/project-custom-voice-ui-source-contract.ts.
     expect(screen.getAllByRole('button', { name: 'uploadAudio' })).toHaveLength(2)
     expect(screen.getAllByRole('button', { name: 'aiDesign' })).toHaveLength(2)
     for (const button of screen.getAllByRole('button', { name: /^(uploadAudio|aiDesign)$/ })) {

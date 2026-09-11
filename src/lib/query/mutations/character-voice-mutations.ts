@@ -1,29 +1,15 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '../keys'
 import {
-  invalidateQueryTemplates,
-  requestJsonWithError,
+    invalidateQueryTemplates,
+    requestJsonWithError,
 } from './mutation-shared'
 
-export function useUploadProjectCharacterVoice(projectId: string) {
-    const queryClient = useQueryClient()
-    const invalidateProjectAssets = () =>
-        invalidateQueryTemplates(queryClient, [queryKeys.projectAssets.all(projectId)])
-
-    return useMutation({
-        mutationFn: async ({ file, characterId }: { file: File; characterId: string }) => {
-            const formData = new FormData()
-            formData.append('file', file)
-            formData.append('characterId', characterId)
-
-            return await requestJsonWithError(`/api/novel-promotion/${projectId}/character-voice`, {
-                method: 'POST',
-                body: formData
-            }, 'Failed to upload voice')
-        },
-        onSuccess: invalidateProjectAssets,
-    })
-}
+// Custom-voice upload and AI-designed-voice save hooks used to live here. Both
+// POSTed to /api/novel-promotion/[projectId]/character-voice, which now rejects
+// unconditionally with VOICE_SOURCE_CONSENT_REQUIRED, so they could only ever
+// produce a failed request. They are removed rather than left exported so no
+// new caller can pick them up before VoiceSource/Consent/Revocation exist.
 
 export function useUpdateProjectCharacterVoiceSettings(projectId: string) {
     const queryClient = useQueryClient()
@@ -48,37 +34,5 @@ export function useUpdateProjectCharacterVoiceSettings(projectId: string) {
             }, '更新音色失败')
         },
         onSettled: invalidateProjectAssets,
-    })
-}
-
-/**
- * 保存 AI 设计音色到角色
- */
-
-export function useSaveProjectDesignedVoice(projectId: string) {
-    const queryClient = useQueryClient()
-    const invalidateProjectAssets = () =>
-        invalidateQueryTemplates(queryClient, [queryKeys.projectAssets.all(projectId)])
-
-    return useMutation({
-        mutationFn: async ({
-            characterId,
-            voiceId,
-            audioBase64,
-        }: {
-            characterId: string
-            voiceId: string
-            audioBase64: string
-        }) => {
-            return await requestJsonWithError<{ audioUrl?: string }>(`/api/novel-promotion/${projectId}/character-voice`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    characterId,
-                    voiceDesign: { voiceId, audioBase64 },
-                }),
-            }, '保存失败')
-        },
-        onSuccess: invalidateProjectAssets,
     })
 }
