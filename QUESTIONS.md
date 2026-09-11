@@ -431,7 +431,10 @@ Image（13 個）：
 - **我的傾向**: A 或 B。B 的好處是現在就能清掉不可達的 provider 程式碼;風險是若 production 還有
   QUEUED 的 VOICE_DESIGN task,行為會從「可達但被 HTTP 擋」變成「worker 直接失敗」——
   這一點跟 G-1 的 production 盤點是同一個前置條件,而 G-1 使用者已明確指示先不做。
-- **狀態**: 待確認
+- **決議**: **A —— 維持現狀**(2026-09-11,使用者拍板)。`qwen-voice-design.ts` 與
+  `workers/handlers/voice-design.ts` 均不動,等 VoiceSource + Consent + Revocation schema
+  設計時一併處理。本輪僅更正 08-open-gaps 對「無 import 端」的描述錯誤。
+- **狀態**: 已解決(決議 A,無程式碼變更)
 - **建立時間**: 2026-09-11
 - **相關檔案**:
   - `src/lib/qwen-voice-design.ts`(149 行)
@@ -460,5 +463,14 @@ Image（13 個）：
   - C. 先不動,等 VoiceSource + Consent 落地後一次性重寫(與 Q-010 綁定)。
 - **我的傾向**: A。與專案側 `VoiceDesignDialog.tsx` 的既有處理一致,使用者得到解釋而非功能憑空消失,
   且日後 VoiceSource 落地時只要把 placeholder 換回實作。
-- **狀態**: 待確認
+- **決議**: **A —— 保留入口,改為 fail-closed placeholder**(2026-09-11,使用者拍板)。已實作:
+  - `voice-creation/VoiceCreationModalLayout.tsx` 改為 placeholder(保留 props 介面與 portal 掛載),
+    `VoiceCreationForm.tsx` / `VoicePreviewSection.tsx` / `hooks/useVoiceCreation.tsx` 移除
+    (739 行 → 104 行);`VoiceCreationModal.tsx`、`VoiceCreationModalShell.tsx` 與 page.tsx 入口不動。
+  - `asset-hub/components/VoiceDesignDialog.tsx` 改為 placeholder,比照專案側;連帶
+    `src/components/voice/VoiceDesignDialogBase.tsx`(372 行)失去唯一使用端,一併移除。
+  - 移除四支指向已關閉端點的 hook:`useDesignAssetHubVoice`、`useSaveDesignedAssetHubVoice`、
+    `useUploadAssetHubVoice`、`useUploadCharacterVoice`,及其 re-export 與孤兒 helper
+    `buildCharacterVoiceFormData`。`useDeleteVoice` 保留(端點仍合法)。
+- **狀態**: 已解決(決議 A,已實作)
 - **建立時間**: 2026-09-11

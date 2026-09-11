@@ -45,6 +45,7 @@ export default function VoiceSettings({
     // not invoked because the endpoint behind it is closed.
     void onVoiceChange
     void onVoiceDesign
+    void characterName
     const audioRef = useRef<HTMLAudioElement | null>(null)
     const [isPreviewingVoice, setIsPreviewingVoice] = useState(false)
 

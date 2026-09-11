@@ -82,9 +82,3 @@ export function buildCharacterImageFormData(params: {
   return formData
 }
 
-export function buildCharacterVoiceFormData(file: File, characterId: string): FormData {
-  const formData = new FormData()
-  formData.append('file', file)
-  formData.append('characterId', characterId)
-  return formData
-}

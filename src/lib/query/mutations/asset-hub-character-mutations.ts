@@ -19,7 +19,6 @@ import {
   captureCharacterQuerySnapshots,
   restoreCharacterQuerySnapshots,
   buildCharacterImageFormData,
-  buildCharacterVoiceFormData,
 } from './asset-hub-character-mutations-utils'
 import type {
   SelectCharacterImageContext,
@@ -278,17 +277,6 @@ export function useDeleteCharacterAppearance() {
   })
 }
 
-export function useUploadCharacterVoice() {
-  const queryClient = useQueryClient()
-  const invalidateCharacters = () => invalidateGlobalCharacters(queryClient)
-
-  return useMutation({
-    mutationFn: async ({ file, characterId }: { file: File; characterId: string }) => {
-      return await requestJsonWithError('/api/asset-hub/character-voice', {
-        method: 'POST',
-        body: buildCharacterVoiceFormData(file, characterId),
-      }, 'Failed to upload voice')
-    },
-    onSuccess: invalidateCharacters,
-  })
-}
+// useUploadCharacterVoice was removed: POST /api/asset-hub/character-voice
+// calls rejectLegacyCustomVoiceWrite() and returns 400 before reading the
+// form data, so the hook could only ever fail.

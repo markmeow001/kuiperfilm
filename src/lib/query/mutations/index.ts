@@ -12,7 +12,6 @@ export {
     useUploadCharacterImage,
     useDeleteCharacter,
     useDeleteCharacterAppearance,
-    useUploadCharacterVoice,
     // 场景相关
     useGenerateLocationImage,
     useModifyLocationImage,

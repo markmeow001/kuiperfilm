@@ -198,6 +198,14 @@ AI 声音设计的两个入口（项目 / Asset Hub）都已在 HTTP 层与 work
 未删除，因为 `TASK_TYPE.VOICE_DESIGN` / `ASSET_HUB_VOICE_DESIGN` 仍需保留给既有 Task 行与
 计费历史。待 VoiceSource + Consent + Revocation schema 落地时一并决定是重写还是移除。
 
+**📌 描述更正（2026-09-11）**：本节开头「不再被任何产品代码 import」**不准确**。
+`src/lib/workers/handlers/voice-design.ts:2` 仍 import 它（`createVoiceDesign` /
+`validatePreviewText` / `validateVoicePrompt`），因此直接删档会打断 worker handler。
+准确说法是「HTTP 层已关闭，provider 主体在**执行期**不可达」，而非静态上无人 import。
+
+**决议（QUESTIONS.md Q-010，人类拍板 A）**：维持现状，`qwen-voice-design.ts` 与
+`handlers/voice-design.ts` 均不动，等 VoiceSource schema 设计时一并处理。本项保持开启。
+
 ### G-3 Asset Hub 声音 UI 仍呈现已被后端拒绝的能力
 
 `src/app/[locale]/workspace/asset-hub/components/VoiceSettings.tsx` 仍保留
@@ -225,11 +233,24 @@ AI 声音设计的两个入口（项目 / Asset Hub）都已在 HTTP 层与 work
 验证：`npx tsc --noEmit` 干净；lint 0 errors（我方档案 0 warning）；unit 411 files / 3480 tests、
 dom 120 files / 635 tests、api 86 files / 859 tests、`test:guards` 全绿。
 
-**⚠️ 未处理的延伸面（已登记 QUESTIONS.md Q-011，需人类拍板）**：Asset Hub 四支语音写入端点
-（`/voices/upload`、`/voice-design`、`/voices`、`/character-voice`）**全部**无条件 400，但
-`components/voice-creation/`（5 档 739 行）、`VoiceCreationModal.tsx`、`VoiceDesignDialog.tsx`
-以及 `asset-hub-voice-mutations.ts` 的三支 hook 仍以「可用功能」的样子存在。把整个 739 行的
-用户流程下架属于产品范围决策，本轮不单方面认定。
+**✅ 延伸面已收口（2026-09-11，QUESTIONS.md Q-011 决议 A）**：Asset Hub 四支语音写入端点
+（`/voices/upload`、`/voice-design`、`/voices`、`/character-voice`）**全部**无条件 400，而
+`components/voice-creation/`（5 档 739 行）、`VoiceDesignDialog.tsx` 与
+`asset-hub-voice-mutations.ts` 的三支 hook 仍以「可用功能」的样子存在。经人类拍板选 A
+（保留入口、改为 fail-closed placeholder），已实作：
+
+- `voice-creation/VoiceCreationModalLayout.tsx` 改为 placeholder（保留 props 介面与 portal
+  挂载），`VoiceCreationForm.tsx` / `VoicePreviewSection.tsx` / `hooks/useVoiceCreation.tsx`
+  移除：739 行 → 104 行。`VoiceCreationModal.tsx`、`VoiceCreationModalShell.tsx` 与 page.tsx
+  的入口按钮均不动，使用者仍看得到能力、点开得到解释。
+- `asset-hub/components/VoiceDesignDialog.tsx` 改为 placeholder，比照专案侧
+  `modes/novel-promotion/components/voice/VoiceDesignDialog.tsx`。连带
+  `src/components/voice/VoiceDesignDialogBase.tsx`（372 行）失去唯一使用端，一并移除。
+- 移除四支指向已关闭端点的 hook（`useDesignAssetHubVoice`、`useSaveDesignedAssetHubVoice`、
+  `useUploadAssetHubVoice`、`useUploadCharacterVoice`）、其 re-export，以及随之成为孤儿的
+  `buildCharacterVoiceFormData`。`useDeleteVoice` 保留 —— 该端点仍合法。
+
+恢复真实功能的方式：把两个 placeholder 的 body 换回实作即可，入口与 props 介面都还在。
 
 ### G-4 `useUploadProjectCharacterVoice` 仍是已关闭端点的活 client hook
 
