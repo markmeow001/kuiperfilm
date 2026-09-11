@@ -410,3 +410,55 @@ Image（13 個）：
 - **狀態**: 待調查（先查 dispatch 路徑再修）
 - **建立時間**: 2026-07-02
 - **相關檔案**: `src/lib/workers/handlers/playground-video.ts`、`src/app/[locale]/playground/V2PlaygroundClient.tsx`、AtlasCloud/ARK video dispatcher
+
+## Q-010 [架構決策] G-2:`qwen-voice-design.ts` 的去留綁在 VoiceSource schema 上
+
+- **Phase**: 不在 master plan 內(AtlasCloud 配音 cutover 收尾,`docs/ai-runtime/08-open-gaps.md` G-2)
+- **為什麼停下來**: 命中 AUTONOMY_PROTOCOL 硬規則「需要動 `prisma/schema.prisma` 加新表或改欄位」。
+- **背景與一項文件更正**:
+  - 08-open-gaps G-2 寫「`src/lib/qwen-voice-design.ts` 不再被任何產品程式碼 import」。**這句不準確**:
+    `src/lib/workers/handlers/voice-design.ts:2` 仍然 import 它(`createVoiceDesign` / `validatePreviewText` / `validateVoicePrompt`)。
+    正確說法是「HTTP 層已關閉,provider 主體在執行期不可達」,不是「無 import 端」。
+  - 因此不能直接刪檔:會連帶打斷 worker handler。
+- **真正的決策點**: `TASK_TYPE.VOICE_DESIGN` / `ASSET_HUB_VOICE_DESIGN` 需保留給既有 Task 行與計費歷史,
+  而 G-2 的解法(重寫 or 移除)按原文件規劃要等 VoiceSource + Consent + Revocation schema 落地時一併決定。
+- **選項**:
+  - A. 維持現狀,等 VoiceSource schema 設計時一起處理(文件原本的規劃)。
+  - B. 先把 `qwen-voice-design.ts` 與 `handlers/voice-design.ts` 一起降為明確的 tombstone
+    (handler 直接 fail-closed、不再 import provider 主體),TASK_TYPE 與計費字串不動。
+    這樣可移除 149 行 provider 程式碼且不碰 schema,但改變了既有 QUEUED task 的行為。
+  - C. 立刻設計 VoiceSource + Consent + Revocation schema(範圍最大,要人類拍板 migration 策略)。
+- **我的傾向**: A 或 B。B 的好處是現在就能清掉不可達的 provider 程式碼;風險是若 production 還有
+  QUEUED 的 VOICE_DESIGN task,行為會從「可達但被 HTTP 擋」變成「worker 直接失敗」——
+  這一點跟 G-1 的 production 盤點是同一個前置條件,而 G-1 使用者已明確指示先不做。
+- **狀態**: 待確認
+- **建立時間**: 2026-09-11
+- **相關檔案**:
+  - `src/lib/qwen-voice-design.ts`(149 行)
+  - `src/lib/workers/handlers/voice-design.ts`(唯一 import 端)
+  - `src/lib/billing/task-policy.ts:252`、`src/lib/billing/cost.ts:55`(只引用字串 model id,非模組依賴)
+  - `docs/ai-runtime/08-open-gaps.md` G-2
+
+## Q-011 [範圍決策] Asset Hub「建立音色」整個流程都打向已關閉端點
+
+- **Phase**: 不在 master plan 內(G-3 修復期間發現的延伸面)
+- **背景**: G-3 只點名 `asset-hub/components/VoiceSettings.tsx`。實際盤點後,Asset Hub 四支語音寫入端點
+  **全部**無條件 `rejectLegacyCustomVoiceWrite()` → 400:
+  `/api/asset-hub/voices/upload`、`/api/asset-hub/voice-design`、`/api/asset-hub/voices`、`/api/asset-hub/character-voice`。
+  而以下 UI 仍以「可用功能」的樣子存在,使用者走完流程必定失敗:
+  - `components/voice-creation/`(5 檔、739 行:ModalShell / ModalLayout / Form / PreviewSection / useVoiceCreation)
+  - `components/VoiceCreationModal.tsx`、`components/VoiceDesignDialog.tsx`
+  - `src/lib/query/mutations/asset-hub-voice-mutations.ts` 的 `useDesignAssetHubVoice` /
+    `useSaveDesignedAssetHubVoice` / `useUploadAssetHubVoice`(`useDeleteVoice` 仍合法)
+  - `asset-hub-character-mutations.ts` 的 `useUploadCharacterVoice`
+- **本輪已做**: 只修 G-3 指名的 `VoiceSettings.tsx`(上傳／AI 設計改 disabled + 同意聲明文案)
+  與 `CharacterCard.tsx` 的不可達死碼。**沒有動** voice-creation 流程。
+- **為什麼停下來**: 把一整個 739 行的使用者流程下架屬於產品範圍決策,不該由自主執行單方面認定。
+- **選項**:
+  - A. 整個 voice-creation 流程比照專案側改為 fail-closed placeholder(保留入口,點開說明為何不可用)。
+  - B. 直接移除入口與該子系統(程式碼最乾淨,但功能從 UI 上消失)。
+  - C. 先不動,等 VoiceSource + Consent 落地後一次性重寫(與 Q-010 綁定)。
+- **我的傾向**: A。與專案側 `VoiceDesignDialog.tsx` 的既有處理一致,使用者得到解釋而非功能憑空消失,
+  且日後 VoiceSource 落地時只要把 placeholder 換回實作。
+- **狀態**: 待確認
+- **建立時間**: 2026-09-11

@@ -2,13 +2,18 @@
 
 /**
  * 音色设置组件 - 从 CharacterCard 提取
- * 支持上传自定义音频和 AI 声音设计
+ *
+ * Custom-voice upload and AI voice design are fail-closed here: every Asset Hub
+ * write endpoint behind them (/api/asset-hub/voices/upload, /voice-design,
+ * /voices, /character-voice) calls rejectLegacyCustomVoiceWrite() and returns
+ * 400 VOICE_SOURCE_CONSENT_REQUIRED. Rendering them as live controls gave the
+ * user buttons that could only fail. Playback of an already-stored sample stays
+ * available (read-only legacy compatibility).
  */
 
 import { useRef, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { shouldShowError } from '@/lib/error-utils'
-import { useUploadCharacterVoice } from '@/lib/query/mutations'
 import { AppIcon } from '@/components/ui/icons'
 
 interface VoiceSettingsProps {
@@ -33,13 +38,15 @@ export default function VoiceSettings({
     compact = false
 }: VoiceSettingsProps) {
     const t = useTranslations('assetHub')
-    // 🔥 使用 mutation hook
-    const uploadVoice = useUploadCharacterVoice()
+    const tVoice = useTranslations('voice.inlineBinding')
     void projectId
-    const voiceFileInputRef = useRef<HTMLInputElement>(null)
+    // Retained so the surrounding wiring (CharacterCard -> AssetGrid -> page)
+    // stays intact while the voice-creation surface is decided; deliberately
+    // not invoked because the endpoint behind it is closed.
+    void onVoiceChange
+    void onVoiceDesign
     const audioRef = useRef<HTMLAudioElement | null>(null)
     const [isPreviewingVoice, setIsPreviewingVoice] = useState(false)
-    type UploadedVoiceResult = { audioUrl?: string }
 
     const hasCustomVoice = !!customVoiceUrl
 
@@ -73,32 +80,6 @@ export default function VoiceSettings({
         }
     }
 
-    // 上传自定义音频
-    const handleUploadVoice = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0]
-        if (!file) return
-
-        uploadVoice.mutate(
-            { file, characterId },
-            {
-                onSuccess: (data) => {
-                    const result = (data || {}) as UploadedVoiceResult
-                    onVoiceChange?.(characterId, result.audioUrl)
-                },
-                onError: (error) => {
-                    if (shouldShowError(error)) {
-                        alert(t('voiceSettings.uploadFailed', { error: error.message }))
-                    }
-                },
-                onSettled: () => {
-                    if (voiceFileInputRef.current) {
-                        voiceFileInputRef.current.value = ''
-                    }
-                }
-            }
-        )
-    }
-
     // 紧凑模式样式
     const containerClass = compact
         ? 'glass-surface-soft border border-[var(--glass-stroke-base)] rounded-xl p-3'
@@ -122,38 +103,29 @@ export default function VoiceSettings({
                 </span>
             </div>
 
-            {/* 隐藏的音频文件输入 */}
-            <input
-                ref={voiceFileInputRef}
-                type="file"
-                accept="audio/*"
-                onChange={handleUploadVoice}
-                className="hidden"
-            />
-
             <div className="flex gap-2 w-full justify-center flex-wrap">
                 <button
-                    onClick={() => voiceFileInputRef.current?.click()}
-                    disabled={uploadVoice.isPending}
-                    className="glass-btn-base glass-btn-secondary flex-1 min-w-[70px] px-2 py-1.5 rounded-lg text-xs font-medium transition-all relative group whitespace-nowrap"
+                    type="button"
+                    disabled
+                    title={tVoice('customSourceUnavailable')}
+                    className="glass-btn-base glass-btn-secondary flex-1 min-w-[70px] px-2 py-1.5 rounded-lg text-xs font-medium opacity-55 cursor-not-allowed whitespace-nowrap"
                 >
                     <div className="flex items-center justify-center gap-1">
-                        {hasCustomVoice && <div className="w-1.5 h-1.5 bg-[var(--glass-tone-success-fg)] rounded-full flex-shrink-0"></div>}
-                        <span>{uploadVoice.isPending ? t('voiceSettings.uploading') : hasCustomVoice ? t('voiceSettings.uploaded') : t('voiceSettings.uploadAudio')}</span>
+                        <span>{t('voiceSettings.uploadAudio')}</span>
                     </div>
                 </button>
 
-                {onVoiceDesign && (
-                    <button
-                        onClick={() => onVoiceDesign(characterId, characterName)}
-                        className="glass-btn-base glass-btn-tone-info flex-1 min-w-[70px] px-2 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap"
-                    >
-                        <div className="flex items-center justify-center gap-1">
-                            <AppIcon name="bolt" className="w-3.5 h-3.5 flex-shrink-0" />
-                            <span>{t('voiceSettings.aiDesign')}</span>
-                        </div>
-                    </button>
-                )}
+                <button
+                    type="button"
+                    disabled
+                    title={tVoice('customSourceUnavailable')}
+                    className="glass-btn-base glass-btn-secondary flex-1 min-w-[70px] px-2 py-1.5 rounded-lg text-xs font-medium opacity-55 cursor-not-allowed whitespace-nowrap"
+                >
+                    <div className="flex items-center justify-center gap-1">
+                        <AppIcon name="bolt" className="w-3.5 h-3.5 flex-shrink-0" />
+                        <span>{t('voiceSettings.aiDesign')}</span>
+                    </div>
+                </button>
 
                 {onVoiceSelect && (
                     <button
@@ -167,6 +139,10 @@ export default function VoiceSettings({
                     </button>
                 )}
             </div>
+
+            <p className="mt-2 text-[11px] leading-relaxed text-[var(--glass-text-tertiary)]">
+                {tVoice('customSourceUnavailable')}
+            </p>
 
             {/* 试听按钮 - 仅在有音频时显示 */}
             {hasCustomVoice && (

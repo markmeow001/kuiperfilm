@@ -10,8 +10,7 @@ import {
     useUndoCharacterImage,
     useUploadCharacterImage,
     useDeleteCharacter,
-    useDeleteCharacterAppearance,
-    useUploadCharacterVoice
+    useDeleteCharacterAppearance
 } from '@/lib/query/mutations'
 import VoiceSettings from './VoiceSettings'
 import { MediaImageWithLoading } from '@/components/media/MediaImageWithLoading'
@@ -60,12 +59,10 @@ export function CharacterCard({ character, onImageClick, onImageEdit, onVoiceDes
     const uploadImage = useUploadCharacterImage()
     const deleteCharacter = useDeleteCharacter()
     const deleteAppearance = useDeleteCharacterAppearance()
-    const uploadVoice = useUploadCharacterVoice()
 
     const t = useTranslations('assetHub')
     const tAssets = useTranslations('assets')
     const fileInputRef = useRef<HTMLInputElement>(null)
-    const voiceInputRef = useRef<HTMLInputElement>(null)
 
     const [activeAppearance, setActiveAppearance] = useState(0)
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
@@ -203,28 +200,12 @@ export function CharacterCard({ character, onImageClick, onImageEdit, onVoiceDes
         )
     }
 
-    // 上传音色
-    const handleUploadVoice = () => {
-        const file = voiceInputRef.current?.files?.[0]
-        if (!file) return
-
-        uploadVoice.mutate(
-            { file, characterId: character.id },
-            {
-                onSettled: () => {
-                    if (voiceInputRef.current) voiceInputRef.current.value = ''
-                }
-            }
-        )
-    }
-
     // 多图选择模式
     if (hasMultipleImages) {
         return (
             <div className="col-span-3 glass-surface p-4 relative">
                 {/* 隐藏输入 */}
                 <input ref={fileInputRef} type="file" accept="image/*" onChange={handleUpload} className="hidden" />
-                <input ref={voiceInputRef} type="file" accept="audio/*" onChange={handleUploadVoice} className="hidden" />
 
                 {/* 顶部：名字 + 操作 */}
                 <div className="flex items-center justify-between mb-4">
@@ -360,7 +341,6 @@ export function CharacterCard({ character, onImageClick, onImageEdit, onVoiceDes
     return (
         <div className="glass-surface overflow-hidden relative group">
             <input ref={fileInputRef} type="file" accept="image/*" onChange={handleUpload} className="hidden" />
-            <input ref={voiceInputRef} type="file" accept="audio/*" onChange={handleUploadVoice} className="hidden" />
 
             {/* 图片区域 */}
             <div className="relative bg-[var(--glass-bg-muted)] min-h-[100px]">

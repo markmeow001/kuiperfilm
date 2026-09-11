@@ -52,12 +52,23 @@ describe('project custom voice UI source contract', () => {
     expect(en.inlineBinding.customSourceUnavailable).toContain('revocation')
   })
 
-  it('[project-only shutdown] -> [global Asset Hub voice tools remain available]', () => {
+  // This case used to assert the opposite -- that the Asset Hub kept a live
+  // file input and AI-design entry, on the premise that the shutdown was
+  // project-only. That premise expired 7 minutes after it was written: the
+  // AtlasCloud cutover (9acd5e7) put rejectLegacyCustomVoiceWrite(), which
+  // throws unconditionally, in front of every Asset Hub voice write
+  // (/voices/upload, /voice-design, /voices, /character-voice), and
+  // tests/integration/api/asset-hub-voice-consent-boundary.test.ts asserts the
+  // resulting 400s. The stale assertion held the known defect in place, so it
+  // now guards the alignment instead of the misalignment.
+  it('[Asset Hub voice writes are closed] -> [its VoiceSettings offers no upload or AI-design control]', () => {
     const globalVoiceSettings = source(
       'src/app/[locale]/workspace/asset-hub/components/VoiceSettings.tsx',
     )
 
-    expect(globalVoiceSettings).toContain('type="file"')
-    expect(globalVoiceSettings).toContain('onVoiceDesign')
+    expect(globalVoiceSettings).not.toContain('type="file"')
+    expect(globalVoiceSettings).not.toContain('onVoiceDesign(')
+    expect(globalVoiceSettings).not.toContain('useUploadCharacterVoice')
+    expect(globalVoiceSettings).toContain('customSourceUnavailable')
   })
 })

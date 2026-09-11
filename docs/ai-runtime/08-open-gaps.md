@@ -208,6 +208,29 @@ AI 声音设计的两个入口（项目 / Asset Hub）都已在 HTTP 层与 work
 
 项目侧已改为 fail-closed placeholder（`VoiceDesignDialog.tsx`），Asset Hub 侧尚未对齐。
 
+**🔧 已修（2026-09-11，部分）**：
+
+- `asset-hub/components/VoiceSettings.tsx`：移除 `type="file"` 输入、`useUploadCharacterVoice`
+  与上传 handler；上传／AI 设计改为 disabled 控件 + `voice.inlineBinding.customSourceUnavailable`
+  说明文案，与项目侧同一套处理。试听（读既有样本）与音色库入口不受影响。
+- `asset-hub/components/CharacterCard.tsx`：移除其自有的语音上传残留（hook、handler、ref 与两个
+  隐藏 `<input accept="audio/*">`）。该路径本来就**不可达** —— 全档没有任何地方 click 那两个
+  input，故此项无 UI 变化，纯死码。
+- `tests/unit/voice/project-custom-voice-ui-source-contract.test.ts` 第 4 个 case 原本断言
+  Asset Hub「仍保有 `type="file"` 与 `onVoiceDesign`」。该前提在写下后 7 分钟就失效：cutover
+  `9acd5e7`（11:56）已把无条件 throw 的 `rejectLegacyCustomVoiceWrite()` 放在所有 Asset Hub
+  语音写入端点前，而该测试最后一次改动是 `34c763e`（12:03）。这条断言等于**把已知缺陷锁在原地**，
+  现改为断言对齐后的状态（无 file input、无 `onVoiceDesign(` 调用、无上传 hook、有同意说明文案）。
+
+验证：`npx tsc --noEmit` 干净；lint 0 errors（我方档案 0 warning）；unit 411 files / 3480 tests、
+dom 120 files / 635 tests、api 86 files / 859 tests、`test:guards` 全绿。
+
+**⚠️ 未处理的延伸面（已登记 QUESTIONS.md Q-011，需人类拍板）**：Asset Hub 四支语音写入端点
+（`/voices/upload`、`/voice-design`、`/voices`、`/character-voice`）**全部**无条件 400，但
+`components/voice-creation/`（5 档 739 行）、`VoiceCreationModal.tsx`、`VoiceDesignDialog.tsx`
+以及 `asset-hub-voice-mutations.ts` 的三支 hook 仍以「可用功能」的样子存在。把整个 739 行的
+用户流程下架属于产品范围决策，本轮不单方面认定。
+
 ### G-4 `useUploadProjectCharacterVoice` 仍是已关闭端点的活 client hook
 
 `src/lib/query/mutations/character-voice-mutations.ts` 导出、且
@@ -215,6 +238,16 @@ AI 声音设计的两个入口（项目 / Asset Hub）都已在 HTTP 层与 work
 `POST /api/novel-promotion/[projectId]/character-voice` 已回 400
 `VOICE_SOURCE_CONSENT_REQUIRED`。与本轮已删除的 `useDesignProjectVoice` 属同一类残留，
 本轮未一并处理（不在授权范围内）。
+
+**✅ 已修（2026-09-11）**：同档另有第二支同类 —— `useSaveProjectDesignedVoice` 也 POST 到同一支
+已关闭的端点。两支在 `src/` 内都无任何使用端，已连同 `hooks/index.ts` 的 re-export 一并删除。
+`useUpdateProjectCharacterVoiceSettings` 保留：它 PATCH `/character`，该路由仍接受合法的 clear
+操作，与「打向已关闭端点」不同类。
+
+`ProjectCustomVoiceUiBoundary.test.tsx` 原有一行 `expect(uploadVoiceHookMock).not.toHaveBeenCalled()`
+在 hook 删除后恒真且无对应实体，改为注释交代保证的去处（被更强的结构性保证取代：hook 不存在，
+且 source contract test 断言其名称不出现在 UI 源码）。同档其余断言（按钮 disabled、显示
+`customSourceUnavailable`、无 audio input）不变。
 
 ### G-5 `reference-to-character-api.test.ts` 在完整 api 套件内是 flaky（既有问题）
 
